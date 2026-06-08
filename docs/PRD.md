@@ -538,14 +538,14 @@ interface GraphData {
 ```css
 /* ── 背景層 ── */
 --bg-base: #020617; /* 主背景（OLED 深黑） */
---bg-primary: #0f172a; /* 次要背景 */
+--bg-accent: #0f172a; /* 次要背景 */
 --bg-sidebar: #1e293b; /* Sidebar 背景 */
 --bg-card: #1e293b; /* 卡片 / 面板 */
 --border: #334155; /* 邊框（深色模式可見） */
 
 /* ── 文字層 ── */
---text-primary: #f8fafc; /* 主要文字 */
---text-muted: #94a3b8; /* 次要說明文字（最低對比 4.5:1） */
+--primary-foreground: #f8fafc; /* 主要文字 */
+--text-muted-foreground: #94a3b8; /* 次要說明文字（最低對比 4.5:1） */
 --text-faint: #475569; /* 輔助提示，僅用於非必要文字 */
 
 /* ── 功能色 ── */
@@ -572,11 +572,11 @@ interface GraphData {
 
 **對比度驗證**
 
-| 組合                             | 比例  | 標準   |
-| -------------------------------- | ----- | ------ |
-| `--text-primary` on `--bg-base`  | 21:1  | ✅ AAA |
-| `--text-muted` on `--bg-sidebar` | 4.7:1 | ✅ AA  |
-| `--cta` on `--bg-primary`        | 5.2:1 | ✅ AA  |
+| 組合                                        | 比例  | 標準   |
+| ------------------------------------------- | ----- | ------ |
+| `--primary-foreground` on `--bg-base`       | 21:1  | ✅ AAA |
+| `--text-muted-foreground` on `--bg-sidebar` | 4.7:1 | ✅ AA  |
+| `--cta` on `--bg-accent`                    | 5.2:1 | ✅ AA  |
 
 ---
 

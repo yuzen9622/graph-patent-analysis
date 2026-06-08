@@ -1,19 +1,19 @@
-'use client'
+"use client";
 
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import type { NodeType } from '@/types/graph'
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import type { NodeType } from "@/types/graph";
 
 interface Props {
-  visibleLayers: Set<NodeType>
-  onToggle: (type: NodeType) => void
+  visibleLayers: Set<NodeType>;
+  onToggle: (type: NodeType) => void;
 }
 
 const LAYERS: { type: NodeType; label: string; color: string }[] = [
-  { type: 'applicant', label: '申請人層', color: '#4E79A7' },
-  { type: 'patent',    label: '專利層',   color: '#F28E2B' },
-  { type: 'concept',   label: '概念層',   color: '#59A14F' },
-]
+  { type: "applicant", label: "申請人層", color: "#4E79A7" },
+  { type: "patent", label: "專利層", color: "#F28E2B" },
+  { type: "concept", label: "概念層", color: "#59A14F" },
+];
 
 export default function LayerToggle({ visibleLayers, onToggle }: Props) {
   return (
@@ -24,7 +24,7 @@ export default function LayerToggle({ visibleLayers, onToggle }: Props) {
             id={`layer-${type}`}
             checked={visibleLayers.has(type)}
             onCheckedChange={() => onToggle(type)}
-            className="border-[#334155] data-[state=checked]:bg-[#4E79A7] data-[state=checked]:border-[#4E79A7]"
+            className="border-border data-[state=checked]:bg-[#4E79A7] data-[state=checked]:border-[#4E79A7]"
           />
           <Label
             htmlFor={`layer-${type}`}
@@ -32,7 +32,7 @@ export default function LayerToggle({ visibleLayers, onToggle }: Props) {
           >
             <span
               aria-hidden
-              className="w-2 h-2 rounded-sm flex-shrink-0"
+              className="w-2 h-2 rounded-sm shrink-0"
               style={{ background: color }}
             />
             {label}
@@ -40,5 +40,5 @@ export default function LayerToggle({ visibleLayers, onToggle }: Props) {
         </div>
       ))}
     </div>
-  )
+  );
 }

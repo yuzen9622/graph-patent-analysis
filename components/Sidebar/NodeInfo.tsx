@@ -1,83 +1,117 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { X, ChevronDown, ChevronUp } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import type { GraphNode, GraphEdge, Community } from '@/types/graph'
+import { useState } from "react";
+import { X, ChevronDown, ChevronUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import type { GraphNode, GraphEdge, Community } from "@/types/graph";
 
 interface Props {
-  node: GraphNode
-  edges: GraphEdge[]
-  nodes: GraphNode[]
-  communities: Community[]
-  onClose: () => void
-  onNodeSelect: (node: GraphNode) => void
-  onNodeFocus: (nodeId: string) => void
+  node: GraphNode;
+  edges: GraphEdge[];
+  nodes: GraphNode[];
+  communities: Community[];
+  onClose: () => void;
+  onNodeSelect: (node: GraphNode) => void;
+  onNodeFocus: (nodeId: string) => void;
 }
 
-export default function NodeInfo({ node, edges, nodes, communities, onClose, onNodeSelect, onNodeFocus }: Props) {
-  const [abstractExpanded, setAbstractExpanded] = useState(false)
+export default function NodeInfo({
+  node,
+  edges,
+  nodes,
+  communities,
+  onClose,
+  onNodeSelect,
+  onNodeFocus,
+}: Props) {
+  const [abstractExpanded, setAbstractExpanded] = useState(false);
 
-  const TYPE_COLORS = { applicant: '#4E79A7', patent: '#F28E2B', concept: '#59A14F' }
-  const TYPE_LABELS = { applicant: '申請人', patent: '專利', concept: '技術概念' }
+  const TYPE_COLORS = {
+    applicant: "#4E79A7",
+    patent: "#F28E2B",
+    concept: "#59A14F",
+  };
+  const TYPE_LABELS = {
+    applicant: "申請人",
+    patent: "專利",
+    concept: "技術概念",
+  };
 
-  const community = node.community_id !== undefined
-    ? communities.find(c => c.id === node.community_id)
-    : undefined
+  const community =
+    node.community_id !== undefined
+      ? communities.find((c) => c.id === node.community_id)
+      : undefined;
 
   // Find adjacent nodes
-  const adjacentIds = new Set<string>()
-  edges.forEach(e => {
-    if (e.from === node.id) adjacentIds.add(e.to)
-    if (e.to === node.id) adjacentIds.add(e.from)
-  })
-  const adjacentNodes = nodes.filter(n => adjacentIds.has(n.id)).slice(0, 12)
+  const adjacentIds = new Set<string>();
+  edges.forEach((e) => {
+    if (e.from === node.id) adjacentIds.add(e.to);
+    if (e.to === node.id) adjacentIds.add(e.from);
+  });
+  const adjacentNodes = nodes.filter((n) => adjacentIds.has(n.id)).slice(0, 12);
 
   return (
     <div className="relative">
       <div className="flex items-start justify-between mb-3">
         <Badge
           className="text-[0.65rem] font-bold px-2 py-0.5 rounded border-0"
-          style={{ background: TYPE_COLORS[node.type], color: '#020617' }}
+          style={{ background: TYPE_COLORS[node.type], color: "#020617" }}
         >
           {TYPE_LABELS[node.type]}
         </Badge>
         <button
           onClick={onClose}
-          className="text-[#475569] hover:text-[#94A3B8] transition-colors cursor-pointer -mt-0.5"
+          className="primary-foreground hover:text-muted-foreground transition-colors cursor-pointer -mt-0.5"
           aria-label="關閉節點資訊"
         >
           <X size={14} />
         </button>
       </div>
 
-      <h3 className="font-serif text-sm font-semibold text-[#F8FAFC] leading-snug mb-3 break-words">
+      <h3 className="font-serif text-sm font-semibold primary-foreground leading-snug mb-3 break-words">
         {node.label}
       </h3>
 
       <dl className="space-y-2 text-xs">
         {/* Applicant fields */}
-        {node.type === 'applicant' && (
+        {node.type === "applicant" && (
           <Row label="專利件數" value={`${node.patent_count ?? 0} 件`} />
         )}
 
         {/* Patent fields */}
-        {node.type === 'patent' && (
+        {node.type === "patent" && (
           <>
             {node.applicant && <Row label="申請人" value={node.applicant} />}
-            {node.filing_date && <Row label="申請日" value={node.filing_date} />}
-            {node.application_number && <Row label="申請號" value={node.application_number} />}
+            {node.filing_date && (
+              <Row label="申請日" value={node.filing_date} />
+            )}
+            {node.application_number && (
+              <Row label="申請號" value={node.application_number} />
+            )}
             {node.abstract && (
               <div>
-                <dt className="text-[#475569] mb-1">摘要</dt>
+                <dt className="primary-foreground mb-1">摘要</dt>
                 <dd className="text-[#CBD5E1] leading-relaxed m-0">
-                  {abstractExpanded ? node.abstract : node.abstract.slice(0, 120) + (node.abstract.length > 120 ? '…' : '')}
+                  {abstractExpanded
+                    ? node.abstract
+                    : node.abstract.slice(0, 120) +
+                      (node.abstract.length > 120 ? "…" : "")}
                   {node.abstract.length > 120 && (
                     <button
-                      onClick={() => setAbstractExpanded(v => !v)}
-                      className="ml-1 text-[#4E79A7] hover:text-[#6B9CC3] inline-flex items-center gap-0.5 cursor-pointer"
+                      onClick={() => setAbstractExpanded((v) => !v)}
+                      className="ml-1 text-primary hover:text-[#6B9CC3] inline-flex items-center gap-0.5 cursor-pointer"
                     >
-                      {abstractExpanded ? <><ChevronUp size={11} />收合</> : <><ChevronDown size={11} />展開</>}
+                      {abstractExpanded ? (
+                        <>
+                          <ChevronUp size={11} />
+                          收合
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={11} />
+                          展開
+                        </>
+                      )}
                     </button>
                   )}
                 </dd>
@@ -87,16 +121,16 @@ export default function NodeInfo({ node, edges, nodes, communities, onClose, onN
         )}
 
         {/* Concept fields */}
-        {node.type === 'concept' && (
+        {node.type === "concept" && (
           <>
             <Row label="出現次數" value={`${node.frequency ?? 1} 次`} />
             {community && (
               <div className="flex items-center gap-1.5">
-                <dt className="text-[#475569]">社群</dt>
+                <dt className="primary-foreground">社群</dt>
                 <dd className="flex items-center gap-1.5 m-0">
                   <span
                     aria-hidden
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: community.color }}
                   />
                   <span className="text-[#CBD5E1]">{community.name}</span>
@@ -110,12 +144,15 @@ export default function NodeInfo({ node, edges, nodes, communities, onClose, onN
       {/* Adjacent nodes */}
       {adjacentNodes.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs text-[#475569] mb-2">相鄰節點</p>
+          <p className="text-xs primary-foreground mb-2">相鄰節點</p>
           <div className="flex flex-wrap gap-1.5">
-            {adjacentNodes.map(n => (
+            {adjacentNodes.map((n) => (
               <button
                 key={n.id}
-                onClick={() => { onNodeSelect(n); onNodeFocus(n.id) }}
+                onClick={() => {
+                  onNodeSelect(n);
+                  onNodeFocus(n.id);
+                }}
                 className="text-[0.65rem] px-1.5 py-0.5 rounded border cursor-pointer transition-colors hover:opacity-80"
                 style={{
                   borderColor: n.color,
@@ -123,21 +160,21 @@ export default function NodeInfo({ node, edges, nodes, communities, onClose, onN
                   background: `${n.color}18`,
                 }}
               >
-                {n.label.length > 12 ? n.label.slice(0, 12) + '…' : n.label}
+                {n.label.length > 12 ? n.label.slice(0, 12) + "…" : n.label}
               </button>
             ))}
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
-      <dt className="text-[#475569] flex-shrink-0 w-16">{label}</dt>
+      <dt className="primary-foreground shrink-0 w-16">{label}</dt>
       <dd className="text-[#CBD5E1] m-0 break-words min-w-0">{value}</dd>
     </div>
-  )
+  );
 }

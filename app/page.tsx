@@ -1,134 +1,176 @@
-'use client'
+"use client";
 
-import { useState, useId } from 'react'
-import { BarChart2, Loader2, ArrowRight, FlaskConical } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import UploadZone from '@/components/UploadZone'
-import ModelSelector from '@/components/ModelSelector'
-import ProgressPanel from '@/components/ProgressPanel'
-import AnalysisHistorySidebar from '@/components/AnalysisHistorySidebar'
-import { addHistoryEntry } from '@/lib/analysis-history'
-import type { PatentRow } from '@/types/graph'
-import type { FieldMapping } from '@/lib/excel-parser'
-import type { ProviderType } from '@/lib/llm/providers'
+import { useState, useId } from "react";
+import { BarChart2, Loader2, ArrowRight, FlaskConical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import UploadZone from "@/components/UploadZone";
+import ModelSelector from "@/components/ModelSelector";
+import ProgressPanel from "@/components/ProgressPanel";
+import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
+import { addHistoryEntry } from "@/lib/analysis-history";
+import type { PatentRow } from "@/types/graph";
+import type { FieldMapping } from "@/lib/excel-parser";
+import type { ProviderType } from "@/lib/llm/providers";
 
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true'
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 
-function Step({ n, label, active, done }: { n: number; label: string; active: boolean; done?: boolean }) {
+function Step({
+  n,
+  label,
+  active,
+  done,
+}: {
+  n: number;
+  label: string;
+  active: boolean;
+  done?: boolean;
+}) {
   return (
-    <div className={`flex items-center gap-2 text-sm transition-colors duration-200 ${active ? 'text-[#F8FAFC]' : 'text-[#475569]'}`}>
-      <span className={[
-        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all duration-200',
-        done    ? 'bg-[#22C55E] text-white shadow-sm shadow-green-500/40' :
-        active  ? 'bg-[#60A5FA] text-white shadow-sm shadow-blue-400/50' :
-                  'bg-white/5 text-[#475569] border border-white/10',
-      ].join(' ')}>
+    <div
+      className={`flex items-center gap-2 text-sm transition-colors duration-200 ${active ? "primary-foreground" : "primary-foreground"}`}
+    >
+      <span
+        className={[
+          "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-200",
+          done
+            ? "bg-[#22C55E] text-white shadow-sm shadow-green-500/40"
+            : active
+              ? "bg-[#60A5FA] text-white shadow-sm shadow-blue-400/50"
+              : "bg-white/5 primary-foreground border border-white/10",
+        ].join(" ")}
+      >
         {n}
       </span>
       <span className="font-medium whitespace-nowrap">{label}</span>
     </div>
-  )
+  );
 }
 
 export default function HomePage() {
-  const [patents, setPatents]                   = useState<PatentRow[]>([])
-  const [_mappings, setMappings]                = useState<FieldMapping[]>([])
-  const [filename, setFilename]                 = useState<string>('')
-  const [provider, setProvider]                 = useState<ProviderType>('nvidia')
-  const [apiKey, setApiKey]                     = useState('')
-  const [sampleSize, setSampleSize]             = useState(50)
-  const [uploadError, setUploadError]           = useState<string | null>(null)
-  const [submitError, setSubmitError]           = useState<string | null>(null)
-  const [submitting, setSubmitting]             = useState(false)
-  const [phase, setPhase]                       = useState<'upload' | 'analyzing'>('upload')
-  const [jobId, setJobId]                       = useState<string | null>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [patents, setPatents] = useState<PatentRow[]>([]);
+  const [_mappings, setMappings] = useState<FieldMapping[]>([]);
+  const [filename, setFilename] = useState<string>("");
+  const [provider, setProvider] = useState<ProviderType>("nvidia");
+  const [apiKey, setApiKey] = useState("");
+  const [sampleSize, setSampleSize] = useState(50);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [phase, setPhase] = useState<"upload" | "analyzing">("upload");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const sampleInputId = useId()
+  const sampleInputId = useId();
 
-  const effectiveSample = patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize
-  const sampleHint      = patents.length > 0 ? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆` : null
-  const canStart        = patents.length > 0 && (USE_MOCK || apiKey.trim().length > 0)
+  const effectiveSample =
+    patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;
+  const sampleHint =
+    patents.length > 0
+      ? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆`
+      : null;
+  const canStart = patents.length > 0 && (USE_MOCK || apiKey.trim().length > 0);
 
-  function handleParsed(rows: PatentRow[], mappings: FieldMapping[], fname: string) {
-    setPatents(rows)
-    setMappings(mappings)
-    setFilename(fname)
-    setUploadError(null)
-    setSubmitError(null)
+  function handleParsed(
+    rows: PatentRow[],
+    mappings: FieldMapping[],
+    fname: string,
+  ) {
+    setPatents(rows);
+    setMappings(mappings);
+    setFilename(fname);
+    setUploadError(null);
+    setSubmitError(null);
   }
 
   function handleUploadError(msg: string) {
-    setUploadError(msg)
-    setPatents([])
-    setFilename('')
-    setSubmitError(null)
+    setUploadError(msg);
+    setPatents([]);
+    setFilename("");
+    setSubmitError(null);
   }
 
   async function handleStart() {
-    if (patents.length === 0) { setSubmitError('請先上傳 .xlsx 檔案。'); return }
-    if (!USE_MOCK && !apiKey.trim()) { setSubmitError('請輸入 API Key 後再開始分析。'); return }
+    if (patents.length === 0) {
+      setSubmitError("請先上傳 .xlsx 檔案。");
+      return;
+    }
+    if (!USE_MOCK && !apiKey.trim()) {
+      setSubmitError("請輸入 API Key 後再開始分析。");
+      return;
+    }
 
-    setSubmitError(null)
-    setSubmitting(true)
+    setSubmitError(null);
+    setSubmitting(true);
 
-    const sampled = patents.slice(0, Math.min(sampleSize, patents.length))
+    const sampled = patents.slice(0, Math.min(sampleSize, patents.length));
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (!USE_MOCK) headers['X-LLM-Api-Key'] = apiKey.trim()
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (!USE_MOCK) headers["X-LLM-Api-Key"] = apiKey.trim();
 
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
+      const res = await fetch("/api/analyze", {
+        method: "POST",
         headers,
-        body: JSON.stringify({ provider, sample_size: sampleSize, patents: sampled }),
-      })
+        body: JSON.stringify({
+          provider,
+          sample_size: sampleSize,
+          patents: sampled,
+        }),
+      });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error((data as { message?: string }).message ?? `伺服器錯誤 ${res.status}`)
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          (data as { message?: string }).message ?? `伺服器錯誤 ${res.status}`,
+        );
       }
 
-      const data = (await res.json()) as { job_id: string }
+      const data = (await res.json()) as { job_id: string };
 
       addHistoryEntry({
         id: data.job_id,
-        filename: filename || 'patents.xlsx',
+        filename: filename || "patents.xlsx",
         timestamp: new Date().toISOString(),
-        status: 'analyzing',
+        status: "analyzing",
         patentCount: sampled.length,
-      })
+      });
 
-      setJobId(data.job_id)
-      setPhase('analyzing')
+      setJobId(data.job_id);
+      setPhase("analyzing");
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : '啟動分析失敗，請重試。')
+      setSubmitError(
+        err instanceof Error ? err.message : "啟動分析失敗，請重試。",
+      );
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-dvh bg-[#020617] text-[#F8FAFC] flex flex-col relative overflow-hidden">
-
+    <div className="min-h-dvh bg-[#020617] primary-foreground flex flex-col relative overflow-hidden">
       {/* ── Ambient light orbs ── */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+      <div
+        className="fixed inset-0 pointer-events-none overflow-hidden"
+        aria-hidden
+      >
         <div className="absolute -top-32 left-1/4 w-[600px] h-[600px] bg-blue-500/8 rounded-full blur-3xl" />
         <div className="absolute top-1/2 -right-32 w-[400px] h-[400px] bg-indigo-500/6 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 left-1/3 w-[500px] h-[400px] bg-cyan-500/5 rounded-full blur-3xl" />
       </div>
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 flex-shrink-0 h-14 bg-[#020617]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 shrink-0 h-14 bg-[#020617]/80 backdrop-blur-xl">
         <BarChart2 size={20} className="text-[#22C55E]" aria-hidden />
         <div>
-          <h1 className="font-serif text-base font-bold leading-tight text-[#F8FAFC]">
+          <h1 className="font-serif text-base font-bold leading-tight primary-foreground">
             王老師專利知識圖譜分析平台
           </h1>
-          <p className="text-[0.65rem] text-[#475569] mt-0.5 font-mono tracking-wide">
+          <p className="text-[0.65rem] primary-foreground mt-0.5 font-mono tracking-wide">
             Patent Knowledge Graph Analysis
           </p>
         </div>
@@ -142,40 +184,49 @@ export default function HomePage() {
 
       {/* ── Body: sidebar + main ── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-
         {/* History sidebar — hidden on mobile */}
-        <div className="hidden md:flex flex-shrink-0">
+        <div className="hidden md:flex shrink-0">
           <AnalysisHistorySidebar
             collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed(c => !c)}
+            onToggle={() => setSidebarCollapsed((c) => !c)}
           />
         </div>
 
         {/* Main content area */}
         <main className="flex-1 overflow-y-auto" aria-label="上傳與設定">
-
           {/* ── Analyzing phase ── */}
-          {phase === 'analyzing' && jobId ? (
+          {phase === "analyzing" && jobId ? (
             <div className="flex items-center justify-center min-h-full px-4 py-16">
               <ProgressPanel jobId={jobId} />
             </div>
-
-          /* ── Upload phase ── */
           ) : (
+            /* ── Upload phase ── */
             <div className="flex flex-col items-center justify-center min-h-full px-4 py-10">
-
               {/* Step indicator */}
               <div className="flex items-center gap-5 mb-8 flex-wrap justify-center w-full max-w-2xl">
-                <Step n={1} label="上傳 Excel" active={patents.length === 0} done={patents.length > 0} />
-                <span className="text-[#334155] text-sm select-none" aria-hidden>→</span>
-                <Step n={2} label="選擇模型" active={patents.length > 0 && !canStart} done={canStart} />
-                <span className="text-[#334155] text-sm select-none" aria-hidden>→</span>
+                <Step
+                  n={1}
+                  label="上傳 Excel"
+                  active={patents.length === 0}
+                  done={patents.length > 0}
+                />
+                <span className="text-border text-sm select-none" aria-hidden>
+                  →
+                </span>
+                <Step
+                  n={2}
+                  label="選擇模型"
+                  active={patents.length > 0 && !canStart}
+                  done={canStart}
+                />
+                <span className="text-border text-sm select-none" aria-hidden>
+                  →
+                </span>
                 <Step n={3} label="開始分析" active={canStart} />
               </div>
 
               {/* Wizard cards */}
               <div className="w-full max-w-2xl space-y-4">
-
                 {/* Upload card */}
                 <section
                   className="glass rounded-2xl p-6"
@@ -184,7 +235,10 @@ export default function HomePage() {
                   <h2 className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest mb-4">
                     01 · 上傳 Excel 檔案
                   </h2>
-                  <UploadZone onParsed={handleParsed} onError={handleUploadError} />
+                  <UploadZone
+                    onParsed={handleParsed}
+                    onError={handleUploadError}
+                  />
                 </section>
 
                 {/* Settings card */}
@@ -206,7 +260,10 @@ export default function HomePage() {
                   {/* Sample size */}
                   <div className="flex items-end gap-4 pt-4 border-t border-white/[0.06]">
                     <div className="flex flex-col gap-1.5">
-                      <Label htmlFor={sampleInputId} className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest">
+                      <Label
+                        htmlFor={sampleInputId}
+                        className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
+                      >
                         抽樣筆數
                       </Label>
                       <Input
@@ -215,15 +272,19 @@ export default function HomePage() {
                         min={1}
                         max={2000}
                         value={sampleSize}
-                        onChange={e => {
-                          const v = parseInt(e.target.value, 10)
-                          if (!isNaN(v)) setSampleSize(Math.min(2000, Math.max(1, v)))
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v))
+                            setSampleSize(Math.min(2000, Math.max(1, v)));
                         }}
-                        className="h-9 w-28 bg-white/5 border-white/10 text-[#F8FAFC] focus-visible:ring-[#60A5FA] text-sm backdrop-blur-sm"
+                        className="h-9 w-28 bg-white/5 border-white/10 primary-foreground focus-visible:ring-[#60A5FA] text-sm backdrop-blur-sm"
                       />
                     </div>
                     {sampleHint && (
-                      <p className="text-xs text-[#94A3B8] pb-2" aria-live="polite">
+                      <p
+                        className="text-xs text-muted-foreground pb-2"
+                        aria-live="polite"
+                      >
                         {sampleHint}
                       </p>
                     )}
@@ -232,8 +293,13 @@ export default function HomePage() {
 
                 {/* Error alerts */}
                 {(uploadError || submitError) && (
-                  <Alert variant="destructive" className="border-[#EF4444]/30 bg-[#EF4444]/8 text-[#EF4444] backdrop-blur-sm">
-                    <AlertDescription>{submitError ?? uploadError}</AlertDescription>
+                  <Alert
+                    variant="destructive"
+                    className="border-[#EF4444]/30 bg-[#EF4444]/8 text-[#EF4444] backdrop-blur-sm"
+                  >
+                    <AlertDescription>
+                      {submitError ?? uploadError}
+                    </AlertDescription>
                   </Alert>
                 )}
 
@@ -241,18 +307,29 @@ export default function HomePage() {
                 <div className="flex justify-center pt-2 pb-6">
                   <Button
                     size="lg"
-                    onClick={() => { void handleStart() }}
+                    onClick={() => {
+                      void handleStart();
+                    }}
                     disabled={submitting || !canStart}
                     className="min-w-48 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-semibold text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 gap-2 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 rounded-xl"
                   >
                     {submitting ? (
-                      <><Loader2 size={18} className="animate-spin" aria-hidden />啟動中…</>
+                      <>
+                        <Loader2
+                          size={18}
+                          className="animate-spin"
+                          aria-hidden
+                        />
+                        啟動中…
+                      </>
                     ) : (
-                      <>開始分析<ArrowRight size={18} aria-hidden /></>
+                      <>
+                        開始分析
+                        <ArrowRight size={18} aria-hidden />
+                      </>
                     )}
                   </Button>
                 </div>
-
               </div>
             </div>
           )}
@@ -260,12 +337,12 @@ export default function HomePage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center flex-shrink-0 bg-[#020617]/60 backdrop-blur-xl">
-        <p className="text-xs text-[#334155]">
-          支援 NVIDIA NIM · Google Gemini · OpenAI &nbsp;·&nbsp; 本機部署，資料不離開您的電腦
+      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center shrink-0 bg-[#020617]/60 backdrop-blur-xl">
+        <p className="text-xs text-border">
+          支援 NVIDIA NIM · Google Gemini · OpenAI &nbsp;·&nbsp;
+          本機部署，資料不離開您的電腦
         </p>
       </footer>
-
     </div>
-  )
+  );
 }

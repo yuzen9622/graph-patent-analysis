@@ -34,7 +34,8 @@ export default function ModelSelector({
   onApiKeyChange,
 }: ModelSelectorProps) {
   const [showKey, setShowKey] = useState(false);
-  const [validationState, setValidationState] = useState<ValidationState>("idle");
+  const [validationState, setValidationState] =
+    useState<ValidationState>("idle");
   const [validationMessage, setValidationMessage] = useState<string>("");
 
   const groupId = useId();
@@ -79,7 +80,6 @@ export default function ModelSelector({
 
   return (
     <div className="flex flex-col gap-5">
-
       {/* Provider radio cards — always 3 in a row */}
       <div>
         <p
@@ -117,12 +117,12 @@ export default function ModelSelector({
                 />
                 <span
                   className={`text-sm font-semibold leading-tight ${
-                    isSelected ? "text-[#60A5FA]" : "text-[#F8FAFC]"
+                    isSelected ? "text-[#60A5FA]" : "primary-foreground"
                   }`}
                 >
                   {opt.label}
                 </span>
-                <span className="font-mono text-[0.68rem] text-[#475569] leading-tight break-all">
+                <span className="font-mono text-[0.68rem] primary-foreground leading-tight break-all">
                   {opt.model}
                 </span>
               </label>
@@ -155,10 +155,12 @@ export default function ModelSelector({
             placeholder={USE_MOCK ? "" : "貼上您的 API Key…"}
             autoComplete="off"
             spellCheck={false}
-            aria-describedby={validationMessage ? `${inputId}-status` : undefined}
+            aria-describedby={
+              validationMessage ? `${inputId}-status` : undefined
+            }
             className={[
               "w-full rounded-xl border bg-white/[0.04] backdrop-blur-sm py-2.5 pl-3 pr-10",
-              "font-mono text-sm text-[#F8FAFC] placeholder-[#475569]",
+              "font-mono text-sm primary-foreground placeholder-accent",
               "outline-none transition-all duration-200",
               "focus:outline focus:outline-2 focus:outline-[#60A5FA]",
               "disabled:cursor-not-allowed disabled:opacity-50",
@@ -172,10 +174,16 @@ export default function ModelSelector({
 
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 gap-1.5">
             {validationState === "validating" && (
-              <Loader2 className="h-4 w-4 animate-spin text-[#94A3B8]" aria-hidden="true" />
+              <Loader2
+                className="h-4 w-4 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
             )}
             {validationState === "valid" && (
-              <CheckCircle2 className="h-4 w-4 text-[#22C55E]" aria-hidden="true" />
+              <CheckCircle2
+                className="h-4 w-4 text-[#22C55E]"
+                aria-hidden="true"
+              />
             )}
             {validationState === "invalid" && (
               <XCircle className="h-4 w-4 text-[#EF4444]" aria-hidden="true" />
@@ -185,7 +193,7 @@ export default function ModelSelector({
                 type="button"
                 onClick={() => setShowKey((v) => !v)}
                 aria-label={showKey ? "隱藏 API Key" : "顯示 API Key"}
-                className="cursor-pointer rounded text-[#94A3B8] hover:text-[#F8FAFC] focus:outline focus:outline-2 focus:outline-[#4E79A7] transition-colors duration-150"
+                className="cursor-pointer rounded text-muted-foreground hover:primary-foreground focus:outline focus:outline-2 focus:outline-[#4E79A7] transition-colors duration-150"
               >
                 {showKey ? (
                   <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -198,7 +206,9 @@ export default function ModelSelector({
         </div>
 
         {USE_MOCK ? (
-          <p className="mt-1.5 text-xs text-[#475569]">（開發模式：不需要）</p>
+          <p className="mt-1.5 text-xs primary-foreground">
+            （開發模式：不需要）
+          </p>
         ) : validationMessage ? (
           <p
             id={`${inputId}-status`}

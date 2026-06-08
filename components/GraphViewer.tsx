@@ -4,9 +4,23 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { Network } from "vis-network";
 import type { GraphNode, GraphEdge, Community, NodeType } from "@/types/graph";
 
+// ── Performance thresholds ────────────────────────────────────────────────────
+// LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
+// HUGE:  straight edges, hover off, hideEdgesOnZoom on, clustering
+const LARGE_GRAPH = 120;
+const HUGE_GRAPH = 350;
+
+// ── DataSet update types ──────────────────────────────────────────────────────
+
+type NodeUpdate = { id: string; hidden?: boolean; opacity?: number };
+type EdgeColorProp = { inherit: "from"; opacity?: number };
+type EdgeUpdate = { id: string; hidden?: boolean; color?: EdgeColorProp };
+type NodeDataSet = { update: (items: NodeUpdate[]) => void };
+type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
+
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
-function toVisNode(n: GraphNode) {
+function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
   const isApplicant = n.type === "applicant";
   const isPatent = n.type === "patent";
   const baseColor = n.color.length === 9 ? n.color.slice(0, 7) : n.color;
@@ -20,17 +34,17 @@ function toVisNode(n: GraphNode) {
     color: {
       background: n.color,
       // border must NOT be 'transparent' — vis-network uses border color for
-      // edge `inherit:'from'` rendering. Set border = baseColor so edges pick
-      // up the node's actual community/applicant color.
+      // edge `inherit:'from'` rendering.
       border: baseColor,
       highlight: { background: n.color, border: baseColor },
       hover: { background: n.color, border: baseColor },
     },
     font: {
-      color: "#F8FAFC",
+      color: "#000000",
       size: isApplicant ? 14 : isPatent ? 0 : 11,
       face: "Atkinson Hyperlegible, sans-serif",
     },
+    ...(pos ?? {}),
   };
 }
 
@@ -54,11 +68,114 @@ function toVisEdge(e: GraphEdge) {
         ? e.relation
         : "",
     width: isConceptEdge ? Math.max(1.5, (e.weight ?? 1) * 0.5) : 1,
-    // inherit: 'from' ensures the edge takes the source node's color
     color: { inherit: "from" as const, opacity: isConceptEdge ? 0.75 : 0.45 },
     arrows: { to: { enabled: true, scaleFactor: 0.4 } },
-    font: { size: 9, color: "#94A3B8", strokeWidth: 0 },
-    smooth: { enabled: true, type: "continuous", roundness: 0.2 },
+    font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
+    // smooth is controlled globally via options — not set per-edge
+    // so that perf-adaptive global setting takes effect
+  };
+}
+
+// Pre-spread concept nodes by community so ForceAtlas2 starts from a
+// separated state — prevents same-community nodes from collapsing together.
+function buildInitialPositions(
+  nodes: GraphNode[],
+): Map<string, { x: number; y: number }> {
+  const byComm = new Map<number, string[]>();
+  nodes.forEach((n) => {
+    if (n.type === "concept" && n.community_id !== undefined) {
+      const arr = byComm.get(n.community_id) ?? [];
+      arr.push(n.id);
+      byComm.set(n.community_id, arr);
+    }
+  });
+
+  const comms = [...byComm.entries()];
+  const K = comms.length;
+  if (K === 0) return new Map();
+
+  const RING = Math.max(500, K * 140);
+  const SPREAD = 140;
+
+  const positions = new Map<string, { x: number; y: number }>();
+  comms.forEach(([, ids], ci) => {
+    const ca = (ci / K) * 2 * Math.PI;
+    const cx = Math.cos(ca) * RING;
+    const cy = Math.sin(ca) * RING;
+    ids.forEach((id, ni) => {
+      const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
+      const r = SPREAD * (0.35 + (ni % 3) * 0.32);
+      positions.set(id, {
+        x: cx + Math.cos(na) * r,
+        y: cy + Math.sin(na) * r,
+      });
+    });
+  });
+  return positions;
+}
+
+// Adaptive options: degrade rendering quality as graph size grows.
+// Inspired by vis-network smoothWorldCup example which achieves fluid
+// rendering by: adaptiveTimestep, continuous (not dynamic) smooth, and
+// hiding edges during drag/zoom.
+function buildOptions(nodeCount: number) {
+  const isLarge = nodeCount >= LARGE_GRAPH;
+  const isHuge = nodeCount >= HUGE_GRAPH;
+
+  return {
+    nodes: {
+      // borderWidth: 0 cuts per-node border stroke in large graphs
+      borderWidth: isLarge ? 0 : 1,
+      // shadow is very expensive — disable for large graphs
+      shadow: isLarge
+        ? false
+        : { enabled: true, size: 5, x: 2, y: 2, color: "rgba(0,0,0,0.6)" },
+    },
+    edges: {
+      color: { inherit: "from" as const, opacity: 1 },
+      selectionWidth: 2,
+      // "continuous" smooth: canvas-only, no hidden physics nodes (fast).
+      // For huge graphs use straight lines — eliminates all curve math.
+      smooth: isHuge
+        ? false
+        : { enabled: true, type: "continuous" as const, roundness: 0.2 },
+    },
+    physics: {
+      solver: "forceAtlas2Based" as const,
+      forceAtlas2Based: {
+        gravitationalConstant: isLarge ? -26 : -60,
+        centralGravity: 0.008,
+        springLength: isLarge ? 100 : 120,
+        springConstant: 0.06,
+        damping: 0.45,
+        // avoidOverlap adds per-node overlap checks
+        avoidOverlap: isLarge ? 0 : 0,
+      },
+      // adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
+      // meaning the solver converges in far fewer real iterations
+      adaptiveTimestep: true,
+      maxVelocity: 50,
+      minVelocity: 0.75,
+      stabilization: {
+        enabled: true,
+        iterations: isHuge ? 80 : isLarge ? 130 : 200,
+        updateInterval: isLarge ? 25 : 15,
+        fit: false,
+      },
+    },
+    interaction: {
+      hover: !isHuge,
+      tooltipDelay: 250,
+      navigationButtons: false,
+      keyboard: { enabled: true, bindToWindow: false },
+      zoomView: true,
+      dragView: true,
+      // hiding edges during drag/zoom is the single biggest UX win for
+      // large graphs — canvas redraws drop from O(E) to O(N) per frame
+      hideEdgesOnDrag: isLarge,
+      hideEdgesOnZoom: isHuge,
+    },
+    layout: { improvedLayout: false },
   };
 }
 
@@ -75,10 +192,6 @@ interface Props {
   focusNodeId?: string;
 }
 
-type SimpleDataSet = {
-  update: (items: { id: string; hidden?: boolean }[]) => void;
-};
-
 export default function GraphViewer({
   nodes,
   edges,
@@ -91,9 +204,10 @@ export default function GraphViewer({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
-  const nodeDataSetRef = useRef<SimpleDataSet | null>(null);
-  const edgeDataSetRef = useRef<SimpleDataSet | null>(null);
+  const nodeDataSetRef = useRef<NodeDataSet | null>(null);
+  const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
   const [stabilized, setStabilized] = useState(false);
+  const [stabProgress, setStabProgress] = useState(0);
 
   const handleFit = useCallback(() => {
     networkRef.current?.fit({
@@ -111,41 +225,13 @@ export default function GraphViewer({
       const { DataSet } = await import("vis-data");
       if (cancelled || !containerRef.current) return;
 
-      const nodeDataSet = new DataSet(nodes.map(toVisNode));
+      const initPos = buildInitialPositions(nodes);
+      const nodeDataSet = new DataSet(
+        nodes.map((n) => toVisNode(n, initPos.get(n.id))),
+      );
       const edgeDataSet = new DataSet(edges.map(toVisEdge));
-      nodeDataSetRef.current = nodeDataSet as unknown as SimpleDataSet;
-      edgeDataSetRef.current = edgeDataSet as unknown as SimpleDataSet;
-
-      const options = {
-        nodes: {
-          borderWidth: 1,
-          shadow: { enabled: true, size: 5, x: 2, y: 2, color: "rgba(0,0,0)" },
-        },
-        edges: {
-          color: { inherit: "from", opacity: 1 },
-          selectionWidth: 2,
-        },
-        physics: {
-          solver: "forceAtlas2Based",
-          forceAtlas2Based: {
-            gravitationalConstant: -60,
-            centralGravity: 0.008,
-            springLength: 120,
-            springConstant: 0.06,
-            damping: 0.45,
-          },
-          stabilization: { iterations: 200, updateInterval: 50 },
-        },
-        interaction: {
-          hover: true,
-          tooltipDelay: 250,
-          navigationButtons: false,
-          keyboard: { enabled: true, bindToWindow: false },
-          zoomView: true,
-          dragView: true,
-        },
-        layout: { improvedLayout: false },
-      };
+      nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
+      edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 
       if (networkRef.current) {
         networkRef.current.destroy();
@@ -155,31 +241,80 @@ export default function GraphViewer({
       const network = new Network(
         containerRef.current,
         { nodes: nodeDataSet, edges: edgeDataSet },
-        options,
+        buildOptions(nodes.length),
       );
       networkRef.current = network;
 
       setStabilized(false);
+      setStabProgress(0);
+
+      network.on("stabilizationProgress", (params) => {
+        if (!cancelled)
+          setStabProgress(Math.round((params.iterations / params.total) * 100));
+      });
+
       network.once("stabilizationIterationsDone", () => {
         if (!cancelled) {
           network.setOptions({ physics: { enabled: false } });
           setStabilized(true);
+          setStabProgress(100);
         }
       });
+
+      // ── Highlight: dim non-adjacent nodes/edges on click ──────────────
+      let highlightActive = false;
+      const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.06 };
+
+      const applyHighlight = (clickedId: string) => {
+        const adjacent = new Set<string>([clickedId]);
+        const adjEdgeIds = new Set<string>();
+        edges.forEach((e) => {
+          if (e.from === clickedId || e.to === clickedId) {
+            adjacent.add(e.from);
+            adjacent.add(e.to);
+            adjEdgeIds.add(e.id);
+          }
+        });
+        nodeDataSet.update(
+          nodes.map((n) => ({
+            id: n.id,
+            opacity: adjacent.has(n.id) ? 1 : 0.08,
+          })),
+        );
+        edgeDataSet.update(
+          edges.map((e) => ({
+            id: e.id,
+            color: adjEdgeIds.has(e.id) ? toVisEdge(e).color : DIM_EDGE,
+          })),
+        );
+        highlightActive = true;
+      };
+
+      const clearHighlight = () => {
+        if (!highlightActive) return;
+        nodeDataSet.update(nodes.map((n) => ({ id: n.id, opacity: 1 })));
+        edgeDataSet.update(
+          edges.map((e) => ({ id: e.id, color: toVisEdge(e).color })),
+        );
+        highlightActive = false;
+      };
 
       network.on("click", (params) => {
         if (params.nodes.length > 0) {
           const nodeId = params.nodes[0] as string;
           onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null);
+          applyHighlight(nodeId);
         } else {
           onNodeSelect?.(null);
+          clearHighlight();
         }
       });
 
-      // Double-click: focus mode (hide non-adjacent)
+      // Double-click: focus mode (hide non-adjacent).
+      // Clear opacity-highlight first to avoid stacked visual states.
       network.on("doubleClick", (params) => {
+        clearHighlight();
         if (params.nodes.length === 0) {
-          // Restore all on double-click canvas
           nodeDataSet.update(nodes.map((n) => ({ id: n.id, hidden: false })));
           return;
         }
@@ -213,7 +348,6 @@ export default function GraphViewer({
 
     const [y0, y1] = yearRange ?? [0, 9999];
 
-    // Compute hidden set first so we can use it for edge filtering
     const hiddenIds = new Set<string>();
     const nodeUpdates = nodes.map((n) => {
       let hidden = false;
@@ -235,8 +369,6 @@ export default function GraphViewer({
     nodeDataSetRef.current.update(nodeUpdates);
 
     // Sync edge visibility: hide any edge whose from OR to node is hidden.
-    // vis-network auto-hides edges when a node is hidden, but explicit sync
-    // ensures concept↔concept edges are correctly shown when both nodes are visible.
     if (edgeDataSetRef.current) {
       const edgeUpdates = edges.map((e) => ({
         id: e.id,
@@ -256,21 +388,33 @@ export default function GraphViewer({
     networkRef.current.selectNodes([focusNodeId]);
   }, [focusNodeId]);
 
+  const isLarge = nodes.length >= LARGE_GRAPH;
+
   return (
-    <div className="relative w-full h-full bg-[#0F172A]">
+    <div className="relative w-full h-full bg-accent">
       {/* Fit-to-view button */}
       <button
         onClick={handleFit}
         title="全部顯示"
-        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-[#334155] bg-[#1E293B]/90 text-[#94A3B8] hover:text-[#F8FAFC] hover:border-[#4E79A7] transition-colors duration-150 cursor-pointer backdrop-blur-sm"
+        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-[#4E79A7] transition-colors duration-150 cursor-pointer backdrop-blur-sm"
       >
         全部顯示
       </button>
 
-      {/* Stabilizing overlay */}
+      {/* Stabilizing overlay with progress */}
       {!stabilized && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-[#0F172A]/85 border border-[#334155] rounded-md px-4 py-1.5 text-xs text-[#94A3B8] pointer-events-none backdrop-blur-sm">
-          佈局計算中…
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 bg-accent/85 border border-border rounded-md px-4 py-2 pointer-events-none backdrop-blur-sm">
+          <span className="text-xs text-muted-foreground">
+            佈局計算中… {stabProgress > 0 ? `${stabProgress}%` : ""}
+          </span>
+          {isLarge && (
+            <div className="w-32 h-1 bg-background rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#4E79A7] rounded-full transition-all duration-150"
+                style={{ width: `${stabProgress}%` }}
+              />
+            </div>
+          )}
         </div>
       )}
 
