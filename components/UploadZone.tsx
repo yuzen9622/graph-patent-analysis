@@ -22,13 +22,13 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 function getZoneClass(state: UploadState) {
-  const base = 'flex flex-col items-center justify-center w-full min-h-[160px] rounded-xl border-2 border-dashed px-6 py-8 outline-none transition-all duration-200'
+  const base = 'flex flex-col items-center justify-center w-full min-h-[160px] rounded-xl border-2 border-dashed px-6 py-8 outline-none transition-all duration-200 backdrop-blur-sm'
   switch (state) {
-    case 'idle':    return cn(base, 'border-[#475569] bg-[#0F172A]/50 cursor-pointer hover:border-[#4E79A7]/60 hover:bg-[#4E79A7]/5')
-    case 'dragging':return cn(base, 'border-[#4E79A7] bg-[#4E79A7]/10 scale-[1.01] cursor-copy')
-    case 'parsing': return cn(base, 'border-[#475569] bg-[#0F172A]/50 opacity-75 cursor-wait')
-    case 'success': return cn(base, 'border-[#22C55E] bg-[#22C55E]/10 cursor-pointer')
-    case 'error':   return cn(base, 'border-[#EF4444] bg-[#EF4444]/10 cursor-pointer')
+    case 'idle':    return cn(base, 'border-white/15 bg-white/[0.02] cursor-pointer hover:border-[#60A5FA]/40 hover:bg-[#60A5FA]/5')
+    case 'dragging':return cn(base, 'border-[#60A5FA]/60 bg-[#60A5FA]/10 scale-[1.01] cursor-copy shadow-lg shadow-blue-500/10')
+    case 'parsing': return cn(base, 'border-white/10 bg-white/[0.02] opacity-75 cursor-wait')
+    case 'success': return cn(base, 'border-[#22C55E]/40 bg-[#22C55E]/8 cursor-pointer shadow-sm shadow-green-500/10')
+    case 'error':   return cn(base, 'border-[#EF4444]/40 bg-[#EF4444]/8 cursor-pointer')
   }
 }
 
@@ -167,10 +167,10 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
           <>
             <Upload
               size={36}
-              className={cn('mb-3 transition-colors duration-200', state === 'dragging' ? 'text-[#4E79A7]' : 'text-[#475569]')}
+              className={cn('mb-3 transition-colors duration-200', state === 'dragging' ? 'text-[#60A5FA]' : 'text-[#475569]')}
               aria-hidden
             />
-            <p className={cn('font-semibold text-base transition-colors duration-200', state === 'dragging' ? 'text-[#6B9CC3]' : 'text-[#F8FAFC]')}>
+            <p className={cn('font-semibold text-base transition-colors duration-200', state === 'dragging' ? 'text-[#93C5FD]' : 'text-[#F8FAFC]')}>
               {state === 'dragging' ? '放開以上傳' : '拖曳 .xlsx 至此，或點擊選擇'}
             </p>
             <p className="mt-1.5 text-sm text-[#475569]">僅支援 .xlsx 格式</p>
@@ -243,7 +243,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         <div
           role="region"
           aria-label="欄位對應結果"
-          className="mt-4 bg-[#0F172A] border border-[#334155] rounded-lg p-4"
+          className="mt-4 bg-white/[0.03] border border-white/8 rounded-xl p-4 backdrop-blur-sm"
         >
           <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wide mb-3">
             欄位對應 — {matchedCount} / {totalFields} 已辨識

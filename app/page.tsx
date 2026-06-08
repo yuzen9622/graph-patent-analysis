@@ -21,10 +21,10 @@ function Step({ n, label, active, done }: { n: number; label: string; active: bo
   return (
     <div className={`flex items-center gap-2 text-sm transition-colors duration-200 ${active ? 'text-[#F8FAFC]' : 'text-[#475569]'}`}>
       <span className={[
-        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors duration-200',
-        done    ? 'bg-[#22C55E] text-white' :
-        active  ? 'bg-[#4E79A7] text-white' :
-                  'bg-[#1E293B] text-[#475569] border border-[#334155]',
+        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all duration-200',
+        done    ? 'bg-[#22C55E] text-white shadow-sm shadow-green-500/40' :
+        active  ? 'bg-[#60A5FA] text-white shadow-sm shadow-blue-400/50' :
+                  'bg-white/5 text-[#475569] border border-white/10',
       ].join(' ')}>
         {n}
       </span>
@@ -112,10 +112,17 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#020617] text-[#F8FAFC] flex flex-col">
+    <div className="min-h-dvh bg-[#020617] text-[#F8FAFC] flex flex-col relative overflow-hidden">
+
+      {/* ── Ambient light orbs ── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute -top-32 left-1/4 w-[600px] h-[600px] bg-blue-500/8 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -right-32 w-[400px] h-[400px] bg-indigo-500/6 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 left-1/3 w-[500px] h-[400px] bg-cyan-500/5 rounded-full blur-3xl" />
+      </div>
 
       {/* ── Header ── */}
-      <header className="border-b border-[#1E293B] px-6 py-3.5 flex items-center gap-3 flex-shrink-0 h-14">
+      <header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 flex-shrink-0 h-14 bg-[#020617]/80 backdrop-blur-xl">
         <BarChart2 size={20} className="text-[#22C55E]" aria-hidden />
         <div>
           <h1 className="font-serif text-base font-bold leading-tight text-[#F8FAFC]">
@@ -126,7 +133,7 @@ export default function HomePage() {
           </p>
         </div>
         {USE_MOCK && (
-          <span className="ml-auto flex items-center gap-1.5 text-xs text-[#F59E0B] bg-[#F59E0B]/10 border border-[#F59E0B]/30 px-2.5 py-1 rounded-full">
+          <span className="ml-auto flex items-center gap-1.5 text-xs text-[#F59E0B] bg-[#F59E0B]/10 border border-[#F59E0B]/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
             <FlaskConical size={12} aria-hidden />
             Mock 模式
           </span>
@@ -171,10 +178,10 @@ export default function HomePage() {
 
                 {/* Upload card */}
                 <section
-                  className="rounded-xl border border-[#1E293B] bg-[#0F172A] p-6"
+                  className="glass rounded-2xl p-6"
                   aria-label="檔案上傳"
                 >
-                  <h2 className="text-xs font-semibold text-[#475569] uppercase tracking-wider mb-4">
+                  <h2 className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest mb-4">
                     01 · 上傳 Excel 檔案
                   </h2>
                   <UploadZone onParsed={handleParsed} onError={handleUploadError} />
@@ -182,10 +189,10 @@ export default function HomePage() {
 
                 {/* Settings card */}
                 <section
-                  className="rounded-xl border border-[#1E293B] bg-[#0F172A] p-6 space-y-5"
+                  className="glass rounded-2xl p-6 space-y-5"
                   aria-label="分析設定"
                 >
-                  <h2 className="text-xs font-semibold text-[#475569] uppercase tracking-wider">
+                  <h2 className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest">
                     02 · 分析設定
                   </h2>
 
@@ -197,9 +204,9 @@ export default function HomePage() {
                   />
 
                   {/* Sample size */}
-                  <div className="flex items-end gap-4 pt-4 border-t border-[#1E293B]">
+                  <div className="flex items-end gap-4 pt-4 border-t border-white/[0.06]">
                     <div className="flex flex-col gap-1.5">
-                      <Label htmlFor={sampleInputId} className="text-xs font-semibold text-[#475569] uppercase tracking-wider">
+                      <Label htmlFor={sampleInputId} className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest">
                         抽樣筆數
                       </Label>
                       <Input
@@ -212,7 +219,7 @@ export default function HomePage() {
                           const v = parseInt(e.target.value, 10)
                           if (!isNaN(v)) setSampleSize(Math.min(2000, Math.max(1, v)))
                         }}
-                        className="h-9 w-28 bg-[#020617] border-[#334155] text-[#F8FAFC] focus-visible:ring-[#4E79A7] text-sm"
+                        className="h-9 w-28 bg-white/5 border-white/10 text-[#F8FAFC] focus-visible:ring-[#60A5FA] text-sm backdrop-blur-sm"
                       />
                     </div>
                     {sampleHint && (
@@ -225,7 +232,7 @@ export default function HomePage() {
 
                 {/* Error alerts */}
                 {(uploadError || submitError) && (
-                  <Alert variant="destructive" className="border-[#EF4444]/50 bg-[#EF4444]/10 text-[#EF4444]">
+                  <Alert variant="destructive" className="border-[#EF4444]/30 bg-[#EF4444]/8 text-[#EF4444] backdrop-blur-sm">
                     <AlertDescription>{submitError ?? uploadError}</AlertDescription>
                   </Alert>
                 )}
@@ -236,7 +243,7 @@ export default function HomePage() {
                     size="lg"
                     onClick={() => { void handleStart() }}
                     disabled={submitting || !canStart}
-                    className="min-w-48 bg-[#22C55E] hover:bg-[#16A34A] text-white font-semibold text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 gap-2"
+                    className="min-w-48 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-semibold text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 gap-2 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 rounded-xl"
                   >
                     {submitting ? (
                       <><Loader2 size={18} className="animate-spin" aria-hidden />啟動中…</>
@@ -253,7 +260,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-[#1E293B] px-6 py-3 text-center flex-shrink-0">
+      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center flex-shrink-0 bg-[#020617]/60 backdrop-blur-xl">
         <p className="text-xs text-[#334155]">
           支援 NVIDIA NIM · Google Gemini · OpenAI &nbsp;·&nbsp; 本機部署，資料不離開您的電腦
         </p>

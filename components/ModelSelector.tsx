@@ -84,7 +84,7 @@ export default function ModelSelector({
       <div>
         <p
           id={`${groupId}-label`}
-          className="mb-3 text-xs font-semibold text-[#475569] uppercase tracking-wider"
+          className="mb-3 text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
         >
           模型選擇
         </p>
@@ -99,11 +99,12 @@ export default function ModelSelector({
               <label
                 key={opt.value}
                 className={[
-                  "flex cursor-pointer flex-col gap-1.5 rounded-lg border px-4 py-3.5",
-                  "transition-colors duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-[#4E79A7]",
+                  "flex cursor-pointer flex-col gap-1.5 rounded-xl border px-4 py-3.5",
+                  "transition-all duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-[#60A5FA]",
+                  "backdrop-blur-sm",
                   isSelected
-                    ? "border-[#4E79A7] bg-[#4E79A7]/15"
-                    : "border-[#334155] bg-[#1E293B] hover:border-[#4E79A7]/50 hover:bg-[#4E79A7]/5",
+                    ? "border-[#60A5FA]/40 bg-[#60A5FA]/12 shadow-md shadow-blue-500/15"
+                    : "border-white/8 bg-white/[0.03] hover:border-white/16 hover:bg-white/[0.06]",
                 ].join(" ")}
               >
                 <input
@@ -116,7 +117,7 @@ export default function ModelSelector({
                 />
                 <span
                   className={`text-sm font-semibold leading-tight ${
-                    isSelected ? "text-[#4E79A7]" : "text-[#F8FAFC]"
+                    isSelected ? "text-[#60A5FA]" : "text-[#F8FAFC]"
                   }`}
                 >
                   {opt.label}
@@ -134,7 +135,7 @@ export default function ModelSelector({
       <div>
         <label
           htmlFor={inputId}
-          className="mb-2 block text-xs font-semibold text-[#475569] uppercase tracking-wider"
+          className="mb-2 block text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
         >
           API Key
         </label>
@@ -156,16 +157,16 @@ export default function ModelSelector({
             spellCheck={false}
             aria-describedby={validationMessage ? `${inputId}-status` : undefined}
             className={[
-              "w-full rounded-lg border bg-[#020617] py-2.5 pl-3 pr-10",
+              "w-full rounded-xl border bg-white/[0.04] backdrop-blur-sm py-2.5 pl-3 pr-10",
               "font-mono text-sm text-[#F8FAFC] placeholder-[#475569]",
-              "outline-none transition-colors duration-200",
-              "focus:outline focus:outline-2 focus:outline-[#4E79A7]",
+              "outline-none transition-all duration-200",
+              "focus:outline focus:outline-2 focus:outline-[#60A5FA]",
               "disabled:cursor-not-allowed disabled:opacity-50",
               validationState === "valid"
-                ? "border-[#22C55E]"
+                ? "border-[#22C55E]/50"
                 : validationState === "invalid"
-                  ? "border-[#EF4444]"
-                  : "border-[#334155] hover:border-[#4E79A7]/60",
+                  ? "border-[#EF4444]/50"
+                  : "border-white/8 hover:border-white/16",
             ].join(" ")}
           />
 

@@ -171,10 +171,10 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 
   const barColor =
     status === 'cancelled'
-      ? 'bg-amber-500'
+      ? 'bg-amber-400'
       : status === 'error'
-        ? 'bg-red-500'
-        : 'bg-blue-500'
+        ? 'bg-red-400'
+        : 'bg-gradient-to-r from-[#60A5FA] to-[#818CF8]'
 
   const headingText =
     status === 'running'
@@ -189,7 +189,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 
   return (
     <div
-      className="w-full max-w-2xl mx-auto rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6 space-y-5"
+      className="w-full max-w-2xl mx-auto glass rounded-2xl p-6 space-y-5"
       role="region"
       aria-label="分析進度"
     >
@@ -222,7 +222,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
       {total > 0 && (
         <div className="space-y-1">
           <div
-            className="w-full h-3 rounded-full bg-slate-700 overflow-hidden"
+            className="w-full h-2.5 rounded-full bg-white/8 overflow-hidden"
             role="progressbar"
             aria-valuenow={done}
             aria-valuemin={0}
@@ -258,13 +258,13 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
       {/* Scrollable batch log */}
       {batchLog.length > 0 && (
         <div
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] max-h-52 overflow-y-auto"
+          className="rounded-xl border border-white/8 bg-white/[0.03] backdrop-blur-sm max-h-52 overflow-y-auto"
           aria-label="批次處理紀錄"
         >
           {batchLog.map((entry, idx) => (
             <div
               key={`${entry.batchIndex}-${idx}`}
-              className="flex items-start gap-2 px-3 py-2 text-sm border-b border-[var(--border)] last:border-b-0"
+              className="flex items-start gap-2 px-3 py-2 text-sm border-b border-white/[0.06] last:border-b-0"
             >
               <CheckCircle2
                 className="w-4 h-4 text-green-400 mt-0.5 shrink-0"
@@ -311,11 +311,11 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
             type="button"
             onClick={handleCancel}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium cursor-pointer',
-              'bg-slate-700 text-[var(--text-primary)] border border-[var(--border)]',
-              'hover:bg-red-900/50 hover:border-red-600 hover:text-red-300',
-              'transition-colors duration-150',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]',
+              'px-4 py-2 rounded-xl text-sm font-medium cursor-pointer',
+              'glass text-[#F8FAFC]',
+              'hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-300',
+              'transition-all duration-150',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60A5FA]',
             )}
             aria-label="取消分析"
           >

@@ -50,7 +50,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
   return (
     <aside
       className={[
-        'flex flex-col h-full bg-[#0F172A] border-r border-[#1E293B] flex-shrink-0',
+        'flex flex-col h-full bg-[#020617]/60 backdrop-blur-xl border-r border-white/[0.07] flex-shrink-0',
         'transition-[width] duration-200 ease-in-out overflow-hidden',
         collapsed ? 'w-14' : 'w-64',
       ].join(' ')}
@@ -59,16 +59,16 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
       {/* Header */}
       <div
         className={[
-          'flex items-center border-b border-[#1E293B] h-14 flex-shrink-0',
+          'flex items-center border-b border-white/[0.06] h-14 flex-shrink-0',
           collapsed ? 'justify-center' : 'px-4 justify-between',
         ].join(' ')}
       >
         {!collapsed && (
           <div className="flex items-center gap-2 min-w-0">
-            <History size={15} className="text-[#4E79A7] flex-shrink-0" aria-hidden />
+            <History size={15} className="text-[#60A5FA] flex-shrink-0" aria-hidden />
             <span className="text-sm font-semibold text-[#F8FAFC]">分析歷史</span>
             {entries.length > 0 && (
-              <span className="ml-1 text-[0.65rem] text-[#475569] bg-[#1E293B] rounded-full px-1.5 py-0.5 font-mono leading-none">
+              <span className="ml-1 text-[0.65rem] text-[#475569] bg-white/8 rounded-full px-1.5 py-0.5 font-mono leading-none">
                 {entries.length}
               </span>
             )}
@@ -77,7 +77,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
         <button
           onClick={onToggle}
           aria-label={collapsed ? '展開歷史側欄' : '收起歷史側欄'}
-          className="w-8 h-8 flex items-center justify-center rounded-md text-[#475569] hover:text-[#F8FAFC] hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer flex-shrink-0"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#475569] hover:text-[#F8FAFC] hover:bg-white/8 transition-colors duration-150 cursor-pointer flex-shrink-0"
         >
           {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
         </button>
@@ -91,7 +91,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
               key={entry.id}
               href={`/analysis/${entry.id}`}
               title={`${entry.filename} — ${formatDate(entry.timestamp)}`}
-              className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/8 transition-colors duration-150 cursor-pointer"
             >
               <FileSpreadsheet
                 size={14}
@@ -125,7 +125,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
                 <li key={entry.id}>
                   <Link
                     href={`/analysis/${entry.id}`}
-                    className="group flex flex-col gap-1 rounded-lg px-3 py-2.5 hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer"
+                    className="group flex flex-col gap-1 rounded-xl px-3 py-2.5 hover:bg-white/8 transition-all duration-150 cursor-pointer hover:border-white/10 border border-transparent"
                   >
                     <div className="flex items-start gap-2 min-w-0">
                       <div className="mt-0.5 flex-shrink-0">
@@ -145,7 +145,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
                       <button
                         onClick={e => handleDelete(entry.id, e)}
                         aria-label={`刪除 ${entry.filename} 記錄`}
-                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-[#334155] hover:text-[#EF4444] transition-all duration-150 cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-md text-[#475569] hover:text-[#EF4444] transition-all duration-150 cursor-pointer"
                       >
                         <Trash2 size={10} aria-hidden />
                       </button>
