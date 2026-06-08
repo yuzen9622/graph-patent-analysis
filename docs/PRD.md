@@ -1,8 +1,8 @@
 # PRD：王老師專利知識圖譜分析平台（Next.js 版）
 
-**版本**：v1.0  
+**版本**：v1.1  
 **日期**：2026-06-06  
-**狀態**：草稿
+**狀態**：草稿（已納入架構決策）
 
 ---
 
@@ -43,7 +43,9 @@
 | US-06 | 研究者 | 我想隱藏/顯示特定技術社群來聚焦分析 | 點擊 legend 色點可切換顯示/隱藏 |
 | US-07 | 研究者 | 我想看 AI 產生的技術趨勢報告 | sidebar 下方有 AI 報告面板，可捲動閱讀 |
 | US-08 | 研究者 | 我想搜尋特定技術關鍵字在圖中的位置 | 搜尋框即時過濾，點擊結果自動 focus 到該節點 |
-| US-09 | 研究者 | 我想把圖譜分享給合作者看 | 分析完成後產生可分享的連結（靜態快照） |
+| US-09 | 研究者 | 我想把圖譜分享給合作者看 | 分析完成後產生可分享的 URL 連結，任何可存取此伺服器的人可直接開啟互動圖譜 |
+| US-10 | 研究者 | 我想中止正在進行的分析 | 點擊「取消分析」後，LLM 呼叫停止，顯示「已中止，完成 N/M 筆」 |
+| US-11 | 研究者 | 第一次使用時我知道該怎麼開始 | 首頁未上傳時顯示引導說明；篩選/搜尋無結果時顯示明確提示訊息 |
 
 ---
 
@@ -113,6 +115,14 @@
 [申請人] ──申請了──▶ [專利] ──包含──▶ [技術概念]
 ```
 
+**申請人名稱清理規則**（在 `excel-parser.ts` 解析階段執行，列入 Phase 1 驗收條件）：
+1. 以第一個**全形空格**（U+3000）或**半形空格**為截斷點，取前段作為公司名稱
+2. 若截斷後仍含括號（如「（臺北）」），再次截斷
+3. 多申請人（原始欄位以「；」或「;」分隔）：**各自建立獨立節點**，共同指向同一篇專利
+4. 清理後去重（`Map<string, ApplicantNode>`）；同名公司合併為一個節點
+
+> 範例：`國泰金融控股股份有限公司 臺北市...` → `國泰金融控股股份有限公司`
+
 節點屬性：
 
 | 節點類型 | 屬性 |
@@ -130,9 +140,12 @@
 | 技術概念 → 技術概念 | `relation`（來自 LLM）, `weight`, `source_patent` |
 
 **F-06 社群偵測**
-- 對技術概念層執行 Louvain 社群偵測（`networkx greedy_modularity_communities`）
+- 對技術概念層執行 Louvain 社群偵測，使用 TypeScript 套件 **`graphology` + `graphology-communities-louvain`**
 - 每個社群自動分配顏色
 - 社群標籤 = 該社群度數最高的概念節點名稱
+- **Phase 1 末需完成 PoC**：建立 50 個測試節點，驗證輸出社群分組正確，作為 Phase 2 開工前置條件
+
+> **演算法說明：** 原 Python 版本使用的 `networkx.greedy_modularity_communities` 實作的是 Clauset-Newman-Moore（CNM）演算法，並非 Louvain。本版本統一採用 `graphology-communities-louvain`（MIT 授權），結果會與原 Python 版略有差異，此為預期行為。
 
 **F-07 AI 趨勢報告**
 - 抽取前 15 筆分析結果，呼叫 LLM 產生技術趨勢報告
@@ -147,7 +160,7 @@
 
 **F-15 並行批次處理（加速分析）**
 
-現有串行處理（一次一筆）速度過慢，採用「批次 Prompt + 並行請求」雙重加速。
+採用「批次 Prompt + 並行請求」雙重加速，**全程 TypeScript 實作**，使用 `p-limit` 控制並行上限，LLM 呼叫使用 Vercel AI SDK（`@ai-sdk/openai`、`@ai-sdk/google`、`@ai-sdk/openai-compatible`）。
 
 **速度對比**（以 200 筆、每次 LLM 約 2.5s 為基準）：
 
@@ -158,14 +171,20 @@
 | 批次（無並行） | 每批 10 筆 × 20 批 | ~70 秒 |
 | **批次 + 並行（預設）** | **每批 5 筆 × 5 並行** | **~25 秒（20x 加速）** |
 
-**實作規格：**
+**實作規格（TypeScript）：**
 
-```
-patents[0..199]
-  → 依 batch_size 切割成 batches（預設 5 筆/批）
-  → ThreadPoolExecutor(max_workers=concurrency)（預設 5 並行）
-  → 每個 thread 呼叫 extract_batch()（一次 LLM call 分析一整批）
-  → 結果依原始 index 排序後合併到圖譜
+```ts
+import pLimit from 'p-limit'
+
+const limit = pLimit(concurrency)  // 預設 concurrency = 5
+
+const batches = chunk(patents, batch_size)  // 預設 batch_size = 5
+const results = await Promise.all(
+  batches.map((batch, i) =>
+    limit(() => extractBatch(batch, i, cancelToken))
+  )
+)
+// 結果依原始 batch index 排序後合併到圖譜
 ```
 
 **批次 Prompt 格式：**
@@ -193,6 +212,34 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 **錯誤處理：**
 - 單一批次失敗不影響其他批次，失敗的批次回傳空結果並記錄錯誤
 - 若回傳 JSON 格式不符，對該批次 fallback 到逐筆串行重試
+- 收到取消信號（F-16）時提前結束，不再派送新批次
+
+**F-16 取消分析**
+- 前端 `ProgressPanel` 顯示「取消分析」按鈕，分析進行中可用
+- 點擊後：
+  1. 前端關閉 SSE 連線
+  2. 呼叫 `DELETE /api/analyze/[id]`，Server 設定取消旗標
+  3. `p-limit` 佇列中尚未執行的批次跳過，進行中的批次完成當輪後停止
+  4. 前端顯示「分析已中止，完成 N / M 筆，已取得部分圖譜」
+- 部分結果仍可用於渲染圖譜，使用者不需重頭來過
+
+**F-17 空狀態（Empty State）規格**
+
+| 情境 | 顯示內容 |
+|------|---------|
+| 首頁未上傳 | 拖曳區域下方顯示「← 先上傳 .xlsx 檔案，系統將自動辨識欄位」說明文字 |
+| Excel 欄位全部無法辨識 | 錯誤面板列出所有原始欄位名稱，建議使用者重新命名後再上傳 |
+| 年份篩選無結果 | 圖譜區顯示「此年份範圍內無專利資料」，保留滑桿可調整 |
+| 搜尋無匹配 | 搜尋下拉顯示「找不到「{query}」相關節點」，非匹配節點 opacity 降至 0.2 |
+| 社群 Legend 全部隱藏 | 圖譜區顯示「所有社群已隱藏，點擊 Legend 色點以顯示」 |
+| 分析完成但 0 筆成功 | 顯示錯誤摘要，提供「重新分析」按鈕 |
+
+**F-18 LLM Mock 策略（開發用）**
+
+- `lib/llm/__mocks__/mockExtract.ts`：回傳預先定義的 30 筆 JSON fixture，模擬 `extractBatch()` 的輸出格式
+- 開發時透過環境變數 `USE_LLM_MOCK=true` 啟用，不需要真實 API Key
+- Phase 1 末完成 mock 建立，Phase 2–3 使用 mock 資料開發，Phase 4 整合測試才使用真實 API
+- fixture 資料包含：多個申請人、多個社群、年份跨度 2018–2024，覆蓋主要 UI 情境
 
 ---
 
@@ -200,7 +247,7 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 
 **F-09 圖譜渲染**
 
-使用 vis-network（直接嵌入，不透過 pyvis），物理引擎：
+使用 vis-network（`npm install vis-network`，**不透過 CDN 引入**），`GraphViewer.tsx` 加上 `'use client'`，以 `next/dynamic` 搭配 `ssr: false` 動態載入避免 SSR 衝突，物理引擎：
 
 ```js
 {
@@ -254,14 +301,21 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 
 ### 3.4 輸出模組
 
-**F-13 靜態快照匯出**
-- 分析完成後，將圖譜資料（nodes + edges）序列化為 JSON
-- 產生一個自包含的 `.html` 檔案（內嵌所有資料和 vis-network），可直接開啟或分享
-- 下載按鈕在頁面右上角
+**F-13 圖譜分享 URL**
+- 分析完成後，將 `GraphData` 序列化為 JSON 並持久化到本機磁碟（`data/<job_id>.json`）
+- `app/analysis/[id]/page.tsx` 從磁碟讀取對應 JSON，伺服器運行期間 URL 永久有效
+- 分析完成後在頁面右上角顯示「複製分享連結」按鈕，URL 格式：`http://localhost:3000/analysis/<job_id>`
+- 連結只在此伺服器運行期間有效；若需跨機器分享，請使用 F-13b 下載 HTML
+
+**F-13b 離線 HTML 快照匯出**
+- 將圖譜資料（nodes + edges）序列化後產生自包含 `.html` 檔案（內嵌資料 + vis-network）
+- 可直接用瀏覽器開啟，不需要伺服器
+- 下載按鈕在頁面右上角，檔名格式：`patent-graph-YYYYMMDD.html`
 
 **F-14 資料匯出**
-- 匯出 Excel：技術概念節點 + 出現頻率 + 所屬社群
+- 匯出 Excel：含「節點」與「邊」兩個工作表；節點工作表含概念名稱、出現頻率、所屬社群；檔名格式：`patent-graph-YYYYMMDD.xlsx`
 - 匯出 CSV：所有邊（source, target, relation, weight）
+- 按鈕位於側邊欄底部；分析進行中 disabled
 
 ---
 
@@ -271,15 +325,17 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 
 | 層 | 技術 | 理由 |
 |----|------|------|
-| 前端框架 | Next.js 15 (App Router) | SSE 支援好、部署簡單 |
+| 前端框架 | Next.js 16 (App Router) | SSE 支援好、本機部署 |
 | UI 元件 | shadcn/ui + Tailwind CSS | 快速建立暗色系介面 |
-| 圖譜渲染 | vis-network（CDN 引入） | 與現有程式碼一致，避免重學 |
+| 圖譜渲染 | vis-network（`npm install`，非 CDN） | `next/dynamic` + `ssr: false` 避免 SSR 衝突 |
 | 後端 | Next.js API Routes | 不需要獨立後端 |
-| 資料處理 | Python 子程序 or ts-morph | LLM 呼叫保留 Python，或改用 Vercel AI SDK |
+| LLM 呼叫 | Vercel AI SDK（`@ai-sdk/openai`、`@ai-sdk/google`、`@ai-sdk/openai-compatible`） | 純 TypeScript，`p-limit` 控制並行 |
 | 資料格式 | JSON（圖譜資料）+ XLSX（輸入）| |
-| 部署 | Vercel 或本機 `next start` | 老師可本機跑 |
+| 圖譜持久化 | **本機 JSON 檔案**（`data/<job_id>.json`） | 支援分享 URL，伺服器重啟後仍可讀取 |
+| 部署 | **本機 `next start`**（不部署 Vercel） | 老師在自己電腦上運行 |
+| 社群偵測 | `graphology` + `graphology-communities-louvain` | 純 TypeScript，Louvain 演算法 |
 
-> **建議**：LLM 呼叫改用 [Vercel AI SDK](https://sdk.vercel.ai/)，直接在 Next.js API Route 呼叫 OpenAI / Gemini / NVIDIA，省去 Python 子程序的複雜度。
+> **部署決策（已定案）：** 本系統部署於本機，不使用 Vercel，因此可使用 in-memory Map 管理 job 狀態，並以本機檔案系統儲存圖譜 JSON 以支援分享 URL。
 
 ### 4.2 目錄結構
 
@@ -289,21 +345,23 @@ teacher-wang-web/
 │   ├── page.tsx                 # 首頁（上傳介面）
 │   ├── analysis/
 │   │   └── [id]/
-│   │       └── page.tsx         # 圖譜頁（分析結果）
+│   │       └── page.tsx         # 圖譜頁（從磁碟載入 GraphData）
 │   └── api/
 │       ├── analyze/
 │       │   └── route.ts         # POST：開始分析，回傳 job_id
+│       │   └── [id]/
+│       │       └── route.ts     # DELETE：取消分析（F-16）
 │       ├── progress/
 │       │   └── [id]/
-│       │       └── route.ts     # GET SSE：即時進度
+│       │       └── route.ts     # GET SSE：即時進度（dynamic=force-dynamic）
 │       └── export/
 │           └── [id]/
-│               └── route.ts     # GET：下載 HTML 快照
+│               └── route.ts     # GET：下載自包含 HTML 快照（F-13b）
 ├── components/
 │   ├── UploadZone.tsx
 │   ├── ModelSelector.tsx
-│   ├── ProgressPanel.tsx
-│   ├── GraphViewer.tsx          # vis-network wrapper
+│   ├── ProgressPanel.tsx        # 含取消分析按鈕（F-16）
+│   ├── GraphViewer.tsx          # vis-network wrapper（use client + next/dynamic ssr:false）
 │   ├── Sidebar/
 │   │   ├── SearchBox.tsx
 │   │   ├── NodeInfo.tsx
@@ -314,12 +372,16 @@ teacher-wang-web/
 │   └── ExportButton.tsx
 ├── lib/
 │   ├── graph-builder.ts         # 三層圖譜建構邏輯
-│   ├── community.ts             # 社群偵測（移植自 Python networkx）
+│   ├── community.ts             # 社群偵測（graphology-communities-louvain）
+│   ├── store.ts                 # job 狀態管理（in-memory Map）+ 圖譜 JSON 讀寫（data/）
 │   ├── llm/
-│   │   ├── nvidia.ts
-│   │   ├── gemini.ts
-│   │   └── openai.ts
-│   └── excel-parser.ts          # xlsx 解析 + 欄位自動辨識
+│   │   ├── nvidia.ts            # @ai-sdk/openai-compatible
+│   │   ├── gemini.ts            # @ai-sdk/google
+│   │   ├── openai.ts            # @ai-sdk/openai
+│   │   └── __mocks__/
+│   │       └── mockExtract.ts   # 開發用 fixture（F-18）
+│   └── excel-parser.ts          # xlsx 解析 + 欄位自動辨識 + 申請人名稱清理
+├── data/                        # 持久化圖譜 JSON（.gitignore）
 ├── types/
 │   └── graph.ts                 # Node, Edge, Community 型別定義
 └── public/
@@ -353,9 +415,10 @@ POST /api/analyze
 
 ```typescript
 interface PatentRow {
+  id: string              // 系統生成，格式：`${filename}-${rowIndex}`（e.g. "patents-0"）
   title: string           // 專利名稱(中)
   abstract: string        // 摘要
-  applicant: string       // 申請人（可能含多個，以「；」分隔）
+  applicant: string       // 申請人（已清理，多申請人以「；」分隔，地址已截斷）
   filing_date?: string    // 申請日（YYYY/MM/DD）
   application_number?: string  // 申請號
   search_keyword?: string // 搜尋關鍵字
@@ -409,7 +472,7 @@ interface GraphEdge {
   from: string
   to: string
   relation: string
-  weight: number
+  weight?: number         // 申請人→專利邊無 weight，概念邊有；使用 optional
   source_patent?: string  // 哪篇專利產生了這條邊
 }
 
@@ -426,11 +489,12 @@ interface GraphData {
     applicant_count: number
     patent_count: number
     concept_count: number
-    edge_count: number
+    community_count: number  // 新增：對應 UI 統計列「W 社群」
     year_range: [number, number]
+    // edge_count 不在 UI 顯示，由前端 edges.length 取得即可
   }
   ai_report: string
-  generated_at: string
+  generated_at: string    // ISO 8601 UTC 格式，前端顯示時轉換為台灣時間（UTC+8）
 }
 ```
 
@@ -754,6 +818,9 @@ body { font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1rem; line-h
 }
 ```
 
+**Request Headers**
+- `X-LLM-Api-Key: <api_key>`（API Key 放 header，不放 body，避免寫入 server log）
+
 **Response**
 ```json
 { "job_id": "abc123" }
@@ -761,22 +828,49 @@ body { font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1rem; line-h
 
 ---
 
+### DELETE `/api/analyze/[id]`
+
+取消正在進行的分析任務（F-16）。
+
+**Response**
+```json
+{ "cancelled": true, "done": 47, "total": 200 }
+```
+
+若 job 不存在或已完成：`404 Not Found`
+
+---
+
 ### GET `/api/progress/[id]` (SSE)
 
 訂閱分析進度。
 
+**Route 設定（Next.js 16）：**
+```ts
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+// Response header: X-Accel-Buffering: no（禁止 CDN 緩衝）
+```
+
 **Event 格式**
 
-進度事件：
+進度事件（統一使用 batch 格式，與 F-08 一致）：
 ```
 event: progress
-data: {"done": 5, "total": 50, "current_title": "證券型代幣交易管理系統"}
+data: {"done": 5, "total": 50, "batch_titles": ["證券型代幣交易管理系統", "快速識別網站安全性漏洞"], "batch_index": 1}
 ```
 
 完成事件：
 ```
 event: complete
-data: {"graph": <GraphData>}
+data: {"job_id": "abc123"}
+```
+> 完成後前端導向 `/analysis/abc123`，圖譜資料從磁碟讀取，**不在 SSE 傳送整份 GraphData**
+
+取消事件：
+```
+event: cancelled
+data: {"done": 47, "total": 200}
 ```
 
 錯誤事件：
@@ -789,9 +883,14 @@ data: {"message": "API Key 無效"}
 
 ### GET `/api/export/[id]`
 
-下載自包含 HTML 快照。
+下載自包含 HTML 快照（F-13b）。
 
-**Response**: `Content-Type: text/html`，檔名 `patent-graph-{date}.html`
+**Response**: `Content-Type: text/html`，檔名 `patent-graph-YYYYMMDD.html`
+
+**錯誤回應：**
+- `404 Not Found`：job 不存在或資料已清除
+- `409 Conflict`：分析尚未完成
+- `500 Internal Server Error`：序列化失敗
 
 ---
 
@@ -824,45 +923,53 @@ data: {"message": "API Key 無效"}
 | 首頁載入 | < 2 秒 |
 | 瀏覽器支援 | Chrome / Firefox / Safari 最新版 |
 | 本機部署 | `npm run dev` 即可運行，不需要 Docker |
-| API Key 安全 | Key 只存在 client session，不寫入 server 日誌或資料庫 |
+| API Key 安全 | Key 透過 `X-LLM-Api-Key` header 傳遞，不放 request body；不寫入 server 日誌或資料庫 |
 
 ---
 
 ## 十、開發里程碑
 
-### Phase 1：基礎架構（約 1 週）
-- [ ] Next.js 專案初始化，Tailwind + shadcn/ui 設定
-- [ ] Excel 上傳元件 + 欄位自動辨識
-- [ ] LLM API 整合（三個提供商）
-- [ ] SSE 進度推送
+### Phase 1：基礎架構（約 1 週 + 2 天 PoC）
+- [ ] Next.js 16 專案初始化，Tailwind + shadcn/ui 設定，`.env.local.example` 建立
+- [ ] Excel 上傳元件 + 欄位自動辨識 + **申請人名稱清理**（Phase 1 驗收條件：提供 10 筆測試資料確認清理結果正確）
+- [ ] LLM API 整合（三個提供商，使用 Vercel AI SDK；`p-limit` 並行控制）
+- [ ] SSE 進度推送（route 加上 `dynamic = 'force-dynamic'`、`runtime = 'nodejs'`）
+- [ ] `lib/store.ts`：in-memory job Map + `data/` 目錄 JSON 讀寫（支援分享 URL）
+- [ ] `DELETE /api/analyze/[id]` 取消機制
+- [ ] **社群偵測 PoC**（`graphology-communities-louvain`，50 個測試節點，輸出分組正確）— Phase 2 開工前置條件
+- [ ] **LLM Mock fixture**（`lib/llm/__mocks__/mockExtract.ts`，30 筆，覆蓋多申請人、多社群、年份 2018–2024）
 
-### Phase 2：圖譜核心（約 1 週）
-- [ ] 三層圖譜建構邏輯（graph-builder.ts）
-- [ ] 社群偵測（community.ts）
-- [ ] vis-network GraphViewer 元件
+### Phase 2：圖譜核心（約 1.5 週）
+- [ ] 三層圖譜建構邏輯（`graph-builder.ts`），使用 mock 資料驗收
+- [ ] 社群偵測整合（`community.ts`，接 graphology-communities-louvain PoC 成果）
+- [ ] vis-network `GraphViewer` 元件（`use client` + `next/dynamic ssr:false`，`useEffect` cleanup `network.destroy()`）
 - [ ] 節點視覺規則（顏色、大小、形狀）
+- [ ] `app/analysis/[id]/page.tsx` 從磁碟讀取 GraphData 並渲染
 
 ### Phase 3：Sidebar 功能（約 3 天）
-- [ ] 搜尋框
+- [ ] 搜尋框（節點 label 模糊匹配，非匹配 opacity 0.2）
 - [ ] 節點資訊面板（三種節點類型）
-- [ ] 年份篩選滑桿
-- [ ] 節點層切換（申請人/專利/概念）
+- [ ] 年份篩選滑桿（雙把手，`filing_date` 缺失歸「未知」）
+- [ ] 節點層切換（申請人 / 專利 / 概念）
 - [ ] 社群 Legend + 篩選
+- [ ] 空狀態規格（F-17 各情境）
 
 ### Phase 4：輸出與收尾（約 2 天）
-- [ ] HTML 快照匯出
-- [ ] Excel/CSV 資料匯出
-- [ ] 首頁上傳 UX 完善
-- [ ] 錯誤處理與邊界情況
+- [ ] HTML 快照離線匯出（F-13b）
+- [ ] 分享 URL「複製連結」按鈕（F-13）
+- [ ] Excel/CSV 資料匯出（F-14）
+- [ ] 首頁上傳 UX 完善（空狀態、欄位對應預覽）
+- [ ] 整合測試（使用真實 API Key，50 筆真實資料）
+- [ ] 邊界情況：超大檔案、0 筆成功、網路斷線
 
 ---
 
 ## 十一、開放問題
 
-1. **圖譜是否要持久化？** 目前設計是 in-memory，瀏覽器重整後需重新分析。若需要保留歷史，要加 SQLite 或檔案儲存。
-2. **申請人名稱清理：** 原始資料申請人欄位包含地址（如 `國泰金融控股股份有限公司 臺北市...`），需要截斷到公司名稱。
-3. **多申請人處理：** 部分專利有多個申請人（以分號分隔），圖譜中應建一個節點還是多個節點？建議：各自建節點，共同指向同一篇專利。
-4. **概念去重：** LLM 可能萃取出語意相同但字面不同的詞（如「人工智慧」vs「AI」），是否需要同義詞合併？
+1. ~~**圖譜是否要持久化？**~~ ✅ **已決定：** 本機部署，以 `data/<job_id>.json` 本機檔案持久化，支援分享 URL，伺服器運行期間永久有效。
+2. ~~**申請人名稱清理：**~~ ✅ **已決定：** 截取第一個全形/半形空格前的字串；多申請人各自建節點。詳見 F-05。
+3. ~~**多申請人處理：**~~ ✅ **已決定：** 各自建立獨立節點，共同指向同一篇專利。詳見 F-05。
+4. **概念去重（待決定）：** LLM 可能萃取出語意相同但字面不同的詞（如「人工智慧」vs「AI」），是否需要同義詞合併？建議：v1.0 不處理，以精確字面匹配為主；v2.0 考慮引入詞向量相似度合併。
 
 ---
 

@@ -1,26 +1,62 @@
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap");
 @import "tailwindcss";
 
+@theme {
+  /* Backgrounds */
+  --color-bg-base: #020617;
+  --color-bg-primary: #0F172A;
+  --color-bg-sidebar: #1E293B;
+  --color-bg-card: #1E293B;
+
+  /* Borders */
+  --color-border: #334155;
+
+  /* Text */
+  --color-text-primary: #F8FAFC;
+  --color-text-muted: #94A3B8;
+
+  /* Accents */
+  --color-accent: #4E79A7;
+  --color-cta: #22C55E;
+  --color-error: #EF4444;
+
+  /* Fonts */
+  --font-sans: "Atkinson Hyperlegible", sans-serif;
+  --font-serif: "Crimson Pro", serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --bg-base: #020617;
+  --bg-primary: #0F172A;
+  --bg-sidebar: #1E293B;
+  --bg-card: #1E293B;
+  --border: #334155;
+  --text-primary: #F8FAFC;
+  --text-muted: #94A3B8;
+  --accent: #4E79A7;
+  --cta: #22C55E;
+  --error: #EF4444;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: "Atkinson Hyperlegible", sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Crimson Pro", serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
