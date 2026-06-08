@@ -3,6 +3,7 @@
 import { useState, useId } from "react";
 import { Eye, EyeOff, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { ProviderType } from "@/lib/llm/providers";
+import { cn } from "@/lib/utils";
 
 interface ModelSelectorProps {
   provider: ProviderType;
@@ -41,37 +42,6 @@ export default function ModelSelector({
   const groupId = useId();
   const inputId = useId();
 
-  const handleBlur = async () => {
-    if (USE_MOCK || !apiKey.trim()) {
-      setValidationState("idle");
-      setValidationMessage("");
-      return;
-    }
-
-    setValidationState("validating");
-    setValidationMessage("");
-
-    try {
-      const res = await fetch("/api/validate-key", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey }),
-      });
-
-      if (res.ok) {
-        setValidationState("valid");
-        setValidationMessage("API Key 驗證成功");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setValidationState("invalid");
-        setValidationMessage(data?.message ?? "API Key 無效，請確認後重試");
-      }
-    } catch {
-      setValidationState("invalid");
-      setValidationMessage("驗證失敗，請檢查網路連線");
-    }
-  };
-
   const handleProviderChange = (newProvider: ProviderType) => {
     onProviderChange(newProvider);
     setValidationState("idle");
@@ -84,7 +54,7 @@ export default function ModelSelector({
       <div>
         <p
           id={`${groupId}-label`}
-          className="mb-3 text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
+          className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest"
         >
           模型選擇
         </p>
@@ -98,14 +68,14 @@ export default function ModelSelector({
             return (
               <label
                 key={opt.value}
-                className={[
+                className={cn(
                   "flex cursor-pointer flex-col gap-1.5 rounded-xl border px-4 py-3.5",
-                  "transition-all duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-[#60A5FA]",
+                  "transition-all duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-primary",
                   "backdrop-blur-sm",
                   isSelected
-                    ? "border-[#60A5FA]/40 bg-[#60A5FA]/12 shadow-md shadow-blue-500/15"
+                    ? "border-primary/40 bg-primary/12 shadow-md shadow-primary/15"
                     : "border-white/8 bg-white/[0.03] hover:border-white/16 hover:bg-white/[0.06]",
-                ].join(" ")}
+                )}
               >
                 <input
                   type="radio"
@@ -116,13 +86,14 @@ export default function ModelSelector({
                   className="sr-only"
                 />
                 <span
-                  className={`text-sm font-semibold leading-tight ${
-                    isSelected ? "text-[#60A5FA]" : "primary-foreground"
-                  }`}
+                  className={cn(
+                    "text-sm font-semibold leading-tight transition-colors",
+                    isSelected ? "text-primary" : "text-foreground",
+                  )}
                 >
                   {opt.label}
                 </span>
-                <span className="font-mono text-[0.68rem] primary-foreground leading-tight break-all">
+                <span className="font-mono text-[0.68rem] text-muted-foreground leading-tight break-all">
                   {opt.model}
                 </span>
               </label>
@@ -135,7 +106,7 @@ export default function ModelSelector({
       <div>
         <label
           htmlFor={inputId}
-          className="mb-2 block text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
+          className="mb-2 block text-xs font-semibold text-muted-foreground uppercase tracking-widest"
         >
           API Key
         </label>
@@ -150,7 +121,6 @@ export default function ModelSelector({
               setValidationState("idle");
               setValidationMessage("");
             }}
-            onBlur={handleBlur}
             disabled={USE_MOCK}
             placeholder={USE_MOCK ? "" : "貼上您的 API Key…"}
             autoComplete="off"
@@ -159,16 +129,16 @@ export default function ModelSelector({
               validationMessage ? `${inputId}-status` : undefined
             }
             className={[
-              "w-full rounded-xl border bg-white/[0.04] backdrop-blur-sm py-2.5 pl-3 pr-10",
-              "font-mono text-sm primary-foreground placeholder-accent",
+              "w-full rounded-xl border bg-black/[0.02] dark:bg-white/[0.04] backdrop-blur-sm py-2.5 pl-3 pr-10",
+              "font-mono text-sm text-foreground placeholder-muted-foreground",
               "outline-none transition-all duration-200",
-              "focus:outline focus:outline-2 focus:outline-[#60A5FA]",
+              "focus:outline focus:outline-2 focus:outline-primary",
               "disabled:cursor-not-allowed disabled:opacity-50",
               validationState === "valid"
-                ? "border-[#22C55E]/50"
+                ? "border-success/50"
                 : validationState === "invalid"
-                  ? "border-[#EF4444]/50"
-                  : "border-white/8 hover:border-white/16",
+                  ? "border-error/50"
+                  : "border-black/5 dark:border-white/8 hover:border-black/10 dark:hover:border-white/16",
             ].join(" ")}
           />
 
@@ -181,19 +151,19 @@ export default function ModelSelector({
             )}
             {validationState === "valid" && (
               <CheckCircle2
-                className="h-4 w-4 text-[#22C55E]"
+                className="h-4 w-4 text-success"
                 aria-hidden="true"
               />
             )}
             {validationState === "invalid" && (
-              <XCircle className="h-4 w-4 text-[#EF4444]" aria-hidden="true" />
+              <XCircle className="h-4 w-4 text-error" aria-hidden="true" />
             )}
             {!USE_MOCK && (
               <button
                 type="button"
                 onClick={() => setShowKey((v) => !v)}
                 aria-label={showKey ? "隱藏 API Key" : "顯示 API Key"}
-                className="cursor-pointer rounded text-muted-foreground hover:primary-foreground focus:outline focus:outline-2 focus:outline-[#4E79A7] transition-colors duration-150"
+                className="cursor-pointer rounded text-muted-foreground hover:text-foreground focus:outline focus:outline-2 focus:outline-accent transition-colors duration-150"
               >
                 {showKey ? (
                   <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -206,7 +176,7 @@ export default function ModelSelector({
         </div>
 
         {USE_MOCK ? (
-          <p className="mt-1.5 text-xs primary-foreground">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             （開發模式：不需要）
           </p>
         ) : validationMessage ? (
@@ -214,7 +184,7 @@ export default function ModelSelector({
             id={`${inputId}-status`}
             role="alert"
             className={`mt-1.5 text-xs ${
-              validationState === "valid" ? "text-[#22C55E]" : "text-[#EF4444]"
+              validationState === "valid" ? "text-success" : "text-error"
             }`}
           >
             {validationMessage}

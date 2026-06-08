@@ -26,10 +26,10 @@ export default function NodeInfo({
 }: Props) {
   const [abstractExpanded, setAbstractExpanded] = useState(false);
 
-  const TYPE_COLORS = {
-    applicant: "#4E79A7",
-    patent: "#F28E2B",
-    concept: "#59A14F",
+  const TYPE_TOKENS = {
+    applicant: "var(--color-layer-applicant, #4E79A7)",
+    patent: "var(--color-layer-patent, #F28E2B)",
+    concept: "var(--color-layer-concept, #59A14F)",
   };
   const TYPE_LABELS = {
     applicant: "申請人",
@@ -55,20 +55,20 @@ export default function NodeInfo({
       <div className="flex items-start justify-between mb-3">
         <Badge
           className="text-[0.65rem] font-bold px-2 py-0.5 rounded border-0"
-          style={{ background: TYPE_COLORS[node.type], color: "#020617" }}
+          style={{ background: TYPE_TOKENS[node.type], color: "white" }}
         >
           {TYPE_LABELS[node.type]}
         </Badge>
         <button
           onClick={onClose}
-          className="primary-foreground hover:text-muted-foreground transition-colors cursor-pointer -mt-0.5"
+          className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer -mt-0.5"
           aria-label="關閉節點資訊"
         >
           <X size={14} />
         </button>
       </div>
 
-      <h3 className="font-serif text-sm font-semibold primary-foreground leading-snug mb-3 break-words">
+      <h3 className="font-serif text-sm font-semibold text-foreground leading-snug mb-3 break-words">
         {node.label}
       </h3>
 
@@ -90,7 +90,7 @@ export default function NodeInfo({
             )}
             {node.abstract && (
               <div>
-                <dt className="primary-foreground mb-1">摘要</dt>
+                <dt className="text-foreground font-medium mb-1">摘要</dt>
                 <dd className="text-muted-foreground leading-relaxed m-0">
                   {abstractExpanded
                     ? node.abstract
@@ -99,7 +99,7 @@ export default function NodeInfo({
                   {node.abstract.length > 120 && (
                     <button
                       onClick={() => setAbstractExpanded((v) => !v)}
-                      className="ml-1 text-primary hover:text-[#6B9CC3] inline-flex items-center gap-0.5 cursor-pointer"
+                      className="ml-1 text-primary hover:text-accent inline-flex items-center gap-0.5 cursor-pointer"
                     >
                       {abstractExpanded ? (
                         <>
@@ -126,7 +126,7 @@ export default function NodeInfo({
             <Row label="出現次數" value={`${node.frequency ?? 1} 次`} />
             {community && (
               <div className="flex items-center gap-1.5">
-                <dt className="primary-foreground">社群</dt>
+                <dt className="text-foreground font-medium">社群</dt>
                 <dd className="flex items-center gap-1.5 m-0">
                   <span
                     aria-hidden
@@ -146,7 +146,7 @@ export default function NodeInfo({
       {/* Adjacent nodes */}
       {adjacentNodes.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs primary-foreground mb-2">相鄰節點</p>
+          <p className="text-xs text-foreground font-medium mb-2">相鄰節點</p>
           <div className="flex flex-wrap gap-1.5">
             {adjacentNodes.map((n) => (
               <button
@@ -175,7 +175,7 @@ export default function NodeInfo({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
-      <dt className="primary-foreground shrink-0 w-16">{label}</dt>
+      <dt className="text-foreground font-medium shrink-0 w-16">{label}</dt>
       <dd className="text-muted-foreground m-0 break-words min-w-0">{value}</dd>
     </div>
   );

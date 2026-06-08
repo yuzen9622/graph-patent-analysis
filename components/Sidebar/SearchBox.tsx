@@ -58,7 +58,7 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
       <div className="relative">
         <Search
           size={14}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 primary-foreground pointer-events-none"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
           aria-hidden
         />
         <Input
@@ -69,14 +69,14 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
           }}
           onFocus={() => setOpen(true)}
           placeholder="搜尋節點…"
-          className="pl-8 pr-7 h-8 text-xs bg-accent border-border primary-foreground placeholder:primary-foreground focus-visible:ring-ring"
+          className="pl-8 pr-7 h-8 text-xs bg-muted/50 border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
           aria-label="搜尋節點"
           autoComplete="off"
         />
         {query && (
           <button
             onClick={clear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 primary-foreground hover:text-muted-foreground cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             aria-label="清除搜尋"
           >
             <X size={12} />
@@ -95,17 +95,17 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
               role="option"
               aria-selected={false}
               onClick={() => handleSelect(node)}
-              className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-accent transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted transition-colors"
             >
               <span
                 aria-hidden
                 className="w-2 h-2 rounded-full shrink-0"
                 style={{ background: node.color }}
               />
-              <span className="text-muted-foreground flex-1 truncate">
+              <span className="text-foreground flex-1 truncate">
                 {node.label}
               </span>
-              <span className="primary-foreground shrink-0">
+              <span className="text-muted-foreground shrink-0">
                 {TYPE_LABELS[node.type]}
               </span>
             </li>
@@ -114,7 +114,7 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
       )}
 
       {open && query.trim().length > 0 && results.length === 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-background border border-border rounded-md px-3 py-2 text-xs primary-foreground">
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-background border border-border rounded-md px-3 py-2 text-xs text-muted-foreground">
           找不到「{query}」相關節點
         </div>
       )}

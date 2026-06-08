@@ -242,13 +242,6 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 | 社群 Legend 全部隱藏   | 圖譜區顯示「所有社群已隱藏，點擊 Legend 色點以顯示」                   |
 | 分析完成但 0 筆成功    | 顯示錯誤摘要，提供「重新分析」按鈕                                     |
 
-**F-18 LLM Mock 策略（開發用）**
-
-- `lib/llm/__mocks__/mockExtract.ts`：回傳預先定義的 30 筆 JSON fixture，模擬 `extractBatch()` 的輸出格式
-- 開發時透過環境變數 `USE_LLM_MOCK=true` 啟用，不需要真實 API Key
-- Phase 1 末完成 mock 建立，Phase 2–3 使用 mock 資料開發，Phase 4 整合測試才使用真實 API
-- fixture 資料包含：多個申請人、多個社群、年份跨度 2018–2024，覆蓋主要 UI 情境
-
 ---
 
 ### 3.3 圖譜視覺化模組
@@ -389,9 +382,7 @@ teacher-wang-web/
 │   ├── llm/
 │   │   ├── nvidia.ts            # @ai-sdk/openai-compatible
 │   │   ├── gemini.ts            # @ai-sdk/google
-│   │   ├── openai.ts            # @ai-sdk/openai
-│   │   └── __mocks__/
-│   │       └── mockExtract.ts   # 開發用 fixture（F-18）
+│   │   └── openai.ts            # @ai-sdk/openai
 │   └── excel-parser.ts          # xlsx 解析 + 欄位自動辨識 + 申請人名稱清理
 ├── data/                        # 持久化圖譜 JSON（.gitignore）
 ├── types/
@@ -994,7 +985,6 @@ data: {"message": "API Key 無效"}
 - [ ] `lib/store.ts`：in-memory job Map + `data/` 目錄 JSON 讀寫（支援分享 URL）
 - [ ] `DELETE /api/analyze/[id]` 取消機制
 - [ ] **社群偵測 PoC**（`graphology-communities-louvain`，50 個測試節點，輸出分組正確）— Phase 2 開工前置條件
-- [ ] **LLM Mock fixture**（`lib/llm/__mocks__/mockExtract.ts`，30 筆，覆蓋多申請人、多社群、年份 2018–2024）
 
 ### Phase 2：圖譜核心（約 1.5 週）
 

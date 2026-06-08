@@ -38,22 +38,22 @@ function getZoneClass(state: UploadState) {
     case "idle":
       return cn(
         base,
-        "border-white/15 bg-white/[0.02] cursor-pointer hover:border-[#60A5FA]/40 hover:bg-[#60A5FA]/5",
+        "border-border bg-black/[0.01] dark:bg-white/[0.02] cursor-pointer hover:border-accent/40 hover:bg-accent/5",
       );
     case "dragging":
       return cn(
         base,
-        "border-[#60A5FA]/60 bg-[#60A5FA]/10 scale-[1.01] cursor-copy shadow-lg shadow-blue-500/10",
+        "border-accent/60 bg-accent/10 scale-[1.01] cursor-copy shadow-lg shadow-accent/10",
       );
     case "parsing":
-      return cn(base, "border-white/10 bg-white/[0.02] opacity-75 cursor-wait");
+      return cn(base, "border-black/5 dark:border-white/10 bg-black/[0.01] dark:bg-white/[0.02] opacity-75 cursor-wait");
     case "success":
       return cn(
         base,
-        "border-[#22C55E]/40 bg-[#22C55E]/8 cursor-pointer shadow-sm shadow-green-500/10",
+        "border-success/40 bg-success/8 cursor-pointer shadow-sm shadow-success/10",
       );
     case "error":
-      return cn(base, "border-[#EF4444]/40 bg-[#EF4444]/8 cursor-pointer");
+      return cn(base, "border-error/40 bg-error/8 cursor-pointer");
   }
 }
 
@@ -247,21 +247,21 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
               size={36}
               className={cn(
                 "mb-3 transition-colors duration-200",
-                state === "dragging" ? "text-[#60A5FA]" : "primary-foreground",
+                state === "dragging" ? "text-accent" : "text-muted-foreground",
               )}
               aria-hidden
             />
             <p
               className={cn(
                 "font-semibold text-base transition-colors duration-200",
-                state === "dragging" ? "text-[#93C5FD]" : "primary-foreground",
+                state === "dragging" ? "text-accent-hover" : "text-foreground",
               )}
             >
               {state === "dragging"
                 ? "放開以上傳"
                 : "拖曳 .xlsx 至此，或點擊選擇"}
             </p>
-            <p className="mt-1.5 text-sm primary-foreground">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               僅支援 .xlsx 格式
             </p>
           </>
@@ -285,15 +285,15 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         {state === "success" && (
           <>
             <div className="flex items-center gap-2.5 mb-2">
-              <CheckCircle size={28} className="text-[#22C55E]" aria-hidden />
-              <span className="font-semibold text-base text-[#22C55E]">
+              <CheckCircle size={28} className="text-success" aria-hidden />
+              <span className="font-semibold text-base text-success">
                 上傳成功
               </span>
               <button
                 type="button"
                 aria-label="清除上傳的檔案"
                 onClick={handleReset}
-                className="ml-1 primary-foreground hover:text-muted-foreground transition-colors cursor-pointer"
+                className="ml-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X size={15} aria-hidden />
               </button>
@@ -301,12 +301,12 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
             <p className="text-sm text-muted-foreground">
               {filename}
               {totalRows !== null && (
-                <span className="primary-foreground ml-2">
+                <span className="text-foreground ml-2">
                   （共 {totalRows} 列）
                 </span>
               )}
             </p>
-            <p className="mt-1 text-xs primary-foreground">點擊以重新上傳</p>
+            <p className="mt-1 text-xs text-muted-foreground">點擊以重新上傳</p>
           </>
         )}
 
@@ -314,25 +314,25 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         {state === "error" && (
           <>
             <div className="flex items-center gap-2.5 mb-2">
-              <AlertCircle size={28} className="text-[#EF4444]" aria-hidden />
-              <span className="font-semibold text-base text-[#EF4444]">
+              <AlertCircle size={28} className="text-error" aria-hidden />
+              <span className="font-semibold text-base text-error">
                 上傳失敗
               </span>
               <button
                 type="button"
                 aria-label="關閉錯誤訊息並重試"
                 onClick={handleReset}
-                className="ml-1 primary-foreground hover:text-muted-foreground transition-colors cursor-pointer"
+                className="ml-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <X size={15} aria-hidden />
               </button>
             </div>
             {errorMsg && (
-              <p className="text-sm text-[#EF4444] text-center max-w-sm leading-snug">
+              <p className="text-sm text-error text-center max-w-sm leading-snug">
                 {errorMsg}
               </p>
             )}
-            <p className="mt-1.5 text-xs primary-foreground">點擊以重試</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">點擊以重試</p>
           </>
         )}
       </div>
@@ -342,7 +342,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         <p
           role="status"
           aria-live="polite"
-          className="mt-2 text-xs text-border text-center"
+          className="mt-2 text-xs text-muted-foreground text-center"
         >
           ← 上傳 .xlsx 後系統將自動辨識欄位
         </p>
@@ -355,7 +355,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
           <div
             role="region"
             aria-label="欄位對應結果"
-            className="mt-4 bg-white/[0.03] border border-white/8 rounded-xl p-4 backdrop-blur-sm"
+            className="mt-4 bg-black/[0.01] dark:bg-white/[0.03] border border-black/5 dark:border-white/8 rounded-xl p-4 backdrop-blur-sm"
           >
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               欄位對應 — {matchedCount} / {totalFields} 已辨識
@@ -371,7 +371,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
                     {matched ? (
                       <CheckCircle
                         size={14}
-                        className="text-[#22C55E] shrink-0"
+                        className="text-success shrink-0"
                         aria-label="已辨識"
                         role="img"
                       />
@@ -380,7 +380,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
                         size={14}
                         className={cn(
                           "shrink-0",
-                          fm.required ? "text-[#EF4444]" : "text-border",
+                          fm.required ? "text-error" : "text-border",
                         )}
                         aria-label={
                           fm.required ? "必要欄位缺失" : "未辨識（選填）"
@@ -392,16 +392,16 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
                       className={cn(
                         "min-w-[5rem]",
                         matched
-                          ? "primary-foreground"
+                          ? "text-foreground"
                           : fm.required
-                            ? "text-[#EF4444] font-semibold"
-                            : "primary-foreground",
+                            ? "text-error font-semibold"
+                            : "text-foreground",
                       )}
                     >
                       {FIELD_LABELS[fm.field] ?? fm.field}
                       {fm.required && (
                         <span
-                          className="text-[#EF4444] ml-0.5"
+                          className="text-error ml-0.5"
                           aria-label="必要欄位"
                         >
                           *

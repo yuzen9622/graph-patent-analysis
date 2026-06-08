@@ -36,15 +36,15 @@ export default function YearFilter({ value, fullRange, onChange }: Props) {
   const hasRange = min > 0 && max > 0 && max >= min;
 
   if (!hasRange) {
-    return <p className="text-xs primary-foreground">資料中無年份資訊</p>;
+    return <p className="text-xs text-muted-foreground">資料中無年份資訊</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex justify-between text-xs">
-        <span className="font-semibold text-primary">{local[0]}</span>
-        <span className="primary-foreground">–</span>
-        <span className="font-semibold text-primary">{local[1]}</span>
+        <span className="font-semibold text-foreground">{local[0]}</span>
+        <span className="text-muted-foreground">–</span>
+        <span className="font-semibold text-foreground">{local[1]}</span>
       </div>
       <Slider
         min={min}
@@ -55,7 +55,7 @@ export default function YearFilter({ value, fullRange, onChange }: Props) {
         className="w-full"
         aria-label="年份範圍篩選"
       />
-      <div className="flex justify-between text-[0.65rem] primary-foreground">
+      <div className="flex justify-between text-[0.65rem] text-muted-foreground">
         <span>{min}</span>
         <span>{max}</span>
       </div>

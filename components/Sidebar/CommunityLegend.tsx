@@ -20,7 +20,7 @@ export default function CommunityLegend({
   return (
     <div>
       {allHidden && (
-        <p className="text-xs primary-foreground mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           所有社群已隱藏，點擊色點以顯示
         </p>
       )}
@@ -32,17 +32,17 @@ export default function CommunityLegend({
               <button
                 onClick={() => onToggle(c.id)}
                 title={isHidden ? `顯示「${c.name}」` : `隱藏「${c.name}」`}
-                className="w-full flex items-center gap-2 px-1 py-1 rounded hover:bg-accent transition-colors cursor-pointer group"
+                className="w-full flex items-center gap-2 px-1 py-1 rounded hover:bg-muted transition-colors cursor-pointer group"
               >
                 <span
                   aria-hidden
                   className="w-3 h-3 rounded-full shrink-0 transition-opacity"
                   style={{ background: c.color, opacity: isHidden ? 0.3 : 1 }}
                 />
-                <span className="flex-1 text-primary text-xs text-left truncate transition-colors">
+                <span className="flex-1 text-foreground text-xs text-left truncate transition-colors">
                   {c.name}
                 </span>
-                <span className="text-[0.65rem] primary-foreground shrink-0 tabular-nums">
+                <span className="text-[0.65rem] text-muted-foreground shrink-0 tabular-nums">
                   {c.node_count}
                 </span>
               </button>

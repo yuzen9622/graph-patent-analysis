@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import { BarChart2, Loader2, ArrowRight, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,10 @@ import type { FieldMapping } from "@/lib/excel-parser";
 import type { ProviderType } from "@/lib/llm/providers";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
+const STORAGE_KEYS = {
+  API_KEY: "patent_analysis_api_key",
+  PROVIDER: "patent_analysis_provider",
+};
 
 function Step({
   n,
@@ -30,16 +34,16 @@ function Step({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 text-sm transition-colors duration-200 ${active ? "primary-foreground" : "primary-foreground"}`}
+      className={`flex items-center gap-2 text-sm transition-colors duration-200 ${active ? "text-foreground" : "text-muted-foreground"}`}
     >
       <span
         className={[
           "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-200",
           done
-            ? "bg-[#22C55E] text-white shadow-sm shadow-green-500/40"
+            ? "bg-success text-white shadow-sm shadow-success/40"
             : active
-              ? "bg-[#60A5FA] text-white shadow-sm shadow-blue-400/50"
-              : "bg-white/5 primary-foreground border border-white/10",
+              ? "bg-primary text-primary-foreground shadow-sm shadow-blue-400/50"
+              : "bg-black/5 dark:bg-white/5 text-foreground border border-border/10",
         ].join(" ")}
       >
         {n}
@@ -64,6 +68,23 @@ export default function HomePage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const sampleInputId = useId();
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    const savedProvider = localStorage.getItem(STORAGE_KEYS.PROVIDER);
+    if (savedKey) setApiKey(savedKey);
+    if (savedProvider) setProvider(savedProvider as ProviderType);
+  }, []);
+
+  // Save to localStorage when changed
+  useEffect(() => {
+    if (apiKey) localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (provider) localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
+  }, [provider]);
 
   const effectiveSample =
     patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;
@@ -152,20 +173,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#020617] primary-foreground flex flex-col relative overflow-hidden">
-      {/* ── Ambient light orbs ── */}
-      <div
-        className="fixed inset-0 pointer-events-none overflow-hidden"
-        aria-hidden
-      >
-        <div className="absolute -top-32 left-1/4 w-[600px] h-[600px] bg-blue-500/8 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -right-32 w-[400px] h-[400px] bg-indigo-500/6 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 left-1/3 w-[500px] h-[400px] bg-cyan-500/5 rounded-full blur-3xl" />
-      </div>
-
+    <div className="min-h-dvh bg-background primary-foreground flex flex-col relative overflow-hidden">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 shrink-0 h-14 bg-[#020617]/80 backdrop-blur-xl">
-        <BarChart2 size={20} className="text-[#22C55E]" aria-hidden />
+      <header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 shrink-0 h-14 bg-background/80 backdrop-blur-xl">
+        <BarChart2 size={20} className="text-success" aria-hidden />
         <div>
           <h1 className="font-serif text-base font-bold leading-tight primary-foreground">
             王老師專利知識圖譜分析平台
@@ -175,7 +186,7 @@ export default function HomePage() {
           </p>
         </div>
         {USE_MOCK && (
-          <span className="ml-auto flex items-center gap-1.5 text-xs text-[#F59E0B] bg-[#F59E0B]/10 border border-[#F59E0B]/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
+          <span className="ml-auto flex items-center gap-1.5 text-xs text-warning bg-wartext-warning/10 border border-wartext-warning/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
             <FlaskConical size={12} aria-hidden />
             Mock 模式
           </span>
@@ -232,7 +243,7 @@ export default function HomePage() {
                   className="glass rounded-2xl p-6"
                   aria-label="檔案上傳"
                 >
-                  <h2 className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest mb-4">
+                  <h2 className="text-xs font-semibold text-primary/70 uppercase tracking-widest mb-4">
                     01 · 上傳 Excel 檔案
                   </h2>
                   <UploadZone
@@ -246,7 +257,7 @@ export default function HomePage() {
                   className="glass rounded-2xl p-6 space-y-5"
                   aria-label="分析設定"
                 >
-                  <h2 className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest">
+                  <h2 className="text-xs font-semibold text-primary/70 uppercase tracking-widest">
                     02 · 分析設定
                   </h2>
 
@@ -262,7 +273,7 @@ export default function HomePage() {
                     <div className="flex flex-col gap-1.5">
                       <Label
                         htmlFor={sampleInputId}
-                        className="text-xs font-semibold text-[#60A5FA]/70 uppercase tracking-widest"
+                        className="text-xs font-semibold text-primary/70 uppercase tracking-widest"
                       >
                         抽樣筆數
                       </Label>
@@ -277,7 +288,7 @@ export default function HomePage() {
                           if (!isNaN(v))
                             setSampleSize(Math.min(2000, Math.max(1, v)));
                         }}
-                        className="h-9 w-28 bg-white/5 border-white/10 primary-foreground focus-visible:ring-[#60A5FA] text-sm backdrop-blur-sm"
+                        className="h-9 w-28 border-border bg-background focus-visible:ring-primary text-sm backdrop-blur-sm"
                       />
                     </div>
                     {sampleHint && (
@@ -295,7 +306,7 @@ export default function HomePage() {
                 {(uploadError || submitError) && (
                   <Alert
                     variant="destructive"
-                    className="border-[#EF4444]/30 bg-[#EF4444]/8 text-[#EF4444] backdrop-blur-sm"
+                    className="border-error/30 bg-error/8 text-error backdrop-blur-sm"
                   >
                     <AlertDescription>
                       {submitError ?? uploadError}
@@ -311,7 +322,7 @@ export default function HomePage() {
                       void handleStart();
                     }}
                     disabled={submitting || !canStart}
-                    className="min-w-48 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-semibold text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 gap-2 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 rounded-xl"
+                    className="min-w-48 bg-primary text-primary-foreground font-semibold text-base cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 gap-2 shadow-lg shadow-success/20 hover:shadow-success/30 rounded-xl"
                   >
                     {submitting ? (
                       <>
@@ -337,7 +348,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center shrink-0 bg-[#020617]/60 backdrop-blur-xl">
+      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center shrink-0 bg-background/60 backdrop-blur-xl">
         <p className="text-xs text-border">
           支援 NVIDIA NIM · Google Gemini · OpenAI &nbsp;·&nbsp;
           本機部署，資料不離開您的電腦

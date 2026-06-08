@@ -56,20 +56,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen bg-[#020617] overflow-hidden">
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
       {/* ── Header ── */}
       <header className="shrink-0 bg-accent border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 min-h-[52px]">
         <div className="flex items-center gap-2.5 min-w-0">
           <BarChart2
             size={20}
-            className="text-[#22C55E] shrink-0"
+            className="text-success shrink-0"
             aria-hidden
           />
           <div className="min-w-0">
-            <h1 className="font-serif text-base font-bold primary-foreground leading-tight truncate">
+            <h1 className="font-serif text-base font-bold text-foreground leading-tight truncate">
               專利知識圖譜分析
             </h1>
-            <p className="text-[0.65rem] primary-foreground leading-none mt-0.5 font-mono">
+            <p className="text-[0.65rem] text-foreground leading-none mt-0.5 font-mono">
               {jobId.slice(0, 8)}…
             </p>
           </div>
@@ -78,12 +78,12 @@ export default function GraphLayout({ graph, jobId }: Props) {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-primary hover:primary-foreground hover:border-[#4E79A7] transition-colors duration-150 cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
             aria-label="複製分享連結"
           >
             {copied ? (
               <>
-                <Check size={12} className="text-[#22C55E]" />
+                <Check size={12} className="text-success" />
                 已複製
               </>
             ) : (
@@ -95,7 +95,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
           </button>
           <a
             href={`/api/export/${jobId}`}
-            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-primary hover:primary-foreground transition-colors duration-150"
+            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
             aria-label="下載離線 HTML 圖譜"
           >
             <Download size={12} />

@@ -45,12 +45,12 @@ function Section({ title, defaultOpen = true, children }: SectionProps) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="w-full flex items-center justify-between py-2 group cursor-pointer">
-        <span className="text-xs font-semibold text-muted-foreground-foreground uppercase tracking-wide">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           {title}
         </span>
         <ChevronDown
           size={12}
-          className="primary-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+          className="text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="pb-3">{children}</CollapsibleContent>
@@ -108,7 +108,7 @@ export default function Sidebar({
                 onNodeFocus={onNodeFocus}
               />
             ) : (
-              <p className="text-xs primary-foreground pb-1">
+              <p className="text-xs text-muted-foreground pb-1">
                 點擊圖譜中的節點以查看詳情
               </p>
             )}
@@ -120,7 +120,7 @@ export default function Sidebar({
           <Section title="篩選器">
             <div className="space-y-4">
               <div>
-                <p className="text-xs primary-foreground mb-2">年份範圍</p>
+                <p className="text-xs text-foreground font-medium mb-2">年份範圍</p>
                 <YearFilter
                   value={yearRange}
                   fullRange={fullYearRange}
@@ -128,7 +128,7 @@ export default function Sidebar({
                 />
               </div>
               <div>
-                <p className="text-xs primary-foreground mb-2">節點層</p>
+                <p className="text-xs text-foreground font-medium mb-2">節點層</p>
                 <LayerToggle
                   visibleLayers={visibleLayers}
                   onToggle={onLayerToggle}

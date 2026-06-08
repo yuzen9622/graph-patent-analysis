@@ -135,24 +135,6 @@ export async function runBatchExtraction(
   onBatchDone: (results: ExtractionResult[], doneCount: number) => void,
   model: LanguageModel,
 ): Promise<ExtractionResult[]> {
-  // Mock mode
-  if (process.env.USE_LLM_MOCK === "true") {
-    const { default: mockExtract } = await import("./__mocks__/mockExtract");
-    const results: ExtractionResult[] = [];
-    const chunks = chunkArray(patents, batchSize);
-
-    for (const chunk of chunks) {
-      if (cancelCheck()) break;
-      await new Promise<void>((resolve) => setTimeout(resolve, 30));
-      const batchResults = await mockExtract(chunk);
-      results.push(...batchResults);
-      onBatchDone(batchResults, results.length);
-    }
-
-    return results;
-  }
-
-  // Real LLM mode
   const chunks = chunkArray(patents, batchSize);
   const allResults: ExtractionResult[] = new Array(patents.length);
   const limit = pLimit(concurrency);

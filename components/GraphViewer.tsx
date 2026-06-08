@@ -12,7 +12,13 @@ const HUGE_GRAPH = 350;
 
 // ── DataSet update types ──────────────────────────────────────────────────────
 
-type NodeUpdate = { id: string; hidden?: boolean; opacity?: number; color?: any; label?: string };
+type NodeUpdate = {
+  id: string;
+  hidden?: boolean;
+  opacity?: number;
+  color?: string;
+  label?: string;
+};
 type EdgeColorProp = { inherit: "from"; opacity?: number };
 type EdgeUpdate = { id: string; hidden?: boolean; color?: EdgeColorProp };
 type NodeDataSet = { update: (items: NodeUpdate[]) => void };
@@ -149,7 +155,7 @@ function buildOptions(nodeCount: number) {
         springConstant: 0.06,
         damping: 0.45,
         // avoidOverlap adds per-node overlap checks
-        avoidOverlap: isLarge ? 0 : 0,
+        avoidOverlap: isLarge ? 0 : 0.3,
       },
       // adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
       // meaning the solver converges in far fewer real iterations
@@ -298,38 +304,38 @@ export default function GraphViewer({
             const original = toVisNode(n);
             if (degree1.has(n.id)) {
               // 1st degree & selected: Original color, Original label, Fully opaque
-              return { 
-                id: n.id, 
-                color: original.color, 
+              return {
+                id: n.id,
+                color: original.color,
                 label: original.label,
-                opacity: 1 
+                opacity: 1,
               };
             } else if (degree2.has(n.id)) {
               // 2nd degree: Original color, Original label, Slightly dimmed
-              return { 
-                id: n.id, 
-                color: original.color, 
+              return {
+                id: n.id,
+                color: original.color,
                 label: original.label,
-                opacity: 0.5 
+                opacity: 0.5,
               };
             } else {
               // Non-connected: Grey out, highly dimmed, hide label (unless it's an applicant)
               // We hide concept and patent labels to reduce clutter. Applicant labels are usually kept but we can hide them too if we want a clean view.
-              return { 
-                id: n.id, 
-                color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR }, 
-                label: "", 
-                opacity: 0.2 
+              return {
+                id: n.id,
+                color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR },
+                label: "",
+                opacity: 0.2,
               };
             }
-          })
+          }),
         );
 
         edgeDataSet.update(
           edges.map((e) => ({
             id: e.id,
             color: activeEdges.has(e.id) ? toVisEdge(e).color : DIM_EDGE,
-          }))
+          })),
         );
         highlightActive = true;
       };
@@ -345,7 +351,7 @@ export default function GraphViewer({
               label: original.label,
               opacity: 1,
             };
-          })
+          }),
         );
         edgeDataSet.update(
           edges.map((e) => ({ id: e.id, color: toVisEdge(e).color })),
@@ -450,7 +456,7 @@ export default function GraphViewer({
       <button
         onClick={handleFit}
         title="全部顯示"
-        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-[#4E79A7] transition-colors duration-150 cursor-pointer backdrop-blur-sm"
+        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
       >
         全部顯示
       </button>
@@ -464,7 +470,7 @@ export default function GraphViewer({
           {isLarge && (
             <div className="w-32 h-1 bg-background rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#4E79A7] rounded-full transition-all duration-150"
+                className="h-full bg-accent rounded-full transition-all duration-150"
                 style={{ width: `${stabProgress}%` }}
               />
             </div>
