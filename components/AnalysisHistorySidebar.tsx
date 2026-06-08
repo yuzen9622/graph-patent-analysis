@@ -1,0 +1,173 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import {
+  History, ChevronLeft, ChevronRight, Clock,
+  CheckCircle2, Loader2, AlertCircle, Trash2, FileSpreadsheet,
+} from 'lucide-react'
+import { loadHistory, HISTORY_EVENT, type HistoryEntry } from '@/lib/analysis-history'
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso)
+    return (
+      d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) +
+      ' ' +
+      d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+    )
+  } catch {
+    return ''
+  }
+}
+
+interface Props {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
+  const [entries, setEntries] = useState<HistoryEntry[]>([])
+
+  useEffect(() => {
+    setEntries(loadHistory())
+    const refresh = () => setEntries(loadHistory())
+    window.addEventListener(HISTORY_EVENT, refresh)
+    return () => window.removeEventListener(HISTORY_EVENT, refresh)
+  }, [])
+
+  function handleDelete(id: string, e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setEntries(prev => {
+      const updated = prev.filter(entry => entry.id !== id)
+      localStorage.setItem('patent-analysis-history', JSON.stringify(updated))
+      window.dispatchEvent(new CustomEvent(HISTORY_EVENT))
+      return updated
+    })
+  }
+
+  return (
+    <aside
+      className={[
+        'flex flex-col h-full bg-[#0F172A] border-r border-[#1E293B] flex-shrink-0',
+        'transition-[width] duration-200 ease-in-out overflow-hidden',
+        collapsed ? 'w-14' : 'w-64',
+      ].join(' ')}
+      aria-label="分析歷史側欄"
+    >
+      {/* Header */}
+      <div
+        className={[
+          'flex items-center border-b border-[#1E293B] h-14 flex-shrink-0',
+          collapsed ? 'justify-center' : 'px-4 justify-between',
+        ].join(' ')}
+      >
+        {!collapsed && (
+          <div className="flex items-center gap-2 min-w-0">
+            <History size={15} className="text-[#4E79A7] flex-shrink-0" aria-hidden />
+            <span className="text-sm font-semibold text-[#F8FAFC]">分析歷史</span>
+            {entries.length > 0 && (
+              <span className="ml-1 text-[0.65rem] text-[#475569] bg-[#1E293B] rounded-full px-1.5 py-0.5 font-mono leading-none">
+                {entries.length}
+              </span>
+            )}
+          </div>
+        )}
+        <button
+          onClick={onToggle}
+          aria-label={collapsed ? '展開歷史側欄' : '收起歷史側欄'}
+          className="w-8 h-8 flex items-center justify-center rounded-md text-[#475569] hover:text-[#F8FAFC] hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer flex-shrink-0"
+        >
+          {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+        </button>
+      </div>
+
+      {/* Body */}
+      {collapsed ? (
+        <div className="flex flex-col items-center pt-3 gap-0.5 px-1.5">
+          {entries.slice(0, 10).map(entry => (
+            <Link
+              key={entry.id}
+              href={`/analysis/${entry.id}`}
+              title={`${entry.filename} — ${formatDate(entry.timestamp)}`}
+              className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer"
+            >
+              <FileSpreadsheet
+                size={14}
+                className={
+                  entry.status === 'completed' ? 'text-[#22C55E]' :
+                  entry.status === 'error' ? 'text-[#EF4444]' :
+                  'text-[#4E79A7]'
+                }
+                aria-hidden
+              />
+            </Link>
+          ))}
+          {entries.length === 0 && (
+            <div className="mt-4 text-[#1E293B]">
+              <Clock size={14} aria-hidden />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {entries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3 px-4 text-center">
+              <Clock size={28} className="text-[#1E293B]" aria-hidden />
+              <p className="text-xs text-[#334155] leading-relaxed">
+                完成分析後<br />記錄將顯示於此
+              </p>
+            </div>
+          ) : (
+            <ul role="list" className="py-2 px-2 space-y-0.5">
+              {entries.map(entry => (
+                <li key={entry.id}>
+                  <Link
+                    href={`/analysis/${entry.id}`}
+                    className="group flex flex-col gap-1 rounded-lg px-3 py-2.5 hover:bg-[#1E293B] transition-colors duration-150 cursor-pointer"
+                  >
+                    <div className="flex items-start gap-2 min-w-0">
+                      <div className="mt-0.5 flex-shrink-0">
+                        {entry.status === 'completed' && (
+                          <CheckCircle2 size={12} className="text-[#22C55E]" aria-hidden />
+                        )}
+                        {entry.status === 'analyzing' && (
+                          <Loader2 size={12} className="text-[#4E79A7] animate-spin" aria-hidden />
+                        )}
+                        {entry.status === 'error' && (
+                          <AlertCircle size={12} className="text-[#EF4444]" aria-hidden />
+                        )}
+                      </div>
+                      <span className="text-xs text-[#F8FAFC] leading-snug truncate flex-1 font-medium">
+                        {entry.filename.replace(/\.xlsx$/i, '')}
+                      </span>
+                      <button
+                        onClick={e => handleDelete(entry.id, e)}
+                        aria-label={`刪除 ${entry.filename} 記錄`}
+                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-[#334155] hover:text-[#EF4444] transition-all duration-150 cursor-pointer"
+                      >
+                        <Trash2 size={10} aria-hidden />
+                      </button>
+                    </div>
+                    <div className="pl-5 flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[0.6rem] text-[#334155]">
+                        {entry.id.slice(0, 8)}
+                      </span>
+                      {entry.patentCount !== undefined && (
+                        <span className="text-[0.6rem] text-[#334155]">· {entry.patentCount} 筆</span>
+                      )}
+                      <span className="text-[0.6rem] text-[#475569] ml-auto">
+                        {formatDate(entry.timestamp)}
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </aside>
+  )
+}

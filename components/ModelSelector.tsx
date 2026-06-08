@@ -34,8 +34,7 @@ export default function ModelSelector({
   onApiKeyChange,
 }: ModelSelectorProps) {
   const [showKey, setShowKey] = useState(false);
-  const [validationState, setValidationState] =
-    useState<ValidationState>("idle");
+  const [validationState, setValidationState] = useState<ValidationState>("idle");
   const [validationMessage, setValidationMessage] = useState<string>("");
 
   const groupId = useId();
@@ -79,19 +78,20 @@ export default function ModelSelector({
   };
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-      {/* Provider radio cards */}
-      <div className="flex-1">
+    <div className="flex flex-col gap-5">
+
+      {/* Provider radio cards — always 3 in a row */}
+      <div>
         <p
           id={`${groupId}-label`}
-          className="mb-2 text-sm font-medium text-[#94A3B8]"
+          className="mb-3 text-xs font-semibold text-[#475569] uppercase tracking-wider"
         >
           模型選擇
         </p>
         <div
           role="radiogroup"
           aria-labelledby={`${groupId}-label`}
-          className="flex flex-col gap-2 sm:flex-row"
+          className="grid grid-cols-3 gap-3"
         >
           {PROVIDER_OPTIONS.map((opt) => {
             const isSelected = provider === opt.value;
@@ -99,11 +99,11 @@ export default function ModelSelector({
               <label
                 key={opt.value}
                 className={[
-                  "flex cursor-pointer flex-col gap-0.5 rounded-lg border px-4 py-3",
+                  "flex cursor-pointer flex-col gap-1.5 rounded-lg border px-4 py-3.5",
                   "transition-colors duration-200 focus-within:outline focus-within:outline-2 focus-within:outline-[#4E79A7]",
                   isSelected
-                    ? "border-[#4E79A7] bg-[#4E79A7]/20"
-                    : "border-[#334155] bg-[#1E293B] hover:border-[#4E79A7]/60",
+                    ? "border-[#4E79A7] bg-[#4E79A7]/15"
+                    : "border-[#334155] bg-[#1E293B] hover:border-[#4E79A7]/50 hover:bg-[#4E79A7]/5",
                 ].join(" ")}
               >
                 <input
@@ -115,13 +115,13 @@ export default function ModelSelector({
                   className="sr-only"
                 />
                 <span
-                  className={`text-sm font-semibold ${
+                  className={`text-sm font-semibold leading-tight ${
                     isSelected ? "text-[#4E79A7]" : "text-[#F8FAFC]"
                   }`}
                 >
                   {opt.label}
                 </span>
-                <span className="font-mono text-xs text-[#94A3B8]">
+                <span className="font-mono text-[0.68rem] text-[#475569] leading-tight break-all">
                   {opt.model}
                 </span>
               </label>
@@ -130,11 +130,11 @@ export default function ModelSelector({
         </div>
       </div>
 
-      {/* API Key input */}
-      <div className="flex-1">
+      {/* API Key — full width */}
+      <div>
         <label
           htmlFor={inputId}
-          className="mb-2 block text-sm font-medium text-[#94A3B8]"
+          className="mb-2 block text-xs font-semibold text-[#475569] uppercase tracking-wider"
         >
           API Key
         </label>
@@ -154,11 +154,9 @@ export default function ModelSelector({
             placeholder={USE_MOCK ? "" : "貼上您的 API Key…"}
             autoComplete="off"
             spellCheck={false}
-            aria-describedby={
-              validationMessage ? `${inputId}-status` : undefined
-            }
+            aria-describedby={validationMessage ? `${inputId}-status` : undefined}
             className={[
-              "w-full rounded-lg border bg-[#0F172A] py-2.5 pl-3 pr-10",
+              "w-full rounded-lg border bg-[#020617] py-2.5 pl-3 pr-10",
               "font-mono text-sm text-[#F8FAFC] placeholder-[#475569]",
               "outline-none transition-colors duration-200",
               "focus:outline focus:outline-2 focus:outline-[#4E79A7]",
@@ -171,24 +169,16 @@ export default function ModelSelector({
             ].join(" ")}
           />
 
-          {/* Right-side icon: eye toggle or validation spinner/badge */}
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 gap-1.5">
             {validationState === "validating" && (
-              <Loader2
-                className="h-4 w-4 animate-spin text-[#94A3B8]"
-                aria-hidden="true"
-              />
+              <Loader2 className="h-4 w-4 animate-spin text-[#94A3B8]" aria-hidden="true" />
             )}
             {validationState === "valid" && (
-              <CheckCircle2
-                className="h-4 w-4 text-[#22C55E]"
-                aria-hidden="true"
-              />
+              <CheckCircle2 className="h-4 w-4 text-[#22C55E]" aria-hidden="true" />
             )}
             {validationState === "invalid" && (
               <XCircle className="h-4 w-4 text-[#EF4444]" aria-hidden="true" />
             )}
-
             {!USE_MOCK && (
               <button
                 type="button"
@@ -206,7 +196,6 @@ export default function ModelSelector({
           </div>
         </div>
 
-        {/* Status / mock notice */}
         {USE_MOCK ? (
           <p className="mt-1.5 text-xs text-[#475569]">（開發模式：不需要）</p>
         ) : validationMessage ? (

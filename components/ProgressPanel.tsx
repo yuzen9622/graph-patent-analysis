@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Circle, Loader2, XCircle, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { updateHistoryStatus } from '@/lib/analysis-history'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
       es.close()
       esRef.current = null
 
+      updateHistoryStatus(data.job_id, 'completed')
       setState(prev => ({ ...prev, status: 'done', currentTitles: [] }))
 
       navigateTimerRef.current = setTimeout(() => {
@@ -122,6 +124,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
       es.close()
       esRef.current = null
 
+      updateHistoryStatus(jobId, 'error')
       setState(prev => ({ ...prev, status: 'error', errorMessage: message, currentTitles: [] }))
     })
 
