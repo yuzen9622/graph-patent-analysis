@@ -16,6 +16,7 @@ import {
 import {
   loadHistory,
   HISTORY_EVENT,
+  updateHistoryStatus,
   type HistoryEntry,
 } from "@/lib/analysis-history";
 
@@ -38,14 +39,56 @@ interface Props {
 }
 
 export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [entries, setEntries] = useState<HistoryEntry[]>(() => {
+    if (typeof window !== "undefined") {
+      return loadHistory();
+    }
+    return [];
+  });
 
   useEffect(() => {
-    setEntries(loadHistory());
     const refresh = () => setEntries(loadHistory());
     window.addEventListener(HISTORY_EVENT, refresh);
     return () => window.removeEventListener(HISTORY_EVENT, refresh);
   }, []);
+
+  // Poll actual backend status for jobs that are local-marked as 'analyzing'
+  useEffect(() => {
+    const analyzingEntries = entries.filter((e) => e.status === "analyzing");
+    if (analyzingEntries.length === 0) return;
+
+    let active = true;
+    const checkStatus = () => {
+      void Promise.all(
+        analyzingEntries.map(async (entry) => {
+          try {
+            const res = await fetch(`/api/analyze/${entry.id}`);
+            if (!active) return;
+            if (res.ok) {
+              const data = (await res.json()) as { status: string };
+              if (data.status === "done") {
+                updateHistoryStatus(entry.id, "completed");
+              } else if (data.status === "error" || data.status === "cancelled") {
+                updateHistoryStatus(entry.id, "error");
+              }
+            } else if (res.status === 404) {
+              updateHistoryStatus(entry.id, "error");
+            }
+          } catch (err) {
+            console.error("Failed to sync job status:", err);
+          }
+        })
+      );
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [entries]);
 
   function handleDelete(id: string, e: React.MouseEvent) {
     e.preventDefault();

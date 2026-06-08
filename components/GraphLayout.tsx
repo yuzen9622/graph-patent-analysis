@@ -3,8 +3,10 @@
 import { useState, useCallback } from "react";
 import { BarChart2, Copy, Check, Download } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
+import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import type { GraphData, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -28,6 +30,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   );
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -59,7 +62,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       {/* ── Header ── */}
       <header className="shrink-0 bg-accent border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 min-h-[52px]">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <Link href="/" className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity">
           <BarChart2
             size={20}
             className="text-success shrink-0"
@@ -73,7 +76,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
               {jobId.slice(0, 8)}…
             </p>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -106,6 +109,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
       {/* ── Main area: graph + sidebar ── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* History sidebar — hidden on mobile */}
+        <div className="hidden md:flex shrink-0">
+          <AnalysisHistorySidebar
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((c) => !c)}
+          />
+        </div>
+
         {/* Graph canvas */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <GraphViewer

@@ -9,6 +9,8 @@ const SYSTEM_PROMPT = `你是一位專業的中文金融專利分析師。
 2. 萃取 5–10 個關鍵字（concepts/technologies/methods）
 3. 找出實體關係（source → target），每條關係標註 relation 類型與 weight（1–5，5 最強）
 
+注意：實體關係中的 \`source\` 與 \`target\` 必須來自於你在第二步中所萃取的 \`keywords\` 清單中。請勿在此步驟中使用非關鍵字清單內的詞彙。
+
 回傳格式：純 JSON 陣列，不含任何 markdown 或說明文字。
 每個元素結構如下：
 {

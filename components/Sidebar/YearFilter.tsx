@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Slider } from "@/components/ui/slider";
 
 interface Props {
@@ -15,10 +15,12 @@ function toArr(v: number | readonly number[]): number[] {
 
 export default function YearFilter({ value, fullRange, onChange }: Props) {
   const [local, setLocal] = useState<[number, number]>(value);
+  const [prevValue, setPrevValue] = useState<[number, number]>(value);
 
-  useEffect(() => {
+  if (value[0] !== prevValue[0] || value[1] !== prevValue[1]) {
     setLocal(value);
-  }, [value]);
+    setPrevValue(value);
+  }
 
   const handleChange = useCallback(
     (vals: number | readonly number[]) => {

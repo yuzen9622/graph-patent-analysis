@@ -57,8 +57,19 @@ export default function HomePage() {
   const [patents, setPatents] = useState<PatentRow[]>([]);
   const [_mappings, setMappings] = useState<FieldMapping[]>([]);
   const [filename, setFilename] = useState<string>("");
-  const [provider, setProvider] = useState<ProviderType>("nvidia");
-  const [apiKey, setApiKey] = useState("");
+  const [provider, setProvider] = useState<ProviderType>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(STORAGE_KEYS.PROVIDER);
+      if (saved) return saved as ProviderType;
+    }
+    return "nvidia";
+  });
+  const [apiKey, setApiKey] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(STORAGE_KEYS.API_KEY) || "";
+    }
+    return "";
+  });
   const [sampleSize, setSampleSize] = useState(50);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -69,13 +80,7 @@ export default function HomePage() {
 
   const sampleInputId = useId();
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const savedKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-    const savedProvider = localStorage.getItem(STORAGE_KEYS.PROVIDER);
-    if (savedKey) setApiKey(savedKey);
-    if (savedProvider) setProvider(savedProvider as ProviderType);
-  }, []);
+
 
   // Save to localStorage when changed
   useEffect(() => {
@@ -85,6 +90,18 @@ export default function HomePage() {
   useEffect(() => {
     if (provider) localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
   }, [provider]);
+
+  // Load jobId from URL query parameters if present (for background analysis sync)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const qJobId = params.get("jobId");
+      if (qJobId) {
+        setJobId(qJobId);
+        setPhase("analyzing");
+      }
+    }
+  }, []);
 
   const effectiveSample =
     patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;

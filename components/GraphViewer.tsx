@@ -26,40 +26,78 @@ type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
 
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
-function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
-  const isApplicant = n.type === "applicant";
-  const isPatent = n.type === "patent";
-  const baseColor = n.color.length === 9 ? n.color.slice(0, 7) : n.color;
-
-  return {
-    id: n.id,
-    label: isApplicant ? n.label : isPatent ? "" : n.label,
-    title: buildTitle(n),
-    shape: isApplicant ? "star" : "dot",
-    size: n.size,
-    color: {
-      background: n.color,
-      // border must NOT be 'transparent' — vis-network uses border color for
-      // edge `inherit:'from'` rendering.
-      border: baseColor,
-      highlight: { background: n.color, border: baseColor },
-      hover: { background: n.color, border: baseColor },
-    },
-    font: {
-      color: "#000000",
-      size: isApplicant ? 14 : isPatent ? 0 : 11,
-      face: "Atkinson Hyperlegible, sans-serif",
-    },
-    ...(pos ?? {}),
-  };
-}
-
 function buildTitle(n: GraphNode): string {
   if (n.type === "applicant")
     return `申請人：${n.label}（${n.patent_count ?? 0} 件專利）`;
   if (n.type === "patent")
     return `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`;
-  return `概念：${n.label}（出現 ${n.frequency ?? 1} 次）`;
+  if (n.type === "concept")
+    return `概念：${n.label}（出現 ${n.frequency ?? 1} 次）`;
+  return n.title ?? n.label;
+}
+
+function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
+  const isApplicant = n.type === "applicant";
+  const isPatent = n.type === "patent";
+
+  // Handle color being a string or an object
+  let bgColor = "#BAB0AC";
+  let borderColor = "#BAB0AC";
+  let highlightBg = "#6B9CC3";
+  let highlightBorder = "#6B9CC3";
+
+  if (typeof n.color === "string") {
+    bgColor = n.color;
+    const baseColor = n.color.length === 9 ? n.color.slice(0, 7) : n.color;
+    borderColor = baseColor;
+    highlightBg = n.color;
+    highlightBorder = baseColor;
+  } else if (n.color && typeof n.color === "object") {
+    const colorObj = n.color as {
+      background?: string;
+      border?: string;
+      highlight?: { background?: string; border?: string };
+    };
+    bgColor = colorObj.background ?? bgColor;
+    borderColor = colorObj.border ?? borderColor;
+    if (colorObj.highlight) {
+      highlightBg = colorObj.highlight.background ?? highlightBg;
+      highlightBorder = colorObj.highlight.border ?? highlightBorder;
+    } else {
+      highlightBg = bgColor;
+      highlightBorder = borderColor;
+    }
+  }
+
+  const nodeFont = (n as { font?: unknown }).font as { size?: number; color?: string } | undefined;
+  const fontSize = nodeFont?.size !== undefined
+    ? nodeFont.size
+    : (isApplicant ? 14 : isPatent ? 0 : 11);
+  const fontColor = nodeFont?.color !== undefined
+    ? nodeFont.color
+    : "#000000";
+
+  const shape = (n as { shape?: string }).shape ?? (isApplicant ? "star" : "dot");
+
+  return {
+    id: n.id,
+    label: isApplicant ? n.label : isPatent ? "" : n.label,
+    title: buildTitle(n),
+    shape: shape,
+    size: n.size,
+    color: {
+      background: bgColor,
+      border: borderColor,
+      highlight: { background: highlightBg, border: highlightBorder },
+      hover: { background: highlightBg, border: highlightBorder },
+    },
+    font: {
+      color: fontColor,
+      size: fontSize,
+      face: "Atkinson Hyperlegible, sans-serif",
+    },
+    ...(pos ?? {}),
+  };
 }
 
 function toVisEdge(e: GraphEdge) {
@@ -84,39 +122,117 @@ function toVisEdge(e: GraphEdge) {
 
 // Pre-spread concept nodes by community so ForceAtlas2 starts from a
 // separated state — prevents same-community nodes from collapsing together.
+// For nodes without communities (e.g. applicants and patents), positions
+// are computed iteratively from their connected nodes to prevent them from
+// starting in a giant default outer circle, solving layout issues.
 function buildInitialPositions(
   nodes: GraphNode[],
+  edges: GraphEdge[],
 ): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+
+  // 1. Group nodes by community if they have one (supports both community_id and community)
   const byComm = new Map<number, string[]>();
   nodes.forEach((n) => {
-    if (n.type === "concept" && n.community_id !== undefined) {
-      const arr = byComm.get(n.community_id) ?? [];
+    const commId = n.community_id !== undefined ? n.community_id : (n as { community?: number }).community;
+    if (commId !== undefined) {
+      const arr = byComm.get(commId) ?? [];
       arr.push(n.id);
-      byComm.set(n.community_id, arr);
+      byComm.set(commId, arr);
     }
   });
 
   const comms = [...byComm.entries()];
   const K = comms.length;
-  if (K === 0) return new Map();
 
-  const RING = Math.max(500, K * 140);
-  const SPREAD = 140;
+  if (K > 0) {
+    const RING = Math.max(300, Math.min(K * 40, 1200));
+    const SPREAD = 80;
 
-  const positions = new Map<string, { x: number; y: number }>();
-  comms.forEach(([, ids], ci) => {
-    const ca = (ci / K) * 2 * Math.PI;
-    const cx = Math.cos(ca) * RING;
-    const cy = Math.sin(ca) * RING;
-    ids.forEach((id, ni) => {
-      const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
-      const r = SPREAD * (0.35 + (ni % 3) * 0.32);
-      positions.set(id, {
-        x: cx + Math.cos(na) * r,
-        y: cy + Math.sin(na) * r,
+    comms.forEach(([, ids], ci) => {
+      const ca = (ci / K) * 2 * Math.PI;
+      const cx = Math.cos(ca) * RING;
+      const cy = Math.sin(ca) * RING;
+      ids.forEach((id, ni) => {
+        const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
+        const r = SPREAD * (0.35 + (ni % 3) * 0.32);
+        positions.set(id, {
+          x: cx + Math.cos(na) * r,
+          y: cy + Math.sin(na) * r,
+        });
       });
     });
+  }
+
+  // 2. Build adjacency list for connected nodes to compute positions of unpositioned nodes
+  const adj = new Map<string, string[]>();
+  edges.forEach((e) => {
+    if (!adj.has(e.from)) adj.set(e.from, []);
+    if (!adj.has(e.to)) adj.set(e.to, []);
+    adj.get(e.from)!.push(e.to);
+    adj.get(e.to)!.push(e.from);
   });
+
+  // 3. For nodes without a community, position them based on their neighbors' positions
+  const unpositionedNodes = nodes.filter((n) => {
+    const commId = n.community_id !== undefined ? n.community_id : (n as { community?: number }).community;
+    return commId === undefined;
+  });
+
+  for (let pass = 0; pass < 3; pass++) {
+    let placedAny = false;
+    unpositionedNodes.forEach((n) => {
+      if (positions.has(n.id)) return;
+
+      const neighbors = adj.get(n.id) ?? [];
+      let sumX = 0;
+      let sumY = 0;
+      let count = 0;
+
+      neighbors.forEach((neighId) => {
+        const pos = positions.get(neighId);
+        if (pos) {
+          sumX += pos.x;
+          sumY += pos.y;
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        // Add a small jitter to avoid exact overlapping
+        const jitterX = (Math.random() - 0.5) * 30;
+        const jitterY = (Math.random() - 0.5) * 30;
+        positions.set(n.id, {
+          x: sumX / count + jitterX,
+          y: sumY / count + jitterY,
+        });
+        placedAny = true;
+      }
+    });
+    if (!placedAny) break;
+  }
+
+  // 4. Any remaining nodes (completely disconnected or no positioned neighbors) get a default position on a circle
+  let unplacedCount = 0;
+  unpositionedNodes.forEach((n) => {
+    if (!positions.has(n.id)) {
+      unplacedCount++;
+    }
+  });
+
+  let unplacedIdx = 0;
+  unpositionedNodes.forEach((n) => {
+    if (!positions.has(n.id)) {
+      const angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
+      const r = 200 + Math.random() * 100;
+      positions.set(n.id, {
+        x: Math.cos(angle) * r,
+        y: Math.sin(angle) * r,
+      });
+      unplacedIdx++;
+    }
+  });
+
   return positions;
 }
 
@@ -231,7 +347,7 @@ export default function GraphViewer({
       const { DataSet } = await import("vis-data");
       if (cancelled || !containerRef.current) return;
 
-      const initPos = buildInitialPositions(nodes);
+      const initPos = buildInitialPositions(nodes, edges);
       const nodeDataSet = new DataSet(
         nodes.map((n) => toVisNode(n, initPos.get(n.id))),
       );

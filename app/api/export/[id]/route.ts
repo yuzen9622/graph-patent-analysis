@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getJob, loadGraphData } from '@/lib/store'
-import type { GraphNode } from '@/types/graph'
 
 export async function GET(
   _req: NextRequest,
@@ -130,22 +129,166 @@ function buildHtmlResponse(id: string, graphJson: string): NextResponse {
     (function () {
       var GRAPH_DATA = ${graphJson};
 
+      function buildInitialPositions(nodes, edges) {
+        var positions = {};
+        
+        // 1. Group nodes by community
+        var byComm = {};
+        nodes.forEach(function (n) {
+          var commId = n.community_id !== undefined ? n.community_id : n.community;
+          if (commId !== undefined) {
+            if (!byComm[commId]) byComm[commId] = [];
+            byComm[commId].push(n.id);
+          }
+        });
+
+        var comms = [];
+        for (var k in byComm) {
+          if (byComm.hasOwnProperty(k)) {
+            comms.push({ id: Number(k), ids: byComm[k] });
+          }
+        }
+        var K = comms.length;
+
+        if (K > 0) {
+          var RING = Math.max(300, Math.min(K * 40, 1200));
+          var SPREAD = 80;
+
+          comms.forEach(function (comm, ci) {
+            var ca = (ci / K) * 2 * Math.PI;
+            var cx = Math.cos(ca) * RING;
+            var cy = Math.sin(ca) * RING;
+            var ids = comm.ids;
+            ids.forEach(function (id, ni) {
+              var na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
+              var r = SPREAD * (0.35 + (ni % 3) * 0.32);
+              positions[id] = {
+                x: cx + Math.cos(na) * r,
+                y: cy + Math.sin(na) * r
+              };
+            });
+          });
+        }
+
+        // 2. Build adjacency list
+        var adj = {};
+        edges.forEach(function (e) {
+          if (!adj[e.from]) adj[e.from] = [];
+          if (!adj[e.to]) adj[e.to] = [];
+          adj[e.from].push(e.to);
+          adj[e.to].push(e.from);
+        });
+
+        // 3. Position nodes without a community based on neighbors
+        var unpositionedNodes = nodes.filter(function (n) {
+          var commId = n.community_id !== undefined ? n.community_id : n.community;
+          return commId === undefined;
+        });
+
+        for (var pass = 0; pass < 3; pass++) {
+          var placedAny = false;
+          unpositionedNodes.forEach(function (n) {
+            if (positions[n.id]) return;
+
+            var neighbors = adj[n.id] || [];
+            var sumX = 0;
+            var sumY = 0;
+            var count = 0;
+
+            neighbors.forEach(function (neighId) {
+              var pos = positions[neighId];
+              if (pos) {
+                sumX += pos.x;
+                sumY += pos.y;
+                count++;
+              }
+            });
+
+            if (count > 0) {
+              var jitterX = (Math.random() - 0.5) * 30;
+              var jitterY = (Math.random() - 0.5) * 30;
+              positions[n.id] = {
+                x: sumX / count + jitterX,
+                y: sumY / count + jitterY
+              };
+              placedAny = true;
+            }
+          });
+          if (!placedAny) break;
+        }
+
+        // 4. Position remaining disconnected nodes
+        var unplacedCount = 0;
+        unpositionedNodes.forEach(function (n) {
+          if (!positions[n.id]) unplacedCount++;
+        });
+
+        var unplacedIdx = 0;
+        unpositionedNodes.forEach(function (n) {
+          if (!positions[n.id]) {
+            var angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
+            var r = 200 + Math.random() * 100;
+            positions[n.id] = {
+              x: Math.cos(angle) * r,
+              y: Math.sin(angle) * r
+            };
+            unplacedIdx++;
+          }
+        });
+
+        return positions;
+      }
+
+      var initPos = buildInitialPositions(GRAPH_DATA.nodes, GRAPH_DATA.edges);
+
       var nodes = GRAPH_DATA.nodes.map(function (n) {
-        var shape = n.type === 'applicant' ? 'star' : 'dot';
+        var isApplicant = n.type === 'applicant';
+        var isPatent = n.type === 'patent';
+        
+        // Handle color being a string or an object
+        var bgColor = '#BAB0AC';
+        var borderColor = '#BAB0AC';
+        var highlightBg = '#6B9CC3';
+        var highlightBorder = '#6B9CC3';
+
+        if (typeof n.color === 'string') {
+          bgColor = n.color;
+          borderColor = n.color;
+        } else if (n.color && typeof n.color === 'object') {
+          bgColor = n.color.background || bgColor;
+          borderColor = n.color.border || borderColor;
+          if (n.color.highlight) {
+            highlightBg = n.color.highlight.background || highlightBg;
+            highlightBorder = n.color.highlight.border || highlightBorder;
+          } else {
+            highlightBg = bgColor;
+            highlightBorder = borderColor;
+          }
+        }
+
+        var nodeFont = (n.font && typeof n.font === 'object') ? n.font : {};
+        var fontSize = nodeFont.size !== undefined ? nodeFont.size : 12;
+        var fontColor = nodeFont.color !== undefined ? nodeFont.color : '#F8FAFC';
+
+        var shape = n.shape || (isApplicant ? 'star' : 'dot');
+        var pos = initPos[n.id] || {};
+
         return {
           id: n.id,
           label: n.label,
           shape: shape,
           size: n.size,
+          x: pos.x,
+          y: pos.y,
           color: {
-            background: n.color,
-            border: n.color,
-            highlight: { background: '#6B9CC3', border: '#6B9CC3' },
-            hover: { background: '#6B9CC3', border: '#6B9CC3' },
+            background: bgColor,
+            border: borderColor,
+            highlight: { background: highlightBg, border: highlightBorder },
+            hover: { background: highlightBg, border: highlightBorder },
           },
           font: {
-            color: '#F8FAFC',
-            size: 12,
+            color: fontColor,
+            size: fontSize,
           },
           // Store original metadata for tooltip
           _type: n.type,
