@@ -93,7 +93,8 @@ export default function GraphViewer({
     let cancelled = false
 
     const init = async () => {
-      const { Network, DataSet } = await import('vis-network')
+      const { Network } = await import('vis-network')
+      const { DataSet } = await import('vis-data')
       if (cancelled || !containerRef.current) return
 
       const nodeDataSet = new DataSet(nodes.map(toVisNode))
