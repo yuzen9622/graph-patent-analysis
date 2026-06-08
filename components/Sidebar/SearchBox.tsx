@@ -102,7 +102,7 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
                 className="w-2 h-2 rounded-full shrink-0"
                 style={{ background: node.color }}
               />
-              <span className="text-[#CBD5E1] flex-1 truncate">
+              <span className="text-muted-foreground flex-1 truncate">
                 {node.label}
               </span>
               <span className="primary-foreground shrink-0">

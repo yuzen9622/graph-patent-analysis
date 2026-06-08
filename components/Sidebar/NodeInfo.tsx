@@ -91,7 +91,7 @@ export default function NodeInfo({
             {node.abstract && (
               <div>
                 <dt className="primary-foreground mb-1">摘要</dt>
-                <dd className="text-[#CBD5E1] leading-relaxed m-0">
+                <dd className="text-muted-foreground leading-relaxed m-0">
                   {abstractExpanded
                     ? node.abstract
                     : node.abstract.slice(0, 120) +
@@ -133,7 +133,9 @@ export default function NodeInfo({
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: community.color }}
                   />
-                  <span className="text-[#CBD5E1]">{community.name}</span>
+                  <span className="text-muted-foreground">
+                    {community.name}
+                  </span>
                 </dd>
               </div>
             )}
@@ -174,7 +176,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
       <dt className="primary-foreground shrink-0 w-16">{label}</dt>
-      <dd className="text-[#CBD5E1] m-0 break-words min-w-0">{value}</dd>
+      <dd className="text-muted-foreground m-0 break-words min-w-0">{value}</dd>
     </div>
   );
 }

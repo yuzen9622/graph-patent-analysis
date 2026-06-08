@@ -12,7 +12,7 @@ const HUGE_GRAPH = 350;
 
 // ── DataSet update types ──────────────────────────────────────────────────────
 
-type NodeUpdate = { id: string; hidden?: boolean; opacity?: number };
+type NodeUpdate = { id: string; hidden?: boolean; opacity?: number; color?: any; label?: string };
 type EdgeColorProp = { inherit: "from"; opacity?: number };
 type EdgeUpdate = { id: string; hidden?: boolean; color?: EdgeColorProp };
 type NodeDataSet = { update: (items: NodeUpdate[]) => void };
@@ -261,38 +261,92 @@ export default function GraphViewer({
         }
       });
 
-      // ── Highlight: dim non-adjacent nodes/edges on click ──────────────
+      // ── Highlight: Neighbourhood Highlight (1st & 2nd degree) ───────────
       let highlightActive = false;
-      const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.06 };
+      const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.05 };
+      const DIM_NODE_COLOR = "rgba(200,200,200,0.3)";
 
       const applyHighlight = (clickedId: string) => {
-        const adjacent = new Set<string>([clickedId]);
-        const adjEdgeIds = new Set<string>();
+        const degree1 = new Set<string>([clickedId]);
+        const degree2 = new Set<string>();
+        const activeEdges = new Set<string>();
+
+        // Find 1st degree connections
         edges.forEach((e) => {
-          if (e.from === clickedId || e.to === clickedId) {
-            adjacent.add(e.from);
-            adjacent.add(e.to);
-            adjEdgeIds.add(e.id);
+          if (e.from === clickedId) {
+            degree1.add(e.to);
+            activeEdges.add(e.id);
+          } else if (e.to === clickedId) {
+            degree1.add(e.from);
+            activeEdges.add(e.id);
           }
         });
+
+        // Find 2nd degree connections
+        edges.forEach((e) => {
+          if (degree1.has(e.from) && !degree1.has(e.to)) {
+            degree2.add(e.to);
+            activeEdges.add(e.id);
+          } else if (degree1.has(e.to) && !degree1.has(e.from)) {
+            degree2.add(e.from);
+            activeEdges.add(e.id);
+          }
+        });
+
         nodeDataSet.update(
-          nodes.map((n) => ({
-            id: n.id,
-            opacity: adjacent.has(n.id) ? 1 : 0.08,
-          })),
+          nodes.map((n) => {
+            const original = toVisNode(n);
+            if (degree1.has(n.id)) {
+              // 1st degree & selected: Original color, Original label, Fully opaque
+              return { 
+                id: n.id, 
+                color: original.color, 
+                label: original.label,
+                opacity: 1 
+              };
+            } else if (degree2.has(n.id)) {
+              // 2nd degree: Original color, Original label, Slightly dimmed
+              return { 
+                id: n.id, 
+                color: original.color, 
+                label: original.label,
+                opacity: 0.5 
+              };
+            } else {
+              // Non-connected: Grey out, highly dimmed, hide label (unless it's an applicant)
+              // We hide concept and patent labels to reduce clutter. Applicant labels are usually kept but we can hide them too if we want a clean view.
+              return { 
+                id: n.id, 
+                color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR }, 
+                label: "", 
+                opacity: 0.2 
+              };
+            }
+          })
         );
+
         edgeDataSet.update(
           edges.map((e) => ({
             id: e.id,
-            color: adjEdgeIds.has(e.id) ? toVisEdge(e).color : DIM_EDGE,
-          })),
+            color: activeEdges.has(e.id) ? toVisEdge(e).color : DIM_EDGE,
+          }))
         );
         highlightActive = true;
       };
 
       const clearHighlight = () => {
         if (!highlightActive) return;
-        nodeDataSet.update(nodes.map((n) => ({ id: n.id, opacity: 1 })));
+        nodeDataSet.update(
+          nodes.map((n) => {
+            const original = toVisNode(n);
+            return {
+              id: n.id,
+              color: original.color,
+              label: original.label,
+              opacity: 1,
+            };
+          })
+        );
         edgeDataSet.update(
           edges.map((e) => ({ id: e.id, color: toVisEdge(e).color })),
         );

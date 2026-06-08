@@ -28,7 +28,7 @@ export default function LayerToggle({ visibleLayers, onToggle }: Props) {
           />
           <Label
             htmlFor={`layer-${type}`}
-            className="text-xs text-[#CBD5E1] cursor-pointer flex items-center gap-1.5"
+            className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1.5"
           >
             <span
               aria-hidden
