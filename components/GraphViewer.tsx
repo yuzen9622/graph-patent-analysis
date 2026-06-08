@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Network } from 'vis-network'
-import type { GraphNode, GraphEdge, Community } from '@/types/graph'
+import type { GraphNode, GraphEdge, Community, NodeType } from '@/types/graph'
 
-// ── Visual helpers ────────────────────────────────────────────────────────────
+// ── vis-network helpers ───────────────────────────────────────────────────────
 
 function toVisNode(n: GraphNode) {
   const isApplicant = n.type === 'applicant'
@@ -51,180 +51,54 @@ function toVisEdge(e: GraphEdge) {
   }
 }
 
-// ── Node info panel ───────────────────────────────────────────────────────────
-
-function NodeInfoPanel({
-  node,
-  onClose,
-}: {
-  node: GraphNode
-  onClose: () => void
-}) {
-  const typeLabel = { applicant: '申請人', patent: '專利', concept: '技術概念' }[node.type]
-
-  return (
-    <aside
-      style={{
-        width: '280px',
-        flexShrink: 0,
-        background: '#1E293B',
-        border: '1px solid #334155',
-        borderRadius: '8px',
-        padding: '16px',
-        overflow: 'auto',
-        position: 'relative',
-      }}
-    >
-      <button
-        onClick={onClose}
-        aria-label="關閉節點資訊"
-        style={{
-          position: 'absolute',
-          top: '8px',
-          right: '8px',
-          background: 'none',
-          border: 'none',
-          color: '#94A3B8',
-          fontSize: '1rem',
-          cursor: 'pointer',
-          lineHeight: 1,
-        }}
-      >
-        ✕
-      </button>
-
-      {/* Type badge */}
-      <div
-        style={{
-          display: 'inline-block',
-          background: node.color,
-          color: '#020617',
-          fontSize: '0.7rem',
-          fontWeight: 700,
-          padding: '2px 8px',
-          borderRadius: '4px',
-          marginBottom: '8px',
-          opacity: 0.9,
-        }}
-      >
-        {typeLabel}
-      </div>
-
-      <h3
-        style={{
-          fontFamily: "'Crimson Pro', Georgia, serif",
-          fontSize: '1rem',
-          fontWeight: 600,
-          color: '#F8FAFC',
-          marginBottom: '12px',
-          lineHeight: 1.4,
-          wordBreak: 'break-all',
-        }}
-      >
-        {node.label}
-      </h3>
-
-      {/* Fields */}
-      <dl style={{ fontSize: '0.82rem', color: '#94A3B8' }}>
-        {node.type === 'applicant' && (
-          <Row label="專利件數" value={String(node.patent_count ?? 0)} />
-        )}
-        {node.type === 'patent' && (
-          <>
-            {node.applicant && <Row label="申請人" value={node.applicant} />}
-            {node.filing_date && <Row label="申請日" value={node.filing_date} />}
-            {node.year && <Row label="年份" value={String(node.year)} />}
-            {node.application_number && (
-              <Row label="申請號" value={node.application_number} />
-            )}
-            {node.abstract && (
-              <div style={{ marginTop: '8px' }}>
-                <dt style={{ color: '#64748B', marginBottom: '4px' }}>摘要</dt>
-                <dd
-                  style={{
-                    color: '#CBD5E1',
-                    lineHeight: 1.6,
-                    fontSize: '0.78rem',
-                    margin: 0,
-                  }}
-                >
-                  {node.abstract.slice(0, 200)}
-                  {node.abstract.length > 200 ? '…' : ''}
-                </dd>
-              </div>
-            )}
-          </>
-        )}
-        {node.type === 'concept' && (
-          <>
-            <Row label="出現次數" value={String(node.frequency ?? 1)} />
-            {node.community_id !== undefined && (
-              <Row label="所屬社群" value={String(node.community_id)} />
-            )}
-          </>
-        )}
-      </dl>
-    </aside>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
-      <dt style={{ color: '#64748B', flexShrink: 0, width: '72px' }}>{label}</dt>
-      <dd style={{ color: '#CBD5E1', margin: 0, wordBreak: 'break-word' }}>{value}</dd>
-    </div>
-  )
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
-
-type Layer = 'applicant' | 'patent' | 'concept'
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   nodes: GraphNode[]
   edges: GraphEdge[]
   communities: Community[]
+  onNodeSelect?: (node: GraphNode | null) => void
+  yearRange?: [number, number]
+  visibleLayers?: Set<NodeType>
+  hiddenCommunities?: Set<number>
+  focusNodeId?: string
 }
 
-export default function GraphViewer({ nodes, edges, communities }: Props) {
+type SimpleDataSet = {
+  update: (items: { id: string; hidden?: boolean }[]) => void
+}
+
+export default function GraphViewer({
+  nodes,
+  edges,
+  communities: _communities,
+  onNodeSelect,
+  yearRange,
+  visibleLayers,
+  hiddenCommunities,
+  focusNodeId,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
-
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({
-    applicant: true,
-    patent: true,
-    concept: true,
-  })
+  const nodeDataSetRef = useRef<SimpleDataSet | null>(null)
   const [stabilized, setStabilized] = useState(false)
-
-  const toggleLayer = useCallback((layer: Layer) => {
-    setLayers((prev) => ({ ...prev, [layer]: !prev[layer] }))
-  }, [])
 
   const handleFit = useCallback(() => {
     networkRef.current?.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } })
   }, [])
 
+  // ── Build / rebuild network when nodes or edges change ──
   useEffect(() => {
     if (!containerRef.current) return
-
     let cancelled = false
 
     const init = async () => {
       const { Network, DataSet } = await import('vis-network')
       if (cancelled || !containerRef.current) return
 
-      // Filter nodes/edges by visible layers
-      const visibleNodes = nodes.filter((n) => layers[n.type])
-      const visibleIds = new Set(visibleNodes.map((n) => n.id))
-      const visibleEdges = edges.filter(
-        (e) => visibleIds.has(e.from) && visibleIds.has(e.to),
-      )
-
-      const nodeDataSet = new DataSet(visibleNodes.map(toVisNode))
-      const edgeDataSet = new DataSet(visibleEdges.map(toVisEdge))
+      const nodeDataSet = new DataSet(nodes.map(toVisNode))
+      const edgeDataSet = new DataSet(edges.map(toVisEdge))
+      nodeDataSetRef.current = nodeDataSet as unknown as SimpleDataSet
 
       const options = {
         nodes: {
@@ -271,20 +145,39 @@ export default function GraphViewer({ nodes, edges, communities }: Props) {
 
       setStabilized(false)
       network.once('stabilizationIterationsDone', () => {
-        if (!cancelled) setStabilized(true)
+        if (!cancelled) {
+          network.setOptions({ physics: { enabled: false } })
+          setStabilized(true)
+        }
       })
 
       network.on('click', (params) => {
         if (params.nodes.length > 0) {
           const nodeId = params.nodes[0] as string
-          setSelectedNode(nodes.find((n) => n.id === nodeId) ?? null)
+          onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null)
         } else {
-          setSelectedNode(null)
+          onNodeSelect?.(null)
         }
+      })
+
+      // Double-click: focus mode (hide non-adjacent)
+      network.on('doubleClick', (params) => {
+        if (params.nodes.length === 0) {
+          // Restore all on double-click canvas
+          nodeDataSet.update(nodes.map(n => ({ id: n.id, hidden: false })))
+          return
+        }
+        const clickedId = params.nodes[0] as string
+        const adjacent = new Set<string>([clickedId])
+        edges.forEach(e => {
+          if (e.from === clickedId) adjacent.add(e.to)
+          if (e.to === clickedId) adjacent.add(e.from)
+        })
+        nodeDataSet.update(nodes.map(n => ({ id: n.id, hidden: !adjacent.has(n.id) })))
       })
     }
 
-    init()
+    void init()
 
     return () => {
       cancelled = true
@@ -294,167 +187,61 @@ export default function GraphViewer({ nodes, edges, communities }: Props) {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, layers])
+  }, [nodes, edges])
 
-  const LAYER_LABELS: Record<Layer, string> = {
-    applicant: '申請人',
-    patent: '專利',
-    concept: '技術概念',
-  }
+  // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
+  useEffect(() => {
+    if (!nodeDataSetRef.current) return
+
+    const [y0, y1] = yearRange ?? [0, 9999]
+    const updates = nodes.map(n => {
+      let hidden = false
+
+      if (visibleLayers && !visibleLayers.has(n.type)) hidden = true
+
+      if (!hidden && n.type === 'patent' && n.year) {
+        if (n.year < y0 || n.year > y1) hidden = true
+      }
+
+      if (!hidden && n.type === 'concept' && n.community_id !== undefined) {
+        if (hiddenCommunities?.has(n.community_id)) hidden = true
+      }
+
+      return { id: n.id, hidden }
+    })
+
+    nodeDataSetRef.current.update(updates)
+  }, [nodes, yearRange, visibleLayers, hiddenCommunities])
+
+  // ── Focus a node (from SearchBox) ──
+  useEffect(() => {
+    if (!focusNodeId || !networkRef.current) return
+    networkRef.current.focus(focusNodeId, {
+      scale: 1.5,
+      animation: { duration: 400, easingFunction: 'easeInOutQuad' },
+    })
+    networkRef.current.selectNodes([focusNodeId])
+  }, [focusNodeId])
 
   return (
-    <div style={{ display: 'flex', gap: '12px', height: '72vh' }}>
-      {/* Canvas wrapper */}
-      <div
-        style={{
-          flex: 1,
-          position: 'relative',
-          background: '#0F172A',
-          borderRadius: '8px',
-          border: '1px solid #334155',
-          overflow: 'hidden',
-          minWidth: 0,
-        }}
+    <div className="relative w-full h-full bg-[#0F172A]">
+      {/* Fit-to-view button */}
+      <button
+        onClick={handleFit}
+        title="全部顯示"
+        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-[#334155] bg-[#1E293B]/90 text-[#94A3B8] hover:text-[#F8FAFC] hover:border-[#4E79A7] transition-colors duration-150 cursor-pointer backdrop-blur-sm"
       >
-        {/* Layer toggles */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '12px',
-            left: '12px',
-            zIndex: 10,
-            display: 'flex',
-            gap: '6px',
-          }}
-        >
-          {(['applicant', 'patent', 'concept'] as Layer[]).map((layer) => (
-            <button
-              key={layer}
-              onClick={() => toggleLayer(layer)}
-              title={`切換顯示「${LAYER_LABELS[layer]}」節點`}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: `1px solid ${layers[layer] ? '#4E79A7' : '#475569'}`,
-                background: layers[layer] ? '#4E79A766' : '#1E293B',
-                color: layers[layer] ? '#BAD0F0' : '#94A3B8',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                transition: 'all 150ms',
-              }}
-            >
-              {LAYER_LABELS[layer]}
-            </button>
-          ))}
+        全部顯示
+      </button>
+
+      {/* Stabilizing overlay */}
+      {!stabilized && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-[#0F172A]/85 border border-[#334155] rounded-md px-4 py-1.5 text-xs text-[#94A3B8] pointer-events-none backdrop-blur-sm">
+          佈局計算中…
         </div>
-
-        {/* Fit button */}
-        <button
-          onClick={handleFit}
-          title="全部顯示"
-          style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            zIndex: 10,
-            padding: '4px 10px',
-            borderRadius: '4px',
-            border: '1px solid #475569',
-            background: '#1E293B',
-            color: '#94A3B8',
-            fontSize: '0.75rem',
-            cursor: 'pointer',
-          }}
-        >
-          全部顯示
-        </button>
-
-        {/* Stabilizing overlay */}
-        {!stabilized && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '12px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 10,
-              background: 'rgba(15,23,42,0.85)',
-              border: '1px solid #334155',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              fontSize: '0.75rem',
-              color: '#94A3B8',
-              pointerEvents: 'none',
-            }}
-          >
-            佈局計算中…
-          </div>
-        )}
-
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      </div>
-
-      {/* Node detail panel */}
-      {selectedNode && (
-        <NodeInfoPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
       )}
 
-      {/* Community legend — show when no node is selected */}
-      {!selectedNode && communities.length > 0 && (
-        <aside
-          style={{
-            width: '200px',
-            flexShrink: 0,
-            background: '#1E293B',
-            border: '1px solid #334155',
-            borderRadius: '8px',
-            padding: '14px',
-            overflow: 'auto',
-          }}
-        >
-          <h3
-            style={{
-              fontFamily: "'Crimson Pro', Georgia, serif",
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              color: '#CBD5E1',
-              marginBottom: '10px',
-            }}
-          >
-            技術社群
-          </h3>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {communities.map((c) => (
-              <li
-                key={c.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '5px 0',
-                  borderBottom: '1px solid #334155',
-                  fontSize: '0.78rem',
-                }}
-              >
-                <span
-                  aria-hidden
-                  style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    background: c.color,
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ color: '#CBD5E1', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.name}
-                </span>
-                <span style={{ color: '#64748B', flexShrink: 0 }}>{c.node_count}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )}
+      <div ref={containerRef} className="w-full h-full" />
     </div>
   )
 }
