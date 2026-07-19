@@ -12,6 +12,8 @@ export interface PatentRow {
 }
 
 // 5.2 LLM extraction result
+export type RelationConfidence = 'EXTRACTED' | 'INFERRED' | 'AMBIGUOUS'
+
 export interface ExtractionResult {
   patent_id: string
   translated_abstract: string
@@ -21,6 +23,8 @@ export interface ExtractionResult {
     target: string
     relation: string
     weight: number  // 1–5
+    reason?: string // 解釋這段關係的依據
+    confidence?: RelationConfidence
   }>
 }
 
@@ -55,6 +59,8 @@ export interface GraphEdge {
   to: string
   relation: string
   weight?: number         // Optional: absent on applicant→patent edges, present on concept edges
+  reason?: string         // LLM 對此邊關聯性的解釋
+  confidence?: RelationConfidence  // Only set on LLM-derived concept-concept edges
   source_patent?: string  // Which patent produced this edge
 }
 
