@@ -44,3 +44,5 @@ next-env.d.ts
 data/*.json
 
 ._*
+/memory
+/graphify-out
