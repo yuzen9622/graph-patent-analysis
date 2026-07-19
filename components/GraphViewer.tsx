@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Network } from "vis-network";
-import type { GraphNode, GraphEdge, Community, NodeType } from "@/types/graph";
+import type {
+  GraphNode,
+  GraphEdge,
+  Community,
+  NodeType,
+  GraphAnalysis,
+  GodNode,
+  SurprisingConnection,
+} from "@/types/graph";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -26,17 +34,18 @@ type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
 
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
-function buildTitle(n: GraphNode): string {
-  if (n.type === "applicant")
-    return `申請人：${n.label}（${n.patent_count ?? 0} 件專利）`;
-  if (n.type === "patent")
-    return `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`;
-  if (n.type === "concept")
-    return `概念：${n.label}（出現 ${n.frequency ?? 1} 次）`;
-  return n.title ?? n.label;
+function buildTitle(n: GraphNode, godInfo?: GodNode): string {
+  const base = n.type === "applicant"
+    ? `申請人：${n.label}（${n.patent_count ?? 0} 件專利）`
+    : n.type === "patent"
+    ? `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`
+    : n.type === "concept"
+    ? `概念：${n.label}（出現 ${n.frequency ?? 1} 次）`
+    : n.title ?? n.label;
+  return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
 }
 
-function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
+function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNode) {
   const isApplicant = n.type === "applicant";
   const isPatent = n.type === "patent";
 
@@ -82,14 +91,15 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
   return {
     id: n.id,
     label: isApplicant ? n.label : isPatent ? "" : n.label,
-    title: buildTitle(n),
+    title: buildTitle(n, godInfo),
     shape: shape,
     size: n.size,
+    borderWidth: godInfo ? 4 : undefined,
     color: {
       background: bgColor,
-      border: borderColor,
-      highlight: { background: highlightBg, border: highlightBorder },
-      hover: { background: highlightBg, border: highlightBorder },
+      border: godInfo ? "#FFD700" : borderColor,
+      highlight: { background: highlightBg, border: godInfo ? "#FFD700" : highlightBorder },
+      hover: { background: highlightBg, border: godInfo ? "#FFD700" : highlightBorder },
     },
     font: {
       color: fontColor,
@@ -100,9 +110,24 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }) {
   };
 }
 
-function toVisEdge(e: GraphEdge) {
+function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
   const isConceptEdge =
     e.from.startsWith("concept:") && e.to.startsWith("concept:");
+
+  const confidenceLine = e.confidence ? `\n信心：${e.confidence}` : "";
+  const surprisingLine = surprising ? "\n⚡ 跨社群連結（罕見橋接）" : "";
+  const title = e.reason || confidenceLine || surprisingLine
+    ? `${e.reason ? `權重 ${e.weight}: ${e.reason}` : ""}${confidenceLine}${surprisingLine}`
+    : undefined;
+
+  const dashes: [number, number] | undefined = surprising
+    ? [8, 4]
+    : e.confidence === "AMBIGUOUS"
+    ? [2, 4]
+    : e.confidence === "INFERRED"
+    ? [6, 3]
+    : undefined;
+
   return {
     id: e.id,
     from: e.from,
@@ -111,10 +136,20 @@ function toVisEdge(e: GraphEdge) {
       e.relation && e.relation !== "is_part_of" && e.relation !== "belongs_to"
         ? e.relation
         : "",
-    width: isConceptEdge ? Math.max(1.5, (e.weight ?? 1) * 0.5) : 1,
-    color: { inherit: "from" as const, opacity: isConceptEdge ? 0.75 : 0.45 },
+    title,
+    dashes,
+    width: surprising
+      ? Math.max(3, (e.weight ?? 1) * 0.5 + 1.5)
+      : isConceptEdge
+      ? Math.max(1.5, (e.weight ?? 1) * 0.5)
+      : 1,
+    color: surprising
+      ? { color: "#FF6B35" }
+      : { inherit: "from" as const, opacity: isConceptEdge ? 0.75 : 0.45 },
     arrows: { to: { enabled: true, scaleFactor: 0.4 } },
     font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
+    // 動態設定邊的長度：如果是有權重的概念邊，權重越高（關係越強），長度越短
+    length: isConceptEdge ? Math.max(40, 150 - (e.weight ?? 1) * 15) : undefined,
     // smooth is controlled globally via options — not set per-edge
     // so that perf-adaptive global setting takes effect
   };
@@ -265,13 +300,12 @@ function buildOptions(nodeCount: number) {
     physics: {
       solver: "forceAtlas2Based" as const,
       forceAtlas2Based: {
-        gravitationalConstant: isLarge ? -26 : -60,
-        centralGravity: 0.008,
-        springLength: isLarge ? 100 : 120,
-        springConstant: 0.06,
-        damping: 0.45,
-        // avoidOverlap adds per-node overlap checks
-        avoidOverlap: isLarge ? 0 : 0.3,
+        gravitationalConstant: isLarge ? -80 : -150, // 大幅增加互斥力，把節點推開
+        centralGravity: 0.003, // 極大降低向心力，避免擠在中心
+        springLength: isLarge ? 150 : 250, // 把線拉長
+        springConstant: 0.04,
+        damping: 0.5,
+        avoidOverlap: 1, 
       },
       // adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
       // meaning the solver converges in far fewer real iterations
@@ -307,6 +341,7 @@ interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
   communities: Community[];
+  analysis?: GraphAnalysis;
   onNodeSelect?: (node: GraphNode | null) => void;
   yearRange?: [number, number];
   visibleLayers?: Set<NodeType>;
@@ -318,6 +353,7 @@ export default function GraphViewer({
   nodes,
   edges,
   communities: _communities,
+  analysis,
   onNodeSelect,
   yearRange,
   visibleLayers,
@@ -348,10 +384,16 @@ export default function GraphViewer({
       if (cancelled || !containerRef.current) return;
 
       const initPos = buildInitialPositions(nodes, edges);
-      const nodeDataSet = new DataSet(
-        nodes.map((n) => toVisNode(n, initPos.get(n.id))),
+      const godNodeMap = new Map((analysis?.god_nodes ?? []).map((g) => [g.id, g]));
+      const surprisingEdgeMap = new Map(
+        (analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
       );
-      const edgeDataSet = new DataSet(edges.map(toVisEdge));
+      const nodeDataSet = new DataSet(
+        nodes.map((n) => toVisNode(n, initPos.get(n.id), godNodeMap.get(n.id))),
+      );
+      const edgeDataSet = new DataSet(
+        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id))),
+      );
       nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
       edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 

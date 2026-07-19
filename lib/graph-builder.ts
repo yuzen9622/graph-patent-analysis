@@ -9,7 +9,9 @@ import type {
   GraphNode,
   GraphEdge,
   Community,
+  GraphAnalysis,
 } from "@/types/graph";
+import { computeGodNodes, computeSurprisingConnections } from "@/lib/graph-analysis";
 
 // Tableau-10 colors as defined in PRD Section 6.2
 const TABLEAU_10: string[] = [
@@ -198,6 +200,8 @@ export function buildGraph(
           to: tgtNode.id,
           relation: rel.relation,
           weight: rel.weight,
+          reason: rel.reason,
+          confidence: rel.confidence,
           source_patent: patent.id,
         });
       }
@@ -258,11 +262,18 @@ export function buildGraph(
   // ── generated_at: current UTC ISO 8601 timestamp ──────────────────────────────
   const generated_at = new Date().toISOString();
 
+  // ── graphify-style analysis: god nodes and surprising connections ────────────
+  const analysis: GraphAnalysis = {
+    god_nodes: computeGodNodes(allNodes, edges),
+    surprising_connections: computeSurprisingConnections(edges, allNodes),
+  };
+
   return {
     nodes: allNodes,
     edges,
     communities: communitiesList,
     stats,
+    analysis,
     ai_report: "", // Filled in by the LLM report step (F-07)
     generated_at,
   };

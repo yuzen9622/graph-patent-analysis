@@ -71,6 +71,31 @@ export interface Community {
   node_count: number
 }
 
+// graphify-style analysis: hub nodes and cross-community bridge edges
+export interface GodNode {
+  id: string
+  label: string
+  type: NodeType
+  degree: number           // unweighted degree (edge count)
+  weighted_degree: number  // sum of edge weight (weight=1 for structural edges)
+}
+
+export interface SurprisingConnection {
+  edge_id: string
+  from: string
+  to: string
+  from_community: number
+  to_community: number
+  weight?: number
+  reason?: string
+  bridge_rarity: number // 1 / (該社群配對之間的邊數)，越大越罕見
+}
+
+export interface GraphAnalysis {
+  god_nodes: GodNode[]
+  surprising_connections: SurprisingConnection[]
+}
+
 export interface GraphData {
   nodes: GraphNode[]
   edges: GraphEdge[]
@@ -82,6 +107,7 @@ export interface GraphData {
     community_count: number   // Corresponds to "W 社群" in the UI stats bar
     year_range: [number, number]
   }
+  analysis?: GraphAnalysis     // Optional for backward-compat with pre-existing data/*.json files
   ai_report: string
   generated_at: string        // ISO 8601 UTC; frontend converts to UTC+8 for display
 }

@@ -123,6 +123,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             nodes={graph.nodes}
             edges={graph.edges}
             communities={graph.communities}
+            analysis={graph.analysis}
             onNodeSelect={setSelectedNode}
             yearRange={yearRange}
             visibleLayers={visibleLayers}
