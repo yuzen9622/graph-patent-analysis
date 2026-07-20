@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useId, useEffect } from "react";
+import { Suspense, useState, useId } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart2, Loader2, ArrowRight, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import UploadZone from "@/components/UploadZone";
-import ModelSelector from "@/components/ModelSelector";
 import ProgressPanel from "@/components/ProgressPanel";
 import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
 import { addHistoryEntry } from "@/lib/analysis-history";
@@ -16,10 +16,9 @@ import type { FieldMapping } from "@/lib/excel-parser";
 import type { ProviderType } from "@/lib/llm/providers";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
-const STORAGE_KEYS = {
-  API_KEY: "patent_analysis_api_key",
-  PROVIDER: "patent_analysis_provider",
-};
+
+// Only Gemini is supported; the model is fixed and not user-selectable.
+const PROVIDER: ProviderType = "gemini";
 
 function Step({
   n,
@@ -53,55 +52,23 @@ function Step({
   );
 }
 
-export default function HomePage() {
+function HomePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [patents, setPatents] = useState<PatentRow[]>([]);
   const [_mappings, setMappings] = useState<FieldMapping[]>([]);
   const [filename, setFilename] = useState<string>("");
-  const [provider, setProvider] = useState<ProviderType>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(STORAGE_KEYS.PROVIDER);
-      if (saved) return saved as ProviderType;
-    }
-    return "nvidia";
-  });
-  const [apiKey, setApiKey] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(STORAGE_KEYS.API_KEY) || "";
-    }
-    return "";
-  });
   const [sampleSize, setSampleSize] = useState(50);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [phase, setPhase] = useState<"upload" | "analyzing">("upload");
-  const [jobId, setJobId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const jobId = searchParams.get("jobId");
+  const phase = jobId ? "analyzing" : "upload";
 
   const sampleInputId = useId();
 
 
-
-  // Save to localStorage when changed
-  useEffect(() => {
-    if (apiKey) localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
-  }, [apiKey]);
-
-  useEffect(() => {
-    if (provider) localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
-  }, [provider]);
-
-  // Load jobId from URL query parameters if present (for background analysis sync)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const qJobId = params.get("jobId");
-      if (qJobId) {
-        setJobId(qJobId);
-        setPhase("analyzing");
-      }
-    }
-  }, []);
 
   const effectiveSample =
     patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;
@@ -109,7 +76,7 @@ export default function HomePage() {
     patents.length > 0
       ? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆`
       : null;
-  const canStart = patents.length > 0 && (USE_MOCK || apiKey.trim().length > 0);
+  const canStart = patents.length > 0;
 
   function handleParsed(
     rows: PatentRow[],
@@ -135,27 +102,19 @@ export default function HomePage() {
       setSubmitError("請先上傳 .xlsx 檔案。");
       return;
     }
-    if (!USE_MOCK && !apiKey.trim()) {
-      setSubmitError("請輸入 API Key 後再開始分析。");
-      return;
-    }
-
     setSubmitError(null);
     setSubmitting(true);
 
     const sampled = patents.slice(0, Math.min(sampleSize, patents.length));
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (!USE_MOCK) headers["X-LLM-Api-Key"] = apiKey.trim();
-
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          provider,
+          provider: PROVIDER,
           sample_size: sampleSize,
           patents: sampled,
         }),
@@ -178,8 +137,7 @@ export default function HomePage() {
         patentCount: sampled.length,
       });
 
-      setJobId(data.job_id);
-      setPhase("analyzing");
+      router.replace(`/?jobId=${encodeURIComponent(data.job_id)}`);
     } catch (err) {
       setSubmitError(
         err instanceof Error ? err.message : "啟動分析失敗，請重試。",
@@ -225,7 +183,7 @@ export default function HomePage() {
           {/* ── Analyzing phase ── */}
           {phase === "analyzing" && jobId ? (
             <div className="flex items-center justify-center min-h-full px-4 py-16">
-              <ProgressPanel jobId={jobId} />
+              <ProgressPanel key={jobId} jobId={jobId} />
             </div>
           ) : (
             /* ── Upload phase ── */
@@ -241,16 +199,7 @@ export default function HomePage() {
                 <span className="text-border text-sm select-none" aria-hidden>
                   →
                 </span>
-                <Step
-                  n={2}
-                  label="選擇模型"
-                  active={patents.length > 0 && !canStart}
-                  done={canStart}
-                />
-                <span className="text-border text-sm select-none" aria-hidden>
-                  →
-                </span>
-                <Step n={3} label="開始分析" active={canStart} />
+                <Step n={2} label="開始分析" active={canStart} />
               </div>
 
               {/* Wizard cards */}
@@ -278,12 +227,12 @@ export default function HomePage() {
                     02 · 分析設定
                   </h2>
 
-                  <ModelSelector
-                    provider={provider}
-                    apiKey={apiKey}
-                    onProviderChange={setProvider}
-                    onApiKeyChange={setApiKey}
-                  />
+                  <p className="text-xs text-muted-foreground">
+                    模型：
+                    <span className="font-mono text-foreground">
+                      Google Gemini
+                    </span>
+                  </p>
 
                   {/* Sample size */}
                   <div className="flex items-end gap-4 pt-4 border-t border-white/[0.06]">
@@ -367,10 +316,23 @@ export default function HomePage() {
       {/* ── Footer ── */}
       <footer className="relative z-10 border-t border-white/[0.06] px-6 py-3 text-center shrink-0 bg-background/60 backdrop-blur-xl">
         <p className="text-xs text-border">
-          支援 NVIDIA NIM · Google Gemini · OpenAI &nbsp;·&nbsp;
-          本機部署，資料不離開您的電腦
+          Google Gemini &nbsp;·&nbsp; 本機部署，資料不離開您的電腦
         </p>
       </footer>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-dvh bg-background flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" aria-label="載入中" />
+        </div>
+      }
+    >
+      <HomePageContent />
+    </Suspense>
   );
 }

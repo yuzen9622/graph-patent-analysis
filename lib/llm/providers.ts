@@ -10,6 +10,21 @@ export const PROVIDER_MODELS: Record<ProviderType, string> = {
   openai: "gpt-4o-mini",
 };
 
+/** Environment variable that holds each provider's API key (server-side only). */
+const PROVIDER_ENV_VAR: Record<ProviderType, string> = {
+  nvidia: "NVIDIA_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  openai: "OPENAI_API_KEY",
+};
+
+/**
+ * Read the provider's API key from the server environment.
+ * Returns an empty string when the variable is unset.
+ */
+export function getEnvApiKey(provider: ProviderType): string {
+  return process.env[PROVIDER_ENV_VAR[provider]] ?? "";
+}
+
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 
 export function getModel(provider: ProviderType, apiKey: string) {

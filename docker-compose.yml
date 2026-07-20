@@ -1,0 +1,41 @@
+# Self-hosted deployment: Next.js app + Cloudflare Tunnel.
+#
+# 1. cp .env.docker.example .env   # then fill in the values
+# 2. docker compose up -d --build
+#
+# The app is not published on a host port by default — Cloudflare Tunnel
+# reaches it over the internal Docker network at http://app:3001.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: graph-patent-analysis:latest
+    restart: unless-stopped
+    environment:
+      # Server-side LLM key — read directly from env (no bring-your-own-key UI).
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      NODE_ENV: production
+    volumes:
+      # Persist generated analyses (lib/store.ts writes JSON here).
+      - patent-data:/app/data
+    expose:
+      - "3001"
+    # For direct local access without the tunnel, uncomment:
+    # ports:
+    #   - "3001:3001"
+
+  # Cloudflare Tunnel — create a tunnel in the Zero Trust dashboard, then map a
+  # public hostname to the service http://app:3001 and paste its token below.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+volumes:
+  patent-data:

@@ -10,6 +10,10 @@ import type {
   GodNode,
   SurprisingConnection,
 } from "@/types/graph";
+import {
+  isValidGraphViewport,
+  type GraphViewport,
+} from "@/lib/graph-viewport";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -369,6 +373,7 @@ export default function GraphViewer({
   const networkRef = useRef<Network | null>(null);
   const nodeDataSetRef = useRef<NodeDataSet | null>(null);
   const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
+  const viewportRef = useRef<GraphViewport | null>(null);
   const [stabilized, setStabilized] = useState(false);
   const [stabProgress, setStabProgress] = useState(0);
 
@@ -403,6 +408,11 @@ export default function GraphViewer({
       edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 
       if (networkRef.current) {
+        const viewport = {
+          position: networkRef.current.getViewPosition(),
+          scale: networkRef.current.getScale(),
+        };
+        viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
         networkRef.current.destroy();
         networkRef.current = null;
       }
@@ -413,6 +423,14 @@ export default function GraphViewer({
         buildOptions(nodes.length),
       );
       networkRef.current = network;
+
+      if (isValidGraphViewport(viewportRef.current)) {
+        network.moveTo({
+          position: viewportRef.current.position,
+          scale: viewportRef.current.scale,
+          animation: false,
+        });
+      }
 
       setStabilized(false);
       setStabProgress(0);
@@ -565,6 +583,11 @@ export default function GraphViewer({
     return () => {
       cancelled = true;
       if (networkRef.current) {
+        const viewport = {
+          position: networkRef.current.getViewPosition(),
+          scale: networkRef.current.getScale(),
+        };
+        viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
         networkRef.current.destroy();
         networkRef.current = null;
       }

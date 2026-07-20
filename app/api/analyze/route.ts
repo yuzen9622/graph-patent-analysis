@@ -4,7 +4,7 @@ import { createJob, completeJob, failJob, isJobCancelled, notifyProgress } from 
 import { EXTRACTION_PROMPT_VERSION, runBatchExtraction } from '@/lib/llm/extractor'
 import { detectCommunities } from '@/lib/community'
 import { buildGraph } from '@/lib/graph-builder'
-import { getModel, PROVIDER_MODELS, type ProviderType } from '@/lib/llm/providers'
+import { getModel, getEnvApiKey, PROVIDER_MODELS, type ProviderType } from '@/lib/llm/providers'
 import { buildConceptNetwork } from '@/lib/concept-network'
 import { generateText } from 'ai'
 import type { PatentRow, ExtractionResult } from '@/types/graph'
@@ -114,15 +114,6 @@ async function runAnalysis(
 // ── POST /api/analyze ─────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = request.headers.get('X-LLM-Api-Key') ?? ''
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Missing X-LLM-Api-Key header' },
-      { status: 400 },
-    )
-  }
-
   let body: {
     provider?: string
     sample_size?: number
@@ -142,6 +133,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { error: 'provider must be one of: nvidia, gemini, openai' },
       { status: 400 },
+    )
+  }
+
+  // API key comes from the server environment, not the client.
+  const apiKey = getEnvApiKey(provider as ProviderType)
+  if (!apiKey) {
+    return NextResponse.json(
+      {
+        error: `Server is missing the API key for provider "${provider}". Set the matching environment variable (e.g. GEMINI_API_KEY).`,
+      },
+      { status: 500 },
     )
   }
 

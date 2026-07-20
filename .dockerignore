@@ -1,0 +1,37 @@
+# Dependencies & build artifacts (rebuilt inside the image)
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+
+# Version control & tooling
+.git
+.gitignore
+.claude
+.agents
+
+# Env & secrets (passed at runtime, never baked into the image)
+.env
+.env.*
+!.env.local.example
+
+# Local persisted data (mounted as a volume)
+data/*.json
+
+# Docs, memory, generated graphs — not needed at runtime
+memory
+graphify-out
+docs
+tests
+
+# macOS / editor cruft
+.DS_Store
+._*
+*.pem
+npm-debug.log*
+.pnpm-debug.log*
+
+# Large source spreadsheet not needed in the image
+專利爬蟲.xlsx

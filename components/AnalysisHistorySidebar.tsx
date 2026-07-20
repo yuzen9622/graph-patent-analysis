@@ -16,6 +16,7 @@ import {
 import {
   loadHistory,
   HISTORY_EVENT,
+  getHistoryHref,
   updateHistoryStatus,
   type HistoryEntry,
 } from "@/lib/analysis-history";
@@ -149,7 +150,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
           {entries.slice(0, 10).map((entry) => (
             <Link
               key={entry.id}
-              href={`/analysis/${entry.id}`}
+              href={getHistoryHref(entry)}
               title={`${entry.filename} — ${formatDate(entry.timestamp)}`}
               className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/8 transition-colors duration-150 cursor-pointer"
             >
@@ -188,7 +189,7 @@ export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
               {entries.map((entry) => (
                 <li key={entry.id}>
                   <Link
-                    href={`/analysis/${entry.id}`}
+                    href={getHistoryHref(entry)}
                     className="group flex flex-col gap-1 rounded-xl px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/8 transition-all duration-150 cursor-pointer hover:border-black/5 dark:hover:border-white/10 border border-transparent"
                   >
                     <div className="flex items-start gap-2 min-w-0">

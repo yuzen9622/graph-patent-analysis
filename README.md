@@ -65,7 +65,7 @@ OPENAI_API_KEY=your_openai_key_here
 GEMINI_API_KEY=your_gemini_key_here
 NVIDIA_API_KEY=your_nvidia_key_here
 ```
-*(Note: You only need the key for the model you intend to use. Keys can also be entered directly in the web UI).*
+*(Note: Keys are read from the server environment — there is no key input in the web UI. `GEMINI_API_KEY` is all you need for the default setup.)*
 
 ### 3. Run the Platform
 
@@ -74,6 +74,15 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser. Upload your `.xlsx` patent data and start analyzing!
+
+### Docker / Cloudflare Tunnel
+
+For self-hosted container deployment behind Cloudflare Tunnel, see [docs/DEPLOY.md](docs/DEPLOY.md):
+
+```bash
+cp .env.docker.example .env   # set GEMINI_API_KEY + CLOUDFLARE_TUNNEL_TOKEN
+docker compose up -d --build
+```
 
 ## 📦 Data Export & Integration
 

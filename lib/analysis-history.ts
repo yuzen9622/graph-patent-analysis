@@ -39,3 +39,10 @@ export function updateHistoryStatus(id: string, status: HistoryEntry['status']) 
     persistHistory(entries)
   }
 }
+
+export function getHistoryHref(entry: Pick<HistoryEntry, 'id' | 'status'>): string {
+  const encodedId = encodeURIComponent(entry.id)
+  return entry.status === 'analyzing'
+    ? `/?jobId=${encodedId}`
+    : `/analysis/${encodedId}`
+}
