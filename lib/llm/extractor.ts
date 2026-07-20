@@ -5,6 +5,8 @@ import type { LanguageModel } from "ai";
 
 const VALID_CONFIDENCES: readonly RelationConfidence[] = ["EXTRACTED", "INFERRED", "AMBIGUOUS"];
 
+export const EXTRACTION_PROMPT_VERSION = "fintech-concepts-v2";
+
 const SYSTEM_PROMPT = `你是一位專業的中文金融科技（FinTech）專利分析師。
 使用者會提供一組專利摘要，請為每一筆專利：
 1. 將摘要翻譯為繁體中文（若已是中文則潤飾使其更精確）。

@@ -19,6 +19,9 @@ export default function CommunityLegend({
 
   return (
     <div>
+      <p className="mb-2 text-[0.65rem] leading-relaxed text-muted-foreground">
+        社群名稱取群內連結度最高的概念作為代表概念，不等同人工分類名稱。
+      </p>
       {allHidden && (
         <p className="text-xs text-muted-foreground mb-2">
           所有社群已隱藏，點擊色點以顯示

@@ -123,7 +123,7 @@ export default function NodeInfo({
         {/* Concept fields */}
         {node.type === "concept" && (
           <>
-            <Row label="出現次數" value={`${node.frequency ?? 1} 次`} />
+            <Row label="專利涵蓋" value={`${node.frequency ?? 0} 篇`} />
             {community && (
               <div className="flex items-center gap-1.5">
                 <dt className="text-foreground font-medium">社群</dt>

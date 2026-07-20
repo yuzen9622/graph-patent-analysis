@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { BarChart2, Copy, Check, Download } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { BarChart2, Copy, Check, Download, FileText } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
-import type { GraphData, GraphNode, NodeType } from "@/types/graph";
+import GraphLegend from "./GraphLegend";
+import { selectGraphView } from "@/lib/graph-view";
+import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
 const GraphViewer = dynamic(() => import("./GraphViewer"), { ssr: false });
@@ -19,6 +21,11 @@ interface Props {
 
 export default function GraphLayout({ graph, jobId }: Props) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
+  const [mode, setMode] = useState<GraphMode>("concept");
+  const [showSemantic, setShowSemantic] = useState(false);
+  const [minSupport, setMinSupport] = useState(1);
+  const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
   );
@@ -31,6 +38,38 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const view = useMemo(
+    () =>
+      selectGraphView(graph, {
+        mode,
+        showSemantic,
+        minSupport,
+        yearRange,
+      }),
+    [graph, mode, showSemantic, minSupport, yearRange],
+  );
+  const selectedViewNode = selectedNode
+    ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
+    : null;
+  const selectedViewEdge = selectedEdge
+    ? view.edges.find((edge) => edge.id === selectedEdge.id) ?? null
+    : null;
+
+  const selectMode = useCallback((nextMode: GraphMode) => {
+    setMode(nextMode);
+    setSelectedNode(null);
+    setSelectedEdge(null);
+  }, []);
+
+  const exportQuery = new URLSearchParams({
+    mode,
+    llm: showSemantic ? "1" : "0",
+    paper: paperMode ? "1" : "0",
+    minSupport: String(minSupport),
+    yearStart: String(yearRange[0]),
+    yearEnd: String(yearRange[1]),
+  }).toString();
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -79,25 +118,60 @@ export default function GraphLayout({ graph, jobId }: Props) {
         </Link>
 
         <div className="flex items-center gap-2 shrink-0">
+          <div className="inline-flex rounded-md border border-border bg-background p-0.5" aria-label="圖譜模式">
+            {([
+              ["concept", "技術概念網路"],
+              ["context", "專利脈絡圖"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => selectMode(value)}
+                aria-pressed={mode === value}
+                className={`rounded px-2.5 py-1 text-xs transition-colors ${
+                  mode === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
-            onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
-            aria-label="複製分享連結"
+            type="button"
+            onClick={() => setPaperMode((value) => !value)}
+            aria-pressed={paperMode}
+            className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors ${
+              paperMode
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background border-border text-foreground hover:bg-accent"
+            }`}
           >
-            {copied ? (
-              <>
-                <Check size={12} className="text-success" />
-                已複製
-              </>
-            ) : (
-              <>
-                <Copy size={12} />
-                複製連結
-              </>
-            )}
+            <FileText size={12} />
+            論文檢視
           </button>
+          {!paperMode && (
+            <button
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
+              aria-label="複製分享連結"
+            >
+              {copied ? (
+                <>
+                  <Check size={12} className="text-success" />
+                  已複製
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  複製連結
+                </>
+              )}
+            </button>
+          )}
           <a
-            href={`/api/export/${jobId}`}
+            href={`/api/export/${jobId}?${exportQuery}`}
             className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
             aria-label="下載離線 HTML 圖譜"
           >
@@ -110,7 +184,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       {/* ── Main area: graph + sidebar ── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* History sidebar — hidden on mobile */}
-        <div className="hidden md:flex shrink-0">
+        <div className={`${paperMode ? "hidden" : "hidden md:flex"} shrink-0`}>
           <AnalysisHistorySidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((c) => !c)}
@@ -118,41 +192,65 @@ export default function GraphLayout({ graph, jobId }: Props) {
         </div>
 
         {/* Graph canvas */}
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="relative flex-1 min-w-0 overflow-hidden">
           <GraphViewer
-            nodes={graph.nodes}
-            edges={graph.edges}
-            communities={graph.communities}
-            analysis={graph.analysis}
+            nodes={view.nodes}
+            edges={view.edges}
+            analysis={mode === "concept" ? graph.analysis : undefined}
             onNodeSelect={setSelectedNode}
+            onEdgeSelect={setSelectedEdge}
             yearRange={yearRange}
-            visibleLayers={visibleLayers}
-            hiddenCommunities={hiddenCommunities}
+            visibleLayers={mode === "concept" ? new Set<NodeType>(["concept"]) : visibleLayers}
+            hiddenCommunities={mode === "concept" ? hiddenCommunities : undefined}
             focusNodeId={focusNodeId}
+          />
+          <GraphLegend
+            mode={mode}
+            showSemantic={showSemantic}
+            minSupport={minSupport}
+            methodology={graph.methodology}
+            capabilityWarning={view.capabilityWarning}
+            stats={view.stats}
+            paperMode={paperMode}
           />
         </div>
 
         {/* Right sidebar */}
-        <Sidebar
-          nodes={graph.nodes}
-          edges={graph.edges}
-          communities={graph.communities}
-          aiReport={graph.ai_report}
-          yearRange={yearRange}
-          fullYearRange={graph.stats.year_range}
-          selectedNode={selectedNode}
-          visibleLayers={visibleLayers}
-          hiddenCommunities={hiddenCommunities}
-          onYearChange={setYearRange}
-          onLayerToggle={toggleLayer}
-          onCommunityToggle={toggleCommunity}
-          onNodeFocus={setFocusNodeId}
-          onNodeSelect={setSelectedNode}
-        />
+        {!paperMode && (
+          <Sidebar
+            nodes={view.nodes}
+            allNodes={graph.nodes}
+            edges={view.edges}
+            communities={view.communities}
+            aiReport={graph.ai_report}
+            yearRange={yearRange}
+            fullYearRange={graph.stats.year_range}
+            selectedNode={selectedViewNode}
+            selectedEdge={selectedViewEdge}
+            methodology={graph.methodology}
+            mode={mode}
+            showSemantic={showSemantic}
+            minSupport={minSupport}
+            maxSupport={view.maxSupport}
+            visibleLayers={visibleLayers}
+            hiddenCommunities={hiddenCommunities}
+            onYearChange={setYearRange}
+            onLayerToggle={toggleLayer}
+            onCommunityToggle={toggleCommunity}
+            onNodeFocus={setFocusNodeId}
+            onNodeSelect={(node) => {
+              setSelectedNode(node);
+              if (node) setSelectedEdge(null);
+            }}
+            onEdgeClose={() => setSelectedEdge(null)}
+            onSemanticChange={setShowSemantic}
+            onMinSupportChange={setMinSupport}
+          />
+        )}
       </div>
 
       {/* ── Stats bar ── */}
-      <StatsBar stats={graph.stats} />
+      <StatsBar stats={view.stats} />
     </div>
   );
 }

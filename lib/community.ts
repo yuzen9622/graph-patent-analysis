@@ -1,6 +1,6 @@
 import Graph from 'graphology'
 import louvain from 'graphology-communities-louvain'
-import type { ExtractionResult } from '@/types/graph'
+import type { ConceptNetworkResult } from '@/lib/concept-network'
 
 const COMMUNITY_COLORS: string[] = [
   '#4E79A7',
@@ -27,51 +27,19 @@ export interface CommunityResult {
 }
 
 export function detectCommunities(
-  extractions: ExtractionResult[]
+  conceptNetwork: ConceptNetworkResult
 ): CommunityResult {
   const graph = new Graph({ type: 'undirected', multi: false })
 
-  // Add concept keyword nodes and co-occurrence edges
-  for (const extraction of extractions) {
-    const keywords = extraction.keywords ?? []
+  for (const label of Array.from(conceptNetwork.concepts.keys()).sort()) {
+    graph.addNode(label)
+  }
 
-    // Ensure all keyword nodes exist
-    for (const kw of keywords) {
-      if (!graph.hasNode(kw)) {
-        graph.addNode(kw)
-      }
-    }
-
-    // Add co-occurrence edges for every pair of keywords in the same patent
-    for (let i = 0; i < keywords.length; i++) {
-      for (let j = i + 1; j < keywords.length; j++) {
-        const a = keywords[i]
-        const b = keywords[j]
-        if (a === b) continue
-        if (!graph.hasEdge(a, b)) {
-          graph.addEdge(a, b, { weight: 1 })
-        } else {
-          const w = (graph.getEdgeAttribute(graph.edge(a, b), 'weight') as number) ?? 1
-          graph.setEdgeAttribute(graph.edge(a, b), 'weight', w + 1)
-        }
-      }
-    }
-
-    // Add relation edges (concept-to-concept) from LLM output
-    for (const rel of extraction.relations ?? []) {
-      const { source, target } = rel
-      if (!source || !target || source === target) continue
-
-      if (!graph.hasNode(source)) graph.addNode(source)
-      if (!graph.hasNode(target)) graph.addNode(target)
-
-      if (!graph.hasEdge(source, target)) {
-        graph.addEdge(source, target, { weight: rel.weight ?? 1 })
-      } else {
-        const w = (graph.getEdgeAttribute(graph.edge(source, target), 'weight') as number) ?? 1
-        graph.setEdgeAttribute(graph.edge(source, target), 'weight', w + (rel.weight ?? 1))
-      }
-    }
+  for (const edge of conceptNetwork.cooccurrenceEdges) {
+    const source = edge.from.replace(/^concept:/, '')
+    const target = edge.to.replace(/^concept:/, '')
+    if (!graph.hasNode(source) || !graph.hasNode(target) || source === target) continue
+    graph.addEdge(source, target, { weight: edge.support_count ?? 1 })
   }
 
   if (graph.order === 0) {
@@ -82,8 +50,15 @@ export function detectCommunities(
     }
   }
 
-  // Run Louvain community detection
-  const communityMap: { [node: string]: number } = louvain(graph)
+  // Louvain requires at least one edge. Isolated concepts are each their own
+  // deterministic community instead of being dropped or causing an exception.
+  const communityMap: { [node: string]: number } = graph.size === 0
+    ? Object.fromEntries(graph.nodes().sort().map((node, index) => [node, index]))
+    : louvain(graph, {
+        getEdgeWeight: 'weight',
+        resolution: 1,
+        randomWalk: false,
+      })
 
   const assignments = new Map<string, number>()
   for (const [node, communityId] of Object.entries(communityMap)) {

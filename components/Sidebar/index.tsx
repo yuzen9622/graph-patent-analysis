@@ -11,20 +11,35 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import SearchBox from "./SearchBox";
 import NodeInfo from "./NodeInfo";
+import EdgeInfo from "./EdgeInfo";
 import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
-import type { GraphNode, GraphEdge, Community, NodeType } from "@/types/graph";
+import type {
+  GraphNode,
+  GraphEdge,
+  Community,
+  NodeType,
+  GraphMethodology,
+  GraphMode,
+} from "@/types/graph";
 
 interface Props {
   nodes: GraphNode[];
+  allNodes: GraphNode[];
   edges: GraphEdge[];
   communities: Community[];
   aiReport: string;
   yearRange: [number, number];
   fullYearRange: [number, number];
   selectedNode: GraphNode | null;
+  selectedEdge: GraphEdge | null;
+  methodology: GraphMethodology;
+  mode: GraphMode;
+  showSemantic: boolean;
+  minSupport: number;
+  maxSupport: number;
   visibleLayers: Set<NodeType>;
   hiddenCommunities: Set<number>;
   onYearChange: (range: [number, number]) => void;
@@ -32,6 +47,9 @@ interface Props {
   onCommunityToggle: (id: number) => void;
   onNodeFocus: (nodeId: string) => void;
   onNodeSelect: (node: GraphNode | null) => void;
+  onEdgeClose: () => void;
+  onSemanticChange: (value: boolean) => void;
+  onMinSupportChange: (value: number) => void;
 }
 
 interface SectionProps {
@@ -60,12 +78,19 @@ function Section({ title, defaultOpen = true, children }: SectionProps) {
 
 export default function Sidebar({
   nodes,
+  allNodes,
   edges,
   communities,
   aiReport,
   yearRange,
   fullYearRange,
   selectedNode,
+  selectedEdge,
+  methodology,
+  mode,
+  showSemantic,
+  minSupport,
+  maxSupport,
   visibleLayers,
   hiddenCommunities,
   onYearChange,
@@ -73,6 +98,9 @@ export default function Sidebar({
   onCommunityToggle,
   onNodeFocus,
   onNodeSelect,
+  onEdgeClose,
+  onSemanticChange,
+  onMinSupportChange,
 }: Props) {
   return (
     <aside
@@ -93,8 +121,15 @@ export default function Sidebar({
           <Separator className="bg-border" />
 
           {/* Node Info */}
-          <Section title="節點資訊">
-            {selectedNode ? (
+          <Section title="節點／關係資訊">
+            {selectedEdge ? (
+              <EdgeInfo
+                edge={selectedEdge}
+                nodes={allNodes}
+                methodology={methodology}
+                onClose={onEdgeClose}
+              />
+            ) : selectedNode ? (
               <NodeInfo
                 node={selectedNode}
                 edges={edges}
@@ -109,7 +144,7 @@ export default function Sidebar({
               />
             ) : (
               <p className="text-xs text-muted-foreground pb-1">
-                點擊圖譜中的節點以查看詳情
+                點擊圖譜中的節點或線條以查看詳情
               </p>
             )}
           </Section>
@@ -119,6 +154,8 @@ export default function Sidebar({
           {/* Filters */}
           <Section title="篩選器">
             <div className="space-y-4">
+              {mode === "context" ? (
+                <>
               <div>
                 <p className="text-xs text-foreground font-medium mb-2">年份範圍</p>
                 <YearFilter
@@ -134,13 +171,49 @@ export default function Sidebar({
                   onToggle={onLayerToggle}
                 />
               </div>
+                </>
+              ) : (
+                <>
+                  <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showSemantic}
+                      onChange={(event) => onSemanticChange(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      顯示 LLM 語意關係
+                      <span className="block text-[0.65rem] text-muted-foreground mt-0.5">
+                        虛線僅為模型判讀證據，不參與社群與排版
+                      </span>
+                    </span>
+                  </label>
+                  <label className="block text-xs text-foreground">
+                    <span className="flex justify-between mb-2">
+                      <span className="font-medium">最低共同專利數</span>
+                      <span className="font-mono text-primary">{minSupport}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={Math.max(1, maxSupport)}
+                      value={Math.min(minSupport, Math.max(1, maxSupport))}
+                      onChange={(event) => onMinSupportChange(Number(event.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </label>
+                  <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
+                    概念統計涵蓋完整分析樣本；概念模式不套用年份篩選。
+                  </p>
+                </>
+              )}
             </div>
           </Section>
 
           <Separator className="bg-border" />
 
           {/* Community Legend */}
-          {communities.length > 0 && (
+          {mode === "concept" && communities.length > 0 && (
             <>
               <Section title="技術社群">
                 <CommunityLegend

@@ -4,6 +4,12 @@ import { generateText } from "ai";
 
 export type ProviderType = "nvidia" | "gemini" | "openai";
 
+export const PROVIDER_MODELS: Record<ProviderType, string> = {
+  nvidia: "meta/llama-3.1-70b-instruct",
+  gemini: "gemini-3-flash-preview",
+  openai: "gpt-4o-mini",
+};
+
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 
 export function getModel(provider: ProviderType, apiKey: string) {
@@ -13,15 +19,15 @@ export function getModel(provider: ProviderType, apiKey: string) {
         baseURL: NVIDIA_BASE_URL,
         apiKey,
       });
-      return nvidia("meta/llama-3.1-70b-instruct");
+      return nvidia(PROVIDER_MODELS.nvidia);
     }
     case "gemini": {
       const gemini = createGoogleGenerativeAI({ apiKey });
-      return gemini("gemini-3-flash-preview");
+      return gemini(PROVIDER_MODELS.gemini);
     }
     case "openai": {
       const openai = createOpenAI({ apiKey });
-      return openai("gpt-4o-mini");
+      return openai(PROVIDER_MODELS.openai);
     }
   }
 }

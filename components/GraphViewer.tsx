@@ -5,7 +5,6 @@ import type { Network } from "vis-network";
 import type {
   GraphNode,
   GraphEdge,
-  Community,
   NodeType,
   GraphAnalysis,
   GodNode,
@@ -40,7 +39,7 @@ function buildTitle(n: GraphNode, godInfo?: GodNode): string {
     : n.type === "patent"
     ? `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`
     : n.type === "concept"
-    ? `概念：${n.label}（出現 ${n.frequency ?? 1} 次）`
+    ? `概念：${n.label}（涵蓋 ${n.frequency ?? 0} 篇專利）`
     : n.title ?? n.label;
   return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
 }
@@ -111,48 +110,52 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
 }
 
 function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
-  const isConceptEdge =
-    e.from.startsWith("concept:") && e.to.startsWith("concept:");
-
-  const confidenceLine = e.confidence ? `\n信心：${e.confidence}` : "";
-  const surprisingLine = surprising ? "\n⚡ 跨社群連結（罕見橋接）" : "";
-  const title = e.reason || confidenceLine || surprisingLine
-    ? `${e.reason ? `權重 ${e.weight}: ${e.reason}` : ""}${confidenceLine}${surprisingLine}`
-    : undefined;
-
-  const dashes: [number, number] | undefined = surprising
-    ? [8, 4]
-    : e.confidence === "AMBIGUOUS"
-    ? [2, 4]
-    : e.confidence === "INFERRED"
-    ? [6, 3]
-    : undefined;
+  const isCooccurrence = e.kind === "cooccurrence";
+  const isSemantic = e.kind === "semantic";
+  const supportLine = isCooccurrence
+    ? `共同出現：${e.support_count ?? 0} 篇專利\nJaccard：${(e.jaccard ?? 0).toFixed(3)}`
+    : "";
+  const semanticLine = isSemantic
+    ? `LLM 語意關係：${e.relation}\n目前保存來源：${e.source_patents?.length ?? 0} 篇`
+    : "";
+  const surprisingLine = surprising ? "\n跨社群罕見橋接" : "";
+  const title = `${supportLine}${semanticLine}${surprisingLine}` || e.relation;
 
   return {
     id: e.id,
     from: e.from,
     to: e.to,
-    label:
-      e.relation && e.relation !== "is_part_of" && e.relation !== "belongs_to"
-        ? e.relation
-        : "",
+    label: isSemantic ? e.relation : "",
     title,
-    dashes,
-    width: surprising
-      ? Math.max(3, (e.weight ?? 1) * 0.5 + 1.5)
-      : isConceptEdge
-      ? Math.max(1.5, (e.weight ?? 1) * 0.5)
+    dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
+    width: isCooccurrence
+      ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.2)
+      : isSemantic
+      ? 1.5
       : 1,
     color: surprising
       ? { color: "#FF6B35" }
-      : { inherit: "from" as const, opacity: isConceptEdge ? 0.75 : 0.45 },
-    arrows: { to: { enabled: true, scaleFactor: 0.4 } },
+      : isSemantic
+      ? { color: "#8B5CF6", opacity: 0.8 }
+      : isCooccurrence
+      ? { color: "#64748B", opacity: 0.7 }
+      : { color: "#94A3B8", opacity: 0.35 },
+    arrows: { to: { enabled: isSemantic || e.kind === "structural", scaleFactor: 0.4 } },
     font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
-    // 動態設定邊的長度：如果是有權重的概念邊，權重越高（關係越強），長度越短
-    length: isConceptEdge ? Math.max(40, 150 - (e.weight ?? 1) * 15) : undefined,
+    // Semantic relations are an evidence overlay and must not alter layout.
+    physics: !isSemantic,
     // smooth is controlled globally via options — not set per-edge
     // so that perf-adaptive global setting takes effect
   };
+}
+
+function stableUnit(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) / 0xffffffff;
 }
 
 // Pre-spread concept nodes by community so ForceAtlas2 starts from a
@@ -177,7 +180,9 @@ function buildInitialPositions(
     }
   });
 
-  const comms = [...byComm.entries()];
+  const comms = [...byComm.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([id, ids]) => [id, [...ids].sort()] as [number, string[]]);
   const K = comms.length;
 
   if (K > 0) {
@@ -235,8 +240,8 @@ function buildInitialPositions(
 
       if (count > 0) {
         // Add a small jitter to avoid exact overlapping
-        const jitterX = (Math.random() - 0.5) * 30;
-        const jitterY = (Math.random() - 0.5) * 30;
+        const jitterX = (stableUnit(`${n.id}:x`) - 0.5) * 30;
+        const jitterY = (stableUnit(`${n.id}:y`) - 0.5) * 30;
         positions.set(n.id, {
           x: sumX / count + jitterX,
           y: sumY / count + jitterY,
@@ -259,7 +264,7 @@ function buildInitialPositions(
   unpositionedNodes.forEach((n) => {
     if (!positions.has(n.id)) {
       const angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
-      const r = 200 + Math.random() * 100;
+      const r = 200 + stableUnit(`${n.id}:radius`) * 100;
       positions.set(n.id, {
         x: Math.cos(angle) * r,
         y: Math.sin(angle) * r,
@@ -340,25 +345,25 @@ function buildOptions(nodeCount: number) {
 interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  communities: Community[];
   analysis?: GraphAnalysis;
   onNodeSelect?: (node: GraphNode | null) => void;
   yearRange?: [number, number];
   visibleLayers?: Set<NodeType>;
   hiddenCommunities?: Set<number>;
   focusNodeId?: string;
+  onEdgeSelect?: (edge: GraphEdge | null) => void;
 }
 
 export default function GraphViewer({
   nodes,
   edges,
-  communities: _communities,
   analysis,
   onNodeSelect,
   yearRange,
   visibleLayers,
   hiddenCommunities,
   focusNodeId,
+  onEdgeSelect,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
@@ -521,9 +526,16 @@ export default function GraphViewer({
         if (params.nodes.length > 0) {
           const nodeId = params.nodes[0] as string;
           onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null);
+          onEdgeSelect?.(null);
           applyHighlight(nodeId);
+        } else if (params.edges.length > 0) {
+          const edgeId = params.edges[0] as string;
+          onNodeSelect?.(null);
+          onEdgeSelect?.(edges.find((edge) => edge.id === edgeId) ?? null);
+          clearHighlight();
         } else {
           onNodeSelect?.(null);
+          onEdgeSelect?.(null);
           clearHighlight();
         }
       });

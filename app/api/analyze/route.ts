@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createJob, completeJob, failJob, isJobCancelled, notifyProgress } from '@/lib/store'
-import { runBatchExtraction } from '@/lib/llm/extractor'
+import { EXTRACTION_PROMPT_VERSION, runBatchExtraction } from '@/lib/llm/extractor'
 import { detectCommunities } from '@/lib/community'
 import { buildGraph } from '@/lib/graph-builder'
-import { getModel, type ProviderType } from '@/lib/llm/providers'
+import { getModel, PROVIDER_MODELS, type ProviderType } from '@/lib/llm/providers'
+import { buildConceptNetwork } from '@/lib/concept-network'
 import { generateText } from 'ai'
 import type { PatentRow, ExtractionResult } from '@/types/graph'
 
@@ -83,14 +84,20 @@ async function runAnalysis(
 
     if (isJobCancelled(jobId)) return
 
-    const communityResult = detectCommunities(extractions)
+    const conceptNetwork = buildConceptNetwork(extractions)
+    const communityResult = detectCommunities(conceptNetwork)
 
     const graph = buildGraph(
       patents,
-      extractions,
+      conceptNetwork,
       communityResult.assignments,
       communityResult.colors,
       communityResult.names,
+      {
+        prompt_version: EXTRACTION_PROMPT_VERSION,
+        model_provider: provider,
+        model_id: PROVIDER_MODELS[provider],
+      },
     )
 
     const aiReport = await generateTrendReport(extractions, provider, apiKey)

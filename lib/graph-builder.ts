@@ -4,14 +4,21 @@
 
 import type {
   PatentRow,
-  ExtractionResult,
   GraphData,
   GraphNode,
   GraphEdge,
   Community,
   GraphAnalysis,
+  GraphMethodology,
 } from "@/types/graph";
 import { computeGodNodes, computeSurprisingConnections } from "@/lib/graph-analysis";
+import {
+  applicantSize,
+  conceptSize,
+  PATENT_NODE_SIZE,
+  stableEdgeId,
+  type ConceptNetworkResult,
+} from "@/lib/concept-network";
 
 // Tableau-10 colors as defined in PRD Section 6.2
 const TABLEAU_10: string[] = [
@@ -40,23 +47,31 @@ function withOpacity70(hex: string): string {
  * Returns a trimmed, non-empty list of applicant names.
  */
 function splitApplicants(raw: string): string[] {
-  return raw
-    .split(/；|;/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return Array.from(
+    new Set(
+      raw
+        .split(/；|;/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 export function buildGraph(
   patents: PatentRow[],
-  extractions: ExtractionResult[],
+  conceptNetwork: ConceptNetworkResult,
   communities: Map<string, number>, // concept label → community_id
   communityColors: Map<number, string>, // community_id → hex color
   communityNames: Map<number, string>, // community_id → display name
+  methodologyMeta: Pick<GraphMethodology, 'prompt_version' | 'model_provider' | 'model_id'>,
 ): GraphData {
-  // ── Index extractions by patent_id for O(1) lookup ──────────────────────────
-  const extractionMap = new Map<string, ExtractionResult>();
-  for (const ex of extractions) {
-    extractionMap.set(ex.patent_id, ex);
+  const conceptsByPatent = new Map<string, string[]>();
+  for (const concept of conceptNetwork.concepts.values()) {
+    for (const patentId of concept.source_patents) {
+      const labels = conceptsByPatent.get(patentId) ?? [];
+      labels.push(concept.label);
+      conceptsByPatent.set(patentId, labels);
+    }
   }
 
   // ── Applicant nodes ──────────────────────────────────────────────────────────
@@ -76,7 +91,7 @@ export function buildGraph(
       label: name,
       patent_count: 0,
       color,
-      size: 40,
+      size: applicantSize(0),
     };
     applicantNodeMap.set(name, node);
     return node;
@@ -90,17 +105,18 @@ export function buildGraph(
     if (conceptNodeMap.has(label)) {
       return conceptNodeMap.get(label)!;
     }
+    const aggregate = conceptNetwork.concepts.get(label);
     const communityId = communities.get(label) ?? 0;
     const communityColor = communityColors.get(communityId) ?? "#BAB0AC";
     const node: GraphNode = {
       id: `concept:${label}`,
       type: "concept",
       label,
-      frequency: 0,
+      frequency: aggregate?.frequency ?? 0,
       community_id: communityId,
+      source_patents: aggregate?.source_patents ?? [],
       color: communityColor,
-      // Size computed after frequency is finalized; placeholder here
-      size: 8,
+      size: conceptSize(aggregate?.frequency ?? 0),
     };
     conceptNodeMap.set(label, node);
     return node;
@@ -109,19 +125,14 @@ export function buildGraph(
   // ── Patent nodes and edge collection ─────────────────────────────────────────
   const patentNodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
-  const edgeSet = new Set<string>(); // for deduplication
+  const edgeSet = new Set<string>(); // stable edge IDs provide deduplication
 
   function addEdge(edge: GraphEdge): void {
-    const key = `${edge.from}|${edge.to}|${edge.relation}`;
-    if (!edgeSet.has(key)) {
-      edgeSet.add(key);
+    if (!edgeSet.has(edge.id)) {
+      edgeSet.add(edge.id);
       edges.push(edge);
     }
   }
-
-  // Track patents per concept for frequency counting
-  // concept label → Set of patent_ids that mention it
-  const conceptPatentSets = new Map<string, Set<string>>();
 
   for (const patent of patents) {
     const applicantNames = splitApplicants(patent.applicant);
@@ -149,7 +160,7 @@ export function buildGraph(
       abstract: patent.abstract,
       application_number: patent.application_number,
       color: patentColor,
-      size: 18,
+      size: PATENT_NODE_SIZE,
     };
     patentNodes.push(patentNode);
 
@@ -159,60 +170,41 @@ export function buildGraph(
       applicantNode.patent_count = (applicantNode.patent_count ?? 0) + 1;
 
       addEdge({
-        id: `e:${applicantNode.id}→${patentNode.id}`,
+        id: stableEdgeId('structural', [applicantNode.id, patentNode.id, '申請了']),
         from: applicantNode.id,
         to: patentNode.id,
         relation: "申請了",
+        kind: 'structural',
+        source_patents: [patent.id],
       });
     }
 
-    // Patent → Concept edges (from LLM keywords)
-    const extraction = extractionMap.get(patent.id);
-    if (extraction) {
-      for (const keyword of extraction.keywords) {
-        if (!keyword.trim()) continue;
-        const conceptNode = getOrCreateConcept(keyword);
-
-        // Track per-concept patent membership for frequency
-        if (!conceptPatentSets.has(keyword)) {
-          conceptPatentSets.set(keyword, new Set());
-        }
-        conceptPatentSets.get(keyword)!.add(patent.id);
-
-        addEdge({
-          id: `e:${patentNode.id}→${conceptNode.id}`,
-          from: patentNode.id,
-          to: conceptNode.id,
-          relation: "包含",
-          source_patent: patent.id,
-        });
-      }
-
-      // Concept → Concept edges from LLM relations
-      for (const rel of extraction.relations) {
-        if (!rel.source.trim() || !rel.target.trim()) continue;
-        const srcNode = getOrCreateConcept(rel.source);
-        const tgtNode = getOrCreateConcept(rel.target);
-
-        addEdge({
-          id: `e:${srcNode.id}→${tgtNode.id}:${rel.relation}`,
-          from: srcNode.id,
-          to: tgtNode.id,
-          relation: rel.relation,
-          weight: rel.weight,
-          reason: rel.reason,
-          confidence: rel.confidence,
-          source_patent: patent.id,
-        });
-      }
+    // Patent → Concept edges from the normalized concept memberships.
+    for (const keyword of conceptsByPatent.get(patent.id) ?? []) {
+      const conceptNode = getOrCreateConcept(keyword);
+      addEdge({
+        id: stableEdgeId('structural', [patentNode.id, conceptNode.id, '包含']),
+        from: patentNode.id,
+        to: conceptNode.id,
+        relation: "包含",
+        kind: 'structural',
+        source_patent: patent.id,
+        source_patents: [patent.id],
+      });
     }
   }
 
-  // ── Finalize concept node sizes and frequencies ───────────────────────────────
-  for (const [label, node] of conceptNodeMap) {
-    const freq = conceptPatentSets.get(label)?.size ?? 0;
-    node.frequency = freq;
-    node.size = Math.min(60, Math.max(8, 8 + freq * 3));
+  for (const applicant of applicantNodeMap.values()) {
+    applicant.size = applicantSize(applicant.patent_count ?? 0);
+  }
+
+  // Add empirical co-occurrence and separately aggregated LLM semantic edges.
+  for (const edge of conceptNetwork.cooccurrenceEdges) addEdge(edge);
+  for (const edge of conceptNetwork.semanticEdges) addEdge(edge);
+
+  // Ensure concepts without a patent edge (defensive legacy/input handling) exist.
+  for (const label of conceptNetwork.concepts.keys()) {
+    getOrCreateConcept(label);
   }
 
   // ── Build Community list ──────────────────────────────────────────────────────
@@ -262,13 +254,33 @@ export function buildGraph(
   // ── generated_at: current UTC ISO 8601 timestamp ──────────────────────────────
   const generated_at = new Date().toISOString();
 
-  // ── graphify-style analysis: god nodes and surprising connections ────────────
+  const conceptNodes = Array.from(conceptNodeMap.values());
+  const cooccurrenceEdges = conceptNetwork.cooccurrenceEdges;
+
+  // ── Analysis is intentionally limited to the empirical concept network. ──────
   const analysis: GraphAnalysis = {
-    god_nodes: computeGodNodes(allNodes, edges),
-    surprising_connections: computeSurprisingConnections(edges, allNodes),
+    god_nodes: computeGodNodes(conceptNodes, cooccurrenceEdges),
+    surprising_connections: computeSurprisingConnections(cooccurrenceEdges, conceptNodes),
+  };
+
+  const methodology: GraphMethodology = {
+    concept_frequency_metric: 'unique_patent_count',
+    cooccurrence_metric: 'unique_patent_support',
+    concept_size_formula: 'clamp(10 + 6 * sqrt(frequency), 10, 52)',
+    applicant_size_formula: 'clamp(18 + 5 * sqrt(patent_count), 18, 52)',
+    patent_size: PATENT_NODE_SIZE,
+    community_algorithm: 'louvain',
+    community_edge_weight: 'support_count',
+    community_resolution: 1,
+    community_random_walk: false,
+    layout_distance_interpretation: 'visual_only',
+    cooccurrence_data: 'native',
+    semantic_provenance: 'complete',
+    ...methodologyMeta,
   };
 
   return {
+    schema_version: 2,
     nodes: allNodes,
     edges,
     communities: communitiesList,
@@ -276,5 +288,6 @@ export function buildGraph(
     analysis,
     ai_report: "", // Filled in by the LLM report step (F-07)
     generated_at,
+    methodology,
   };
 }

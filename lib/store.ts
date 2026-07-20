@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { JobState, GraphData } from '@/types/graph'
+import { normalizeGraphData } from '@/lib/graph-compat'
 
 export const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -116,7 +117,7 @@ export function loadGraphData(jobId: string): GraphData | null {
   const filePath = path.join(DATA_DIR, `${jobId}.json`)
   try {
     const raw = fs.readFileSync(filePath, 'utf-8')
-    return JSON.parse(raw) as GraphData
+    return normalizeGraphData(JSON.parse(raw))
   } catch {
     return null
   }

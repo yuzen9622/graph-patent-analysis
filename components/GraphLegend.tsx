@@ -1,0 +1,191 @@
+"use client";
+
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, Info } from "lucide-react";
+import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
+
+interface Props {
+  mode: GraphMode;
+  showSemantic: boolean;
+  minSupport: number;
+  methodology: GraphMethodology;
+  capabilityWarning?: string;
+  stats: GraphData["stats"];
+  paperMode?: boolean;
+}
+
+export default function GraphLegend({
+  mode,
+  showSemantic,
+  minSupport,
+  methodology,
+  capabilityWarning,
+  stats,
+  paperMode = false,
+}: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const isConceptMode = mode === "concept";
+  const isOpen = paperMode || expanded;
+
+  return (
+    <div className="absolute bottom-3 left-3 z-10 w-[min(25rem,calc(100%-1.5rem))]">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        disabled={paperMode}
+        title={paperMode ? "論文檢視會固定顯示圖例" : undefined}
+        aria-expanded={isOpen}
+        aria-controls="graph-method-legend"
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-background/95"
+      >
+        <Info aria-hidden className="size-3.5" />
+        圖例與方法
+        <ChevronDown
+          aria-hidden
+          className={`size-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <section
+          id="graph-method-legend"
+          className="mt-2 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-lg border border-border bg-background/95 p-3 shadow-md backdrop-blur-sm"
+          aria-label="圖譜視覺編碼圖例"
+        >
+      <div className="mb-2">
+        <h2 className="text-xs font-semibold text-foreground">
+          {isConceptMode ? "技術概念網路" : "專利脈絡圖"}
+        </h2>
+        <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted-foreground">
+          {isConceptMode
+            ? "用於觀察技術概念的共現關係與社群結構"
+            : "用於追溯申請人、專利與技術概念之間的資料關係"}
+        </p>
+      </div>
+
+      <ul className="space-y-2 text-[0.7rem] leading-relaxed text-foreground">
+        {isConceptMode ? (
+          <>
+            <LegendItem marker={<NodeScaleMarker />}>
+              概念大小＝包含該概念的不同專利篇數（1 篇＝16、4 篇＝22、9 篇＝28）
+            </LegendItem>
+            <LegendItem marker={<SolidLineMarker />}>
+              實線粗細＝共同出現的不同專利篇數（support）；目前只顯示 support ≥ {minSupport}
+            </LegendItem>
+            <LegendItem marker={<CommunityMarker />}>
+              顏色＝以 support 加權的 Louvain 技術社群
+            </LegendItem>
+            <LegendItem marker={<DashedLineMarker />}>
+              虛線＝LLM 語意關係（{showSemantic ? "目前顯示" : "目前關閉"}）
+            </LegendItem>
+          </>
+        ) : (
+          <>
+            <LegendItem marker={<ContextNodesMarker />}>
+              申請人大小＝其專利篇數（1 篇＝23、4 篇＝28）；概念大小同上
+            </LegendItem>
+            <LegendItem marker={<PatentMarker />}>
+              專利節點固定大小，不表示重要性
+            </LegendItem>
+            <LegendItem marker={<StructuralLineMarker />}>
+              結構線＝「申請了」或「包含」的資料關係；線寬不表示強度
+            </LegendItem>
+          </>
+        )}
+      </ul>
+
+      <div className="mt-3 border-t border-border pt-2 text-[0.65rem] leading-relaxed text-muted-foreground">
+        <p>
+          分析樣本：{stats.patent_count} 篇專利
+          {hasYearRange(stats.year_range)
+            ? `，年份 ${stats.year_range[0]}–${stats.year_range[1]}`
+            : ""}
+        </p>
+        {isConceptMode && (
+          <p>
+            社群方法：{methodology.community_algorithm}；邊權重＝共同專利篇數
+          </p>
+        )}
+        <p className="mt-1 font-medium text-foreground">
+          座標僅供排版，不代表定量距離。
+        </p>
+      </div>
+
+      {capabilityWarning && (
+        <div
+          role="status"
+          className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[0.65rem] leading-relaxed text-amber-800 dark:text-amber-200"
+        >
+          <AlertTriangle aria-hidden className="mt-0.5 size-3 shrink-0" />
+          <span>{capabilityWarning}</span>
+        </div>
+      )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function LegendItem({
+  marker,
+  children,
+}: {
+  marker: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex items-center gap-2">
+      <span aria-hidden className="flex w-9 shrink-0 items-center justify-center">
+        {marker}
+      </span>
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function NodeScaleMarker() {
+  return (
+    <span className="flex items-end gap-1">
+      <span className="size-2 rounded-full bg-emerald-600" />
+      <span className="size-3.5 rounded-full bg-emerald-600" />
+    </span>
+  );
+}
+
+function ContextNodesMarker() {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="size-3.5 rounded-full bg-blue-600" />
+      <span className="size-2.5 rounded-full bg-emerald-600" />
+    </span>
+  );
+}
+
+function PatentMarker() {
+  return <span className="size-3 rounded-sm bg-orange-500" />;
+}
+
+function CommunityMarker() {
+  return (
+    <span className="flex gap-1">
+      <span className="size-2.5 rounded-full bg-violet-500" />
+      <span className="size-2.5 rounded-full bg-cyan-500" />
+    </span>
+  );
+}
+
+function SolidLineMarker() {
+  return <span className="h-1 w-8 rounded-full bg-slate-500" />;
+}
+
+function DashedLineMarker() {
+  return <span className="w-8 border-t-2 border-dashed border-violet-500" />;
+}
+
+function StructuralLineMarker() {
+  return <span className="w-8 border-t border-slate-400" />;
+}
+
+function hasYearRange(range: [number, number]) {
+  return range.every(Number.isFinite) && range[0] > 0 && range[1] > 0;
+}

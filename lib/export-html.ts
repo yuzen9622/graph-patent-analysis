@@ -1,0 +1,232 @@
+import { selectGraphView, type GraphViewOptions } from './graph-view'
+import type { GraphData, GraphMode } from '../types/graph'
+
+export interface ExportOptions extends GraphViewOptions {
+  paper: boolean
+}
+
+export function safeSerializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function parseBoolean(value: string | null, fallback: boolean): boolean {
+  if (value === '1' || value === 'true') return true
+  if (value === '0' || value === 'false') return false
+  return fallback
+}
+
+function parseClampedInteger(
+  value: string | null,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (value === null || !/^-?\d+$/.test(value)) return fallback
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+export function parseExportOptions(
+  params: URLSearchParams,
+  graph: GraphData,
+): ExportOptions {
+  const mode: GraphMode = params.get('mode') === 'context' ? 'context' : 'concept'
+  const maxSupport = Math.max(
+    1,
+    ...graph.edges
+      .filter((edge) => edge.kind === 'cooccurrence')
+      .map((edge) => edge.support_count ?? 1),
+  )
+  const yearStart = parseClampedInteger(
+    params.get('yearStart'),
+    graph.stats.year_range[0],
+    graph.stats.year_range[0],
+    graph.stats.year_range[1],
+  )
+  const yearEnd = parseClampedInteger(
+    params.get('yearEnd'),
+    graph.stats.year_range[1],
+    graph.stats.year_range[0],
+    graph.stats.year_range[1],
+  )
+  return {
+    mode,
+    showSemantic: parseBoolean(params.get('llm'), false),
+    paper: parseBoolean(params.get('paper'), true),
+    minSupport: parseClampedInteger(params.get('minSupport'), 1, 1, maxSupport),
+    yearRange: yearStart <= yearEnd ? [yearStart, yearEnd] : [yearEnd, yearStart],
+  }
+}
+
+export function buildExportHtml(
+  jobId: string,
+  graph: GraphData,
+  options: ExportOptions,
+  visNetworkSource: string,
+): string {
+  const views = {
+    concept: selectGraphView(graph, { ...options, mode: 'concept' }),
+    context: selectGraphView(graph, { ...options, mode: 'context' }),
+  }
+  const view = views[options.mode]
+  const payload = safeSerializeForInlineScript({
+    views,
+    methodology: graph.methodology,
+    options,
+  })
+  const escapedJobId = escapeHtml(jobId)
+  const jobLabelScript = safeSerializeForInlineScript(`Job ${jobId}`)
+  const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString('base64')}`
+  const title = options.mode === 'concept' ? '技術概念網路' : '專利脈絡圖'
+  const modeExplanation = options.mode === 'concept'
+    ? `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；顏色＝Louvain 社群。`
+    : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
+  return `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)} · ${escapedJobId}</title>
+  <script src="${visNetworkDataUrl}"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${options.paper ? '#fff' : '#020617'}; color: ${options.paper ? '#172033' : '#f8fafc'}; font-family: system-ui, sans-serif; }
+    header { padding: 12px 18px; border-bottom: 1px solid #cbd5e1; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h1 { margin: 0; font-size: 18px; } .meta { color: #64748b; font-size: 12px; }
+    .title-group { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .mode-control { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid #cbd5e1; border-radius: 7px; background: #f8fafc; }
+    .mode-control button { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; }
+    .mode-control button[aria-pressed="true"] { background: #2563eb; color: #fff; }
+    #graph { flex: 1; min-height: 0; }
+    #legend { position: fixed; left: 16px; bottom: 40px; z-index: 5; width: min(390px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgba(255,255,255,.94); color: #172033; font-size: 12px; line-height: 1.55; }
+    #legend strong { display: block; margin-bottom: 4px; } #legend p { margin: 3px 0; }
+    .warning { color: #b45309; } .distance { font-weight: 650; }
+    #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: #172033; color: #fff; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
+    footer { padding: 7px 18px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title-group">
+      <h1 id="graph-title">${escapeHtml(title)}</h1>
+      <div class="mode-control" aria-label="圖譜模式">
+        <button type="button" data-mode="concept" aria-pressed="${options.mode === 'concept'}">技術概念網路</button>
+        <button type="button" data-mode="context" aria-pressed="${options.mode === 'context'}">專利脈絡圖</button>
+      </div>
+    </div>
+    <span id="graph-meta" class="meta">Job ${escapedJobId} · ${view.stats.patent_count} 篇專利</span>
+  </header>
+  <div id="graph"></div>
+  <aside id="legend" aria-label="圖譜圖例">
+    <strong id="legend-title">${escapeHtml(title)}圖例</strong>
+    <p id="mode-explanation">${escapeHtml(modeExplanation)}</p>
+    <p id="semantic-explanation">${options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。'}</p>
+    <p class="distance">座標僅供排版，不代表定量距離。</p>
+    <p id="capability-warning" class="warning"${view.capabilityWarning ? '' : ' hidden'}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ''}</p>
+  </aside>
+  <div id="tooltip" role="status"></div>
+  <footer>${escapeHtml(graph.methodology.cooccurrence_metric)} · Louvain resolution ${escapeHtml(String(graph.methodology.community_resolution))} · ${escapeHtml(graph.methodology.model_id)}</footer>
+  <script id="graph-data" type="application/json">${payload}</script>
+  <script>
+    (function () {
+      'use strict';
+      var payload = JSON.parse(document.getElementById('graph-data').textContent || '{}');
+      var network = null;
+      var tooltip = document.getElementById('tooltip');
+      var jobLabel = ${jobLabelScript};
+      function renderMode(mode) {
+        var view = payload.views[mode];
+        var title = mode === 'concept' ? '技術概念網路' : '專利脈絡圖';
+        document.getElementById('graph-title').textContent = title;
+        document.getElementById('legend-title').textContent = title + '圖例';
+        document.getElementById('graph-meta').textContent = jobLabel + ' · ' + view.stats.patent_count + ' 篇專利';
+        document.getElementById('mode-explanation').textContent = mode === 'concept'
+          ? '節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ' + payload.options.minSupport + '）；顏色＝Louvain 社群。'
+          : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。';
+        document.getElementById('semantic-explanation').textContent = mode === 'concept'
+          ? (payload.options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。')
+          : '本模式只顯示申請人、專利與概念的來源結構線。';
+        var warning = document.getElementById('capability-warning');
+        warning.textContent = view.capabilityWarning || '';
+        warning.hidden = !view.capabilityWarning;
+        document.querySelectorAll('[data-mode]').forEach(function (button) {
+          button.setAttribute('aria-pressed', String(button.getAttribute('data-mode') === mode));
+        });
+        var nodesById = new Map(view.nodes.map(function (node) { return [node.id, node]; }));
+        var edgesById = new Map(view.edges.map(function (edge) { return [edge.id, edge]; }));
+        var nodes = view.nodes.map(function (node) {
+        return {
+          id: node.id,
+          label: node.type === 'patent' ? '' : node.label,
+          shape: node.type === 'applicant' ? 'star' : 'dot',
+          size: node.size,
+          color: node.color,
+          font: { size: node.type === 'applicant' ? 14 : 11, color: ${options.paper ? "'#172033'" : "'#f8fafc'"} }
+        };
+      });
+        var edges = view.edges.map(function (edge) {
+        var co = edge.kind === 'cooccurrence';
+        var semantic = edge.kind === 'semantic';
+        return {
+          id: edge.id,
+          from: edge.from,
+          to: edge.to,
+          label: semantic ? edge.relation : '',
+          width: co ? Math.min(8, 1 + Math.sqrt(edge.support_count || 1) * 1.2) : (semantic ? 1.5 : 1),
+          dashes: semantic ? [6, 4] : false,
+          physics: !semantic,
+          arrows: { to: { enabled: semantic || edge.kind === 'structural', scaleFactor: .4 } },
+          color: { color: semantic ? '#8b5cf6' : (co ? '#64748b' : '#94a3b8'), opacity: semantic ? .8 : (co ? .7 : .35) }
+        };
+      });
+        if (network) network.destroy();
+        network = new vis.Network(document.getElementById('graph'), {
+        nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)
+      }, {
+        layout: { randomSeed: 42, improvedLayout: true },
+        physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -80, springLength: 150, avoidOverlap: 1 }, stabilization: { iterations: 180 } },
+        interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
+      });
+        network.once('stabilizationIterationsDone', function () { network.setOptions({ physics: { enabled: false } }); });
+        function showText(lines) { tooltip.textContent = lines.filter(Boolean).join('\\n'); tooltip.style.display = 'block'; }
+        network.on('hoverNode', function (params) {
+        var node = nodesById.get(params.node); if (!node) return;
+        var lines = [node.label];
+        if (node.type === 'applicant') lines.push('所選範圍專利：' + (node.patent_count || 0) + ' 篇');
+        if (node.type === 'concept') lines.push('專利涵蓋：' + (node.frequency || 0) + ' 篇');
+        if (node.type === 'patent') { lines.push(node.applicant || ''); lines.push(node.filing_date || ''); }
+        showText(lines);
+      });
+        network.on('hoverEdge', function (params) {
+        var edge = edgesById.get(params.edge); if (!edge) return;
+        var lines = [edge.relation];
+        if (edge.kind === 'cooccurrence') { lines.push('共同出現：' + (edge.support_count || 0) + ' 篇'); lines.push('Jaccard：' + Number(edge.jaccard || 0).toFixed(3)); }
+        if (edge.kind === 'semantic') { lines.push('目前保存來源：' + ((edge.source_patents || []).length) + ' 篇'); if (edge.reason) lines.push(edge.reason); }
+        showText(lines);
+      });
+        network.on('blurNode', function () { tooltip.style.display = 'none'; });
+        network.on('blurEdge', function () { tooltip.style.display = 'none'; });
+      }
+      document.querySelectorAll('[data-mode]').forEach(function (button) {
+        button.addEventListener('click', function () { renderMode(button.getAttribute('data-mode')); });
+      });
+      document.addEventListener('mousemove', function (event) { tooltip.style.left = (event.clientX + 12) + 'px'; tooltip.style.top = (event.clientY + 12) + 'px'; });
+      renderMode(payload.options.mode);
+    })();
+  </script>
+</body>
+</html>`
+}
