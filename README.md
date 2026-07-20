@@ -30,10 +30,10 @@
 ## ✨ Key Features
 
 - **🤖 Automated Concept Extraction**: Use your preferred LLM (`gpt-4o`, `gemini-3-flash-preview`, or `meta/llama-3.1-70b-instruct`) to automatically extract technical concepts and relationships from patent abstracts.
-- **📊 Three-Layer Architecture**: Move beyond simple concept graphs. Visualize "Who applied for what" with distinct nodes for Applicants, Patents, and Technical Concepts.
-- **🔍 Advanced Community Detection**: Automatically group technical concepts into clusters using the Louvain algorithm (`graphology`), revealing distinct technology sectors.
+- **📊 Two Research Views**: Use the concept network for empirical co-occurrence analysis, then switch to the Applicant → Patent → Concept context graph to trace every concept back to its source patents.
+- **🔍 Reproducible Community Detection**: Group concepts with Louvain using unique-patent co-occurrence support as the only edge weight. LLM relations are a separate, optional dashed overlay.
 - **📈 AI-Powered Trend Reports**: The system automatically generates strategic insights, technology flow analysis, and future research suggestions based on the graph structure.
-- **🎯 Interactive Exploration**: Filter by year, toggle layers, search for specific nodes, and click on communities to isolate the data you care about.
+- **🎯 Explainable Exploration**: Inspect support counts, Jaccard similarity, source patents, methodology metadata, fixed legends, year-recalculated context views, and a paper-friendly display mode.
 - **📤 Seamless Sharing**: Share your findings via a local server link or export a fully self-contained HTML snapshot of the interactive graph for offline viewing.
 
 ## 🚀 Quick Start
@@ -79,7 +79,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Upload your
 
 Beyond the interactive web view, the platform provides rich data export options for further academic or business research:
 
-- **Standalone HTML**: Export a self-contained `.html` file containing your interactive graph to share with colleagues offline.
+- **Standalone HTML**: Export both research views with the current filters as a self-contained `.html` file. It opens in the selected mode and can switch modes offline; the graph library and data are embedded, so no network connection is required.
 - **Excel/CSV Export**: Download node frequencies, edge relationships, and community mappings for use in statistical software or other graph tools like Gephi.
 
 ## 🛠️ Architecture
@@ -88,6 +88,16 @@ Beyond the interactive web view, the platform provides rich data export options 
 - **Graph Engine**: `vis-network`, `graphology`, `graphology-communities-louvain`
 - **AI Integration**: Vercel AI SDK with parallel batch processing (`p-limit`)
 - **State Management**: In-memory job state and local JSON persistence for shareable URLs
+
+## 📐 How to Interpret the Graph
+
+- Concept node size is `clamp(10 + 6 × √frequency, 10, 52)`, where `frequency` is the number of distinct patents containing the concept.
+- Applicant node size is `clamp(18 + 5 × √patent_count, 18, 52)`; patent nodes are fixed at 18.
+- In the concept network, solid-line width represents distinct-patent co-occurrence support. Edge details also report Jaccard similarity and supporting patent IDs.
+- Purple dashed lines are LLM-extracted semantic claims. They do not determine Louvain communities and do not participate in the force layout.
+- Screen coordinates and pixel distances are layout artifacts, not semantic-distance or causal-strength measurements.
+
+See [知識圖譜分析結果解讀與概念抽取方法](docs/知識圖譜分析結果解讀與概念抽取方法.md) for the research-method wording, formulas, provenance rules, and limitations.
 
 ## 🤝 Contributing
 
