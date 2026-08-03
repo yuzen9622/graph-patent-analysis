@@ -46,6 +46,12 @@ RUN addgroup --system --gid 1001 nodejs \
 
 # Standalone output does NOT include `public` or `.next/static` — copy them in.
 COPY --from=builder /app/public ./public
+# Standalone tracing only follows imports, so files read at runtime with
+# readFileSync must be copied explicitly: the migration .sql files, and the
+# vis-network bundle that /api/export inlines into the offline HTML.
+COPY --from=builder /app/db ./db
+COPY --from=builder /app/node_modules/vis-network/standalone/umd/vis-network.min.js \
+     ./node_modules/vis-network/standalone/umd/vis-network.min.js
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
