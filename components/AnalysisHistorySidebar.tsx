@@ -14,10 +14,9 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import {
-  loadHistory,
+  fetchHistory,
   HISTORY_EVENT,
   getHistoryHref,
-  updateHistoryStatus,
   type HistoryEntry,
 } from "@/lib/analysis-history";
 
@@ -40,66 +39,50 @@ interface Props {
 }
 
 export default function AnalysisHistorySidebar({ collapsed, onToggle }: Props) {
-  const [entries, setEntries] = useState<HistoryEntry[]>(() => {
-    if (typeof window !== "undefined") {
-      return loadHistory();
-    }
-    return [];
-  });
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
 
+  // History lives in the `analyses` table, so it is loaded per account.
   useEffect(() => {
-    const refresh = () => setEntries(loadHistory());
+    let active = true;
+    const refresh = () => {
+      void fetchHistory().then((next) => {
+        if (active) setEntries(next);
+      });
+    };
+    refresh();
     window.addEventListener(HISTORY_EVENT, refresh);
-    return () => window.removeEventListener(HISTORY_EVENT, refresh);
+    return () => {
+      active = false;
+      window.removeEventListener(HISTORY_EVENT, refresh);
+    };
   }, []);
 
-  // Poll actual backend status for jobs that are local-marked as 'analyzing'
+  // While something is still running, re-read the server's view of it.
+  const hasRunning = entries.some((entry) => entry.status === "analyzing");
   useEffect(() => {
-    const analyzingEntries = entries.filter((e) => e.status === "analyzing");
-    if (analyzingEntries.length === 0) return;
-
+    if (!hasRunning) return;
     let active = true;
-    const checkStatus = () => {
-      void Promise.all(
-        analyzingEntries.map(async (entry) => {
-          try {
-            const res = await fetch(`/api/analyze/${entry.id}`);
-            if (!active) return;
-            if (res.ok) {
-              const data = (await res.json()) as { status: string };
-              if (data.status === "done") {
-                updateHistoryStatus(entry.id, "completed");
-              } else if (data.status === "error" || data.status === "cancelled") {
-                updateHistoryStatus(entry.id, "error");
-              }
-            } else if (res.status === 404) {
-              updateHistoryStatus(entry.id, "error");
-            }
-          } catch (err) {
-            console.error("Failed to sync job status:", err);
-          }
-        })
-      );
-    };
-
-    checkStatus();
-    const interval = setInterval(checkStatus, 3000);
-
+    const interval = setInterval(() => {
+      void fetchHistory().then((next) => {
+        if (active) setEntries(next);
+      });
+    }, 3000);
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [entries]);
+  }, [hasRunning]);
 
-  function handleDelete(id: string, e: React.MouseEvent) {
+  async function handleDelete(id: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setEntries((prev) => {
-      const updated = prev.filter((entry) => entry.id !== id);
-      localStorage.setItem("patent-analysis-history", JSON.stringify(updated));
-      window.dispatchEvent(new CustomEvent(HISTORY_EVENT));
-      return updated;
-    });
+    const previous = entries;
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    const res = await fetch(`/api/analyses/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      // Deletion is the server's call; put the row back if it refused.
+      setEntries(previous);
+    }
   }
 
   return (

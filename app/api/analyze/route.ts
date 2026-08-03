@@ -1,11 +1,15 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createJob, completeJob, failJob, isJobCancelled, notifyProgress } from '@/lib/store'
+import { createAnalysis, setAnalysisStatus } from '@/lib/db/analyses'
+import { requireUser, UnauthorizedError } from '@/lib/db/sessions'
 import { EXTRACTION_PROMPT_VERSION, runBatchExtraction } from '@/lib/llm/extractor'
 import { detectCommunities } from '@/lib/community'
 import { buildGraph } from '@/lib/graph-builder'
 import { getModel, getEnvApiKey, PROVIDER_MODELS, type ProviderType } from '@/lib/llm/providers'
 import { buildConceptNetwork } from '@/lib/concept-network'
+import { cleanApplicantName } from '@/lib/excel-parser'
+import { extractCountry } from '@/lib/applicant-classify'
 import { generateText } from 'ai'
 import type { PatentRow, ExtractionResult } from '@/types/graph'
 
@@ -103,7 +107,30 @@ async function runAnalysis(
     const aiReport = await generateTrendReport(extractions, provider, apiKey)
     graph.ai_report = aiReport
 
-    completeJob(jobId, graph)
+    // Fields the graph nodes do not carry, keyed by patent node id.
+    const patentExtras = new Map<string, { search_keyword?: string; translated_abstract?: string }>()
+    const applicantCountries = new Map<string, string>()
+    for (const patent of patents) {
+      const extraction = extractions.find((e) => e.patent_id === patent.id)
+      patentExtras.set(`patent:${patent.id}`, {
+        search_keyword: patent.search_keyword,
+        translated_abstract: extraction?.translated_abstract,
+      })
+
+      // The cleaned name is what the graph uses; the country only survives in
+      // the raw cell, so map one to the other here.
+      for (const part of (patent.applicant_raw ?? '').split(/；|;/)) {
+        const trimmed = part.trim()
+        if (!trimmed) continue
+        const name = cleanApplicantName(trimmed)
+        const country = extractCountry(trimmed)
+        if (name && country && !applicantCountries.has(name)) {
+          applicantCountries.set(name, country)
+        }
+      }
+    }
+
+    await completeJob(jobId, graph, { patentExtras, applicantCountries })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[analyze] job ${jobId} failed:`, message)
@@ -114,10 +141,22 @@ async function runAnalysis(
 // ── POST /api/analyze ─────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  let user
+  try {
+    user = await requireUser()
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: err.message }, { status: 401 })
+    }
+    throw err
+  }
+
   let body: {
     provider?: string
     sample_size?: number
     patents?: PatentRow[]
+    upload_id?: string
+    filename?: string
   }
 
   try {
@@ -159,8 +198,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const jobId = randomUUID()
   createJob(jobId, selectedPatents.length)
 
+  // The row must exist before the background job can update it.
+  try {
+    await createAnalysis({
+      id: jobId,
+      ownerId: user.id,
+      uploadId: body.upload_id ?? null,
+      filename: body.filename ?? null,
+      provider,
+      sampleSize: selectedPatents.length,
+    })
+  } catch (err) {
+    console.error('[analyze] could not record the analysis:', err)
+    return NextResponse.json({ error: '無法寫入資料庫，分析未啟動。' }, { status: 503 })
+  }
+
   // Fire and forget — do not await
-  runAnalysis(jobId, selectedPatents, provider as ProviderType, apiKey)
+  runAnalysis(jobId, selectedPatents, provider as ProviderType, apiKey).catch((err) => {
+    console.error(`[analyze] job ${jobId} crashed:`, err)
+    void setAnalysisStatus(jobId, 'error', String(err)).catch(() => {})
+  })
 
   return NextResponse.json({ job_id: jobId }, { status: 202 })
 }

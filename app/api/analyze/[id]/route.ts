@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getJob, cancelJob, DATA_DIR } from '@/lib/store'
-import fs from 'fs'
-import path from 'path'
+import { getJob, cancelJob } from '@/lib/store'
+import { getAnalysis } from '@/lib/db/analyses'
+import { requireUser, UnauthorizedError } from '@/lib/db/sessions'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params
+  try {
+    await requireUser()
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: err.message }, { status: 401 })
+    }
+    throw err
+  }
 
+  const { id } = await params
   const job = getJob(id)
 
   if (job) {
@@ -21,12 +31,15 @@ export async function GET(
     })
   }
 
-  // If not in memory (e.g. server restarted), check if output file exists on disk
-  const filePath = path.join(DATA_DIR, `${id}.json`)
-  if (fs.existsSync(filePath)) {
+  // Not in memory (e.g. the server restarted) — the database is the record.
+  const analysis = await getAnalysis(id)
+  if (analysis) {
     return NextResponse.json({
       id,
-      status: 'done',
+      status: analysis.status,
+      done: analysis.patent_count,
+      total: analysis.sample_size ?? analysis.patent_count,
+      error: analysis.error ?? undefined,
     })
   }
 
@@ -37,8 +50,16 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params
+  try {
+    await requireUser()
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: err.message }, { status: 401 })
+    }
+    throw err
+  }
 
+  const { id } = await params
   const job = getJob(id)
 
   if (!job) {
@@ -50,7 +71,6 @@ export async function DELETE(
   }
 
   cancelJob(id)
-
   const updated = getJob(id)!
 
   return NextResponse.json({

@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
-import { loadGraphData, getJob } from '@/lib/store'
+import { getJob } from '@/lib/store'
+import { loadGraph } from '@/lib/db/analyses'
+import { currentUser } from '@/lib/db/sessions'
 import GraphLayout from '@/components/GraphLayout'
 
 interface Props {
@@ -8,7 +10,12 @@ interface Props {
 
 export default async function AnalysisPage({ params }: Props) {
   const { id } = await params
-  const graph = loadGraphData(id)
+
+  // proxy.ts already rejected unsigned cookies; this is the authoritative check.
+  const user = await currentUser()
+  if (!user) redirect(`/login?next=/analysis/${id}`)
+
+  const graph = await loadGraph(id)
 
   if (!graph) {
     const job = getJob(id)

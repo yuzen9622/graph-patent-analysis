@@ -10,7 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import UploadZone from "@/components/UploadZone";
 import ProgressPanel from "@/components/ProgressPanel";
 import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
-import { addHistoryEntry } from "@/lib/analysis-history";
+import UserMenu from "@/components/UserMenu";
+import { notifyHistoryChanged } from "@/lib/analysis-history";
 import type { PatentRow } from "@/types/graph";
 import type { FieldMapping } from "@/lib/excel-parser";
 import type { ProviderType } from "@/lib/llm/providers";
@@ -58,6 +59,7 @@ function HomePageContent() {
   const [patents, setPatents] = useState<PatentRow[]>([]);
   const [_mappings, setMappings] = useState<FieldMapping[]>([]);
   const [filename, setFilename] = useState<string>("");
+  const [uploadId, setUploadId] = useState<string | null>(null);
   const [sampleSize, setSampleSize] = useState(50);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -82,18 +84,33 @@ function HomePageContent() {
     rows: PatentRow[],
     mappings: FieldMapping[],
     fname: string,
+    file: File,
   ) {
     setPatents(rows);
     setMappings(mappings);
     setFilename(fname);
     setUploadError(null);
     setSubmitError(null);
+
+    // Archive the original spreadsheet server-side; the database keeps only
+    // the resulting URL, never the bytes. Failure here must not block the
+    // analysis, so it degrades to "no source file recorded".
+    setUploadId(null);
+    const form = new FormData();
+    form.append("file", file);
+    void fetch("/api/uploads", { method: "POST", body: form })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { upload_id?: string } | null) => {
+        if (body?.upload_id) setUploadId(body.upload_id);
+      })
+      .catch(() => {});
   }
 
   function handleUploadError(msg: string) {
     setUploadError(msg);
     setPatents([]);
     setFilename("");
+    setUploadId(null);
     setSubmitError(null);
   }
 
@@ -117,6 +134,8 @@ function HomePageContent() {
           provider: PROVIDER,
           sample_size: sampleSize,
           patents: sampled,
+          upload_id: uploadId,
+          filename: filename || "patents.xlsx",
         }),
       });
 
@@ -129,13 +148,8 @@ function HomePageContent() {
 
       const data = (await res.json()) as { job_id: string };
 
-      addHistoryEntry({
-        id: data.job_id,
-        filename: filename || "patents.xlsx",
-        timestamp: new Date().toISOString(),
-        status: "analyzing",
-        patentCount: sampled.length,
-      });
+      // The row already exists server-side; just tell the sidebar to re-read.
+      notifyHistoryChanged();
 
       router.replace(`/?jobId=${encodeURIComponent(data.job_id)}`);
     } catch (err) {
@@ -160,12 +174,15 @@ function HomePageContent() {
             Patent Knowledge Graph Analysis
           </p>
         </div>
-        {USE_MOCK && (
-          <span className="ml-auto flex items-center gap-1.5 text-xs text-warning bg-wartext-warning/10 border border-wartext-warning/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
-            <FlaskConical size={12} aria-hidden />
-            Mock 模式
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {USE_MOCK && (
+            <span className="flex items-center gap-1.5 text-xs text-warning bg-wartext-warning/10 border border-wartext-warning/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
+              <FlaskConical size={12} aria-hidden />
+              Mock 模式
+            </span>
+          )}
+          <UserMenu />
+        </div>
       </header>
 
       {/* ── Body: sidebar + main ── */}

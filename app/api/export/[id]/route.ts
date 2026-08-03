@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getJob, loadGraphData } from '@/lib/store'
+import { getJob } from '@/lib/store'
+import { loadGraph } from '@/lib/db/analyses'
+import { requireUser, UnauthorizedError } from '@/lib/db/sessions'
 import { buildExportHtml, parseExportOptions } from '@/lib/export-html'
+
+export const dynamic = 'force-dynamic'
 
 function loadVisNetworkSource(): string {
   return readFileSync(
@@ -22,6 +26,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  try {
+    await requireUser()
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: err.message }, { status: 401 })
+    }
+    throw err
+  }
+
   const { id } = await params
   const job = getJob(id)
 
@@ -32,7 +45,7 @@ export async function GET(
     )
   }
 
-  const graph = loadGraphData(id)
+  const graph = await loadGraph(id)
   if (!graph) {
     return NextResponse.json({ error: 'Graph data not found' }, { status: 404 })
   }

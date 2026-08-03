@@ -19,6 +19,8 @@ interface UploadZoneProps {
     patents: PatentRow[],
     mappings: FieldMapping[],
     filename: string,
+    /** The original file, so the caller can archive it and keep only its URL. */
+    file: File,
   ) => void;
   onError: (msg: string) => void;
 }
@@ -102,7 +104,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         }
 
         setState("success");
-        onParsed(result.patents, result.field_mappings, result.filename);
+        onParsed(result.patents, result.field_mappings, result.filename, file);
       } catch (err) {
         const msg =
           err instanceof Error

@@ -1,17 +1,26 @@
+/**
+ * store.ts — in-memory job state (progress + SSE) plus persistence.
+ *
+ * Persistence split, per the storage rule for this project:
+ *   - PostgreSQL is the source of truth for analysis results (normalised into
+ *     patents / applicants / concepts / edges / communities).
+ *   - `data/<id>.json` is still written as a portable snapshot for backup and
+ *     offline use, but the app never reads it back except during migration.
+ *
+ * Job progress itself stays in memory: it is ephemeral, dies with the process,
+ * and a restart mid-analysis loses the job either way.
+ */
+
 import fs from 'fs'
 import path from 'path'
 import type { JobState, GraphData } from '@/types/graph'
-import { normalizeGraphData } from '@/lib/graph-compat'
+import { saveGraph, setAnalysisStatus, type SaveContext } from '@/lib/db/analyses'
 
 export const DATA_DIR = path.join(process.cwd(), 'data')
+export const SNAPSHOT_DIR = path.join(DATA_DIR, 'snapshots')
 
 const jobs = new Map<string, JobState>()
 const subscribers = new Map<string, Set<ReadableStreamDefaultController>>()
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true })
-}
 
 // --- Job lifecycle ---
 
@@ -41,23 +50,39 @@ export function cancelJob(id: string): void {
   if (!job) return
   job.cancelled = true
   job.status = 'cancelled'
+  void setAnalysisStatus(id, 'cancelled').catch((err) =>
+    console.error(`[store] failed to mark ${id} cancelled:`, err),
+  )
   notifySubscribers(id, 'cancelled', { job_id: id })
 }
 
-export function completeJob(id: string, graph: GraphData): void {
+export async function completeJob(
+  id: string,
+  graph: GraphData,
+  context?: SaveContext,
+): Promise<void> {
   const job = jobs.get(id)
-  if (!job) return
-  job.status = 'done'
-  job.graph = graph
-  saveGraphData(id, graph)
+  if (job) {
+    job.status = 'done'
+    job.graph = graph
+  }
+
+  // The database write is what must succeed; the snapshot is best effort.
+  await saveGraph(id, graph, context)
+  writeSnapshot(id, graph)
+
   notifySubscribers(id, 'complete', { job_id: id })
 }
 
 export function failJob(id: string, error: string): void {
   const job = jobs.get(id)
-  if (!job) return
-  job.status = 'error'
-  job.error = error
+  if (job) {
+    job.status = 'error'
+    job.error = error
+  }
+  void setAnalysisStatus(id, 'error', error).catch((err) =>
+    console.error(`[store] failed to mark ${id} errored:`, err),
+  )
   notifySubscribers(id, 'error', { job_id: id, error })
 }
 
@@ -106,19 +131,17 @@ export function notifyProgress(
   })
 }
 
-// --- Persistence ---
+// --- Snapshot (backup artefact, not the source of truth) ---
 
-export function saveGraphData(jobId: string, graph: GraphData): void {
-  const filePath = path.join(DATA_DIR, `${jobId}.json`)
-  fs.writeFileSync(filePath, JSON.stringify(graph), 'utf-8')
-}
-
-export function loadGraphData(jobId: string): GraphData | null {
-  const filePath = path.join(DATA_DIR, `${jobId}.json`)
+export function writeSnapshot(jobId: string, graph: GraphData): void {
   try {
-    const raw = fs.readFileSync(filePath, 'utf-8')
-    return normalizeGraphData(JSON.parse(raw))
-  } catch {
-    return null
+    fs.mkdirSync(SNAPSHOT_DIR, { recursive: true })
+    const finalPath = path.join(SNAPSHOT_DIR, `${jobId}.json`)
+    const tempPath = `${finalPath}.tmp`
+    // tmp + rename: a crash mid-write can no longer truncate an existing file.
+    fs.writeFileSync(tempPath, JSON.stringify(graph), 'utf-8')
+    fs.renameSync(tempPath, finalPath)
+  } catch (err) {
+    console.error(`[store] snapshot write failed for ${jobId}:`, err)
   }
 }
