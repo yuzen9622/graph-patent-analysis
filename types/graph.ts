@@ -6,6 +6,7 @@ export interface PatentRow {
   title: string                 // Patent name (Chinese)
   abstract: string              // Abstract
   applicant: string             // Applicant (cleaned; multiple applicants separated by "；")
+  applicant_raw?: string        // Original cell, incl. address and country — needed to recover country
   filing_date?: string          // Filing date (YYYY/MM/DD)
   application_number?: string   // Application number
   search_keyword?: string       // Search keyword

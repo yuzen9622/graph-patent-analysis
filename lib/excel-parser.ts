@@ -19,6 +19,9 @@ export const FIELD_SYNONYMS: Record<string, string[]> = {
   applicant: ['申請人', 'applicant', 'assignee'],
   filing_date: ['申請日', 'filing_date', 'application_date'],
   application_number: ['申請號', 'application_number'],
+  // Sub-domain label from the crawler ("金控"/"保險"/"銀行"…). Stored on the
+  // patent row so analyses can be broken down by sub-domain in SQL.
+  search_keyword: ['搜尋關鍵字', 'search_keyword', 'keyword'],
 }
 
 // ---------------------------------------------------------------------------
@@ -207,8 +210,10 @@ export function parseExcel(buffer: ArrayBuffer, filename: string): ParseResult {
     // Applicant: split on ；or ;, clean each part, rejoin with ；
     const applicantCol = columnMap.get('applicant')
     let applicant = ''
+    let applicantRaw = ''
     if (applicantCol) {
       const rawApplicant = cellString(row, applicantCol) ?? ''
+      applicantRaw = rawApplicant
       applicant = rawApplicant
         .split(/；|;/)
         .map(part => cleanApplicantName(part.trim()))
@@ -227,6 +232,10 @@ export function parseExcel(buffer: ArrayBuffer, filename: string): ParseResult {
       applicant,
     }
 
+    // Keep the untouched cell: cleanApplicantName() drops the address and the
+    // trailing country, which the applicants table needs.
+    if (applicantRaw && applicantRaw !== applicant) patent.applicant_raw = applicantRaw
+
     if (filingDateCol) {
       const fd = cellString(row, filingDateCol)
       if (fd) patent.filing_date = fd
@@ -235,6 +244,12 @@ export function parseExcel(buffer: ArrayBuffer, filename: string): ParseResult {
     if (appNumberCol) {
       const an = cellString(row, appNumberCol)
       if (an) patent.application_number = an
+    }
+
+    const keywordCol = columnMap.get('search_keyword')
+    if (keywordCol) {
+      const kw = cellString(row, keywordCol)
+      if (kw) patent.search_keyword = kw
     }
 
     patents.push(patent)
