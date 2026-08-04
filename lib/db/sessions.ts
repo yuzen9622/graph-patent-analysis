@@ -87,9 +87,23 @@ export class UnauthorizedError extends Error {
   }
 }
 
+export class ForbiddenError extends Error {
+  constructor() {
+    super('需要管理者權限。')
+    this.name = 'ForbiddenError'
+  }
+}
+
 export async function requireUser(): Promise<SessionUser> {
   const user = await currentUser()
   if (!user) throw new UnauthorizedError()
+  return user
+}
+
+/** Account mutations fail closed instead of trusting the synthetic open-mode admin. */
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await requireUser()
+  if (authMode() !== 'configured' || user.role !== 'admin') throw new ForbiddenError()
   return user
 }
 
