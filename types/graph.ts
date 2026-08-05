@@ -2,14 +2,41 @@
 
 // 5.1 Input data (Excel row)
 export interface PatentRow {
-  id: string                    // System-generated: `${filename}-${rowIndex}` (e.g. "patents-0")
+  // Stable content-derived identity — PRD v2 P0 §4.5.
+  // `sha1hex(identityKey)` where identityKey is one of
+  //   `pn|<patent_number>|<title_key>` / `an|<application_number>|<title_key>` /
+  //   `noid|<title_key>|<sha1(abstract)>|<applicants…>|<filing_date>`
+  // computed from the POST-MERGE fields, so the value never depends on upload
+  // order.  (Pre-v2 this was `${filename}-${rowIndex}`, which did.)
+  // The graph node id stays `patent:${PatentRow.id}` (lib/graph-builder.ts).
+  id: string
   title: string                 // Patent name (Chinese)
   abstract: string              // Abstract
   applicant: string             // Applicant (cleaned; multiple applicants separated by "；")
   applicant_raw?: string        // Original cell, incl. address and country — needed to recover country
-  filing_date?: string          // Filing date (YYYY/MM/DD)
+  filing_date?: string          // Filing date (YYYY/MM/DD for format A, YYYY-MM-DD for format B)
   application_number?: string   // Application number
   search_keyword?: string       // Search keyword
+
+  // --- PRD v2 P0 §6.1 additions -------------------------------------------
+  title_en?: string
+  patent_number?: string
+  publication_number?: string
+  publication_date?: string
+  applicants?: string[]         // optional on purpose — keeps pre-v2 fixtures type-valid (§8)
+  inventors?: string[]
+  ipc5?: string[]               // normalised L5 keys, e.g. "G06Q10/10"
+  ipc5_raw?: string[]           // original cell values, before normalisation
+  ipc_primary?: string          // normalised form of IPC5-1
+  ipc_depth?: number            // 5 for full L5 keys, 3 for subclass-only values
+  references?: string[]         // normalised 專利編號 of cited patents
+  external_references?: string[]// references that match no patent in the dataset
+  cited_by_count?: number
+  case_status?: string          // parsed and stored only — no exclusion flags (§5.4)
+  design_class?: string         // same
+  source_files?: string[]       // optional on purpose — see applicants above (§8)
+  search_keywords?: string[]
+  applicant_key?: string        // normalised merge key; never overwrites `applicant` (§3.4)
 }
 
 // 5.2 LLM extraction result
@@ -50,6 +77,17 @@ export interface GraphNode {
   frequency?: number
   community_id?: number
   source_patents?: string[]
+  // --- PRD v2 P0 §6.1 additions -------------------------------------------
+  // Patent nodes: carried on the node (not only on the transient PatentRow) so
+  // that IPC / provenance filters can be recomputed after a reload.
+  ipc5?: string[]
+  ipc_primary?: string
+  ipc_depth?: number
+  source_files?: string[]
+  cited_by_count?: number
+  case_status?: string
+  // Applicant nodes
+  applicant_key?: string
   // Visual attributes
   color: string
   size: number
@@ -132,7 +170,8 @@ export interface GraphMethodology {
 }
 
 export interface GraphData {
-  schema_version: 2
+  // 2 = PRD v1.2 graphs (incl. every existing data/*.json); 3 = PRD v2 P0 and later.
+  schema_version: 2 | 3
   nodes: GraphNode[]
   edges: GraphEdge[]
   communities: Community[]

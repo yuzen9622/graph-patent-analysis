@@ -170,6 +170,19 @@ function normalizeMethodology(
   }
 }
 
+/**
+ * Resolve the schema version to echo back on the normalised output.
+ *
+ * Pass-through semantics (PRD v2 P0 §6.3 #6): a v2 graph normalises to a v2
+ * graph and a v3 graph normalises to a v3 graph — normalisation repairs the
+ * payload, it never re-labels which schema produced it.  Anything that is
+ * neither (pre-v2 files carry no `schema_version` at all) is *upgraded* to 2,
+ * because `normalizeLegacy()` genuinely rebuilds it into the v2 shape.
+ */
+function resolveSchemaVersion(input: Record<string, unknown>): 2 | 3 {
+  return input.schema_version === 3 ? 3 : 2
+}
+
 function computeStats(nodes: GraphNode[], communities: Community[]): GraphData['stats'] {
   const years = nodes
     .filter((node) => node.type === 'patent' && typeof node.year === 'number')
@@ -201,7 +214,7 @@ function normalizeV2(raw: Record<string, unknown>, nodes: GraphNode[], edges: Gr
   })
   const methodology = normalizeMethodology(raw.methodology, defaults)
   return {
-    schema_version: 2,
+    schema_version: resolveSchemaVersion(raw),
     nodes,
     edges,
     communities,
@@ -311,7 +324,7 @@ function normalizeLegacy(raw: Record<string, unknown>, nodes: GraphNode[], edges
   }
 
   return {
-    schema_version: 2,
+    schema_version: resolveSchemaVersion(raw),
     nodes,
     edges: allEdges,
     communities,
@@ -333,7 +346,17 @@ export function normalizeGraphData(input: unknown): GraphData | null {
   const edges = input.edges
     .map((edge) => normalizeEdge(edge, validNodes))
     .filter((edge): edge is GraphEdge => edge !== null)
-  return input.schema_version === 2
-    ? normalizeV2(input, nodes, edges)
-    : normalizeLegacy(input, nodes, edges)
+  // Dispatch on the *declared* schema version, allow-listing every version that
+  // already stores its own concept network.  This must stay an explicit
+  // `2 | 3` allow-list rather than `=== 2 ? v2 : legacy` (PRD v2 P0 §6.3 #5):
+  // under the old form a v3 graph fell through to `normalizeLegacy()`, which
+  // rebuilds the concept network from scratch — discarding every cooccurrence
+  // edge and overwriting `frequency` / `community_id` / `color` / `methodology`
+  // with recomputed v1.2 defaults.  `saveGraph()` then DELETEs the stored rows
+  // before writing that mangled version back, so the loss is unrecoverable.
+  // Only genuinely pre-v2 payloads (no `schema_version`) may take the legacy
+  // reconstruction path.
+  const declared = input.schema_version
+  if (declared === 2 || declared === 3) return normalizeV2(input, nodes, edges)
+  return normalizeLegacy(input, nodes, edges)
 }

@@ -1,0 +1,452 @@
+[
+  {
+    "title": "證券型代幣交易管理系統",
+    "abstract": "本揭示內容提供一種證券型代幣交易管理系統，與區塊鏈及資料庫通訊連接，用於證券型代幣交易管理。證券型代幣交易管理系統包含伺服器、證券型代幣發行管理模組、客戶管理模組、申購管理模組、交易管理模組、資訊整合模組以及風險控管模組。其中，透過證券型代幣管理模組上架及發行虛擬通貨代幣，透過客戶管理模組協助客戶生成虛擬錢包，透過申購管理模組對客戶產生一申購資訊，以及透過交易管理模組管理交易，藉此證券型代幣管理模組轉移虛擬通貨代幣至客戶的虛擬錢包，或是銷毀虛擬通貨代幣。 Provided herein is a securities token exchange management system that communicates with blockchain and databases to manage securities token transactions. The securities token exchange management system includes a server, a security token offering (STO) management module, a customer management module, a subscription management module, a transaction management module, an information integration module, and a risk control module. In the present securities token exchange management system, the STO management module is configured to list and issue virtual currency tokens; the customer management module is configured to assist in generating virtual wallets for customers; the subscription management module is configured to generate subscription information for customers; and the transaction management module is configured to oversee transactions, enabling the transfer of virtual currency tokens to customers' virtual wallets or the destruction of virtual currency tokens.",
+    "applicant": "國泰金融控股股份有限公司；國泰綜合證券股份有限公司",
+    "applicant_raw": "國泰金融控股股份有限公司 臺北市大安區仁愛路4段296號 (中華民國)；國泰綜合證券股份有限公司 臺北市大安區敦化南路二段333號22樓 (中華民國)",
+    "filing_date": "2024/06/26",
+    "application_number": "TW113123858",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "快速識別網站安全的系統及方法",
+    "abstract": "一種快速識別網站安全的系統包括一客戶端裝置耦接一銀行端伺服器，用以下載一網站安全識別應用程式，其中網站安全識別應用程式用以：擷取一網站之網址及網站之相關憑證資訊；確認相關憑證資訊是否包含安全通訊端層（SSL）憑證；以及確認SSL憑證是否在有效期間。 A system for rapidly identifying website security includes a client device coupled to a bank server for downloading a website security identification application, wherein the website security identification application is configured to: retrieve a website URL and a relevant certificate of the website information; confirm whether the relevant certificate information includes a secure communication layer (SSL) certificate; and confirm whether the SSL certificate is valid.",
+    "applicant": "合作金庫商業銀行股份有限公司",
+    "applicant_raw": "合作金庫商業銀行股份有限公司 臺北市松山區長安東路二段225號 (中華民國)",
+    "filing_date": "2023/05/11",
+    "application_number": "TW112117609",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "基於ESG的資料整合系統",
+    "abstract": "鑒於國內ESG資料難以整合，故提供一種基於ESG的資料整合系統，經由一通訊網路連接多個資料庫，包含一通訊模組、一儲存模組、一資料彙整模組，及一缺失值處理模組。一資料彙整模組根據一儲存模組儲存的一相關於多個指定投資標的之投資組合資料，經由一通訊模組從該等資料庫進行資料蒐集，獲得多筆分別對應該等指定投資標的之標的ESG資訊。對於每一具有至少一缺失值的標的ESG資訊，該缺失值處理模組利用該儲存模組儲存的一估計模型，估計出至少一分別對應該至少一缺失值之估計值。本發明能達到整合遍及該等資料庫的ESG資料之技術功效。 In view of the difficulty in integrating domestic ESG data, an ESG-based data integration system is provided, in which multiple databases are connected through a communication network, and the system includes a communication module, a storage module, a data summarization module, and a missing value processing module. The data summarization module collects data from the databases through the communication module based on an investment portfolio data related to multiple designated investment targets stored in a storage module, so as to obtain multiple target ESG information respectively corresponding to the designated investment targets. For each target ESG information with at least one missing value, the missing value processing module uses an estimation model stored in the storage module to estimate at least one estimated value respectively corresponding to the at least one missing value. The present invention can achieve the technical effect of integrating ESG data throughout the databases.",
+    "applicant": "中國信託證券投資信託股份有限公司",
+    "applicant_raw": "中國信託證券投資信託股份有限公司 臺北市南港區經貿二路188號12樓 (中華民國)",
+    "filing_date": "2023/02/18",
+    "application_number": "TW112105944",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "資料呈現系統及方法",
+    "abstract": "本發明提供資料呈現系統，其包含伺服器端及軟體產品。伺服器端包含管理模組、資料庫模組、轉換模組、及資料提供模組，軟體產品包含身分驗證模組及資料呈現模組。管理模組提供第一使用者介面，供管理者上傳資料至資料庫模組，並對資料庫模組中的資料進行維護，轉換模組用於將該資料庫模組中的資料轉換為適於透過軟體產品呈現之格式，身分驗證模組將使用者的登入資訊傳送予資料提供模組，資料提供模組基於登入資訊判斷出使用者的權限，資料呈現模組依據該權限提供第二使用者介面。 The present invention provides a system for presenting data comprising a server end and a software product. The sever end comprises a management module, a database module, an aggregation and conversion module, and a data provision module, and the software product comprises an identity verification module and a data presenting module. The management module provides a first user interface for an administrator to upload data to the database module, the conversion module is used for converting data in the database module into a format suitable for presentation through the software product, the identity verification module transmits the user's login information to the data provision module, the data provision module determines permissions of the user based on the login information, and the data presenting module provides a second user interface according to the permissions.",
+    "applicant": "台新國際商業銀行股份有限公司",
+    "applicant_raw": "台新國際商業銀行股份有限公司 臺北市中山區中山北路2段44號1樓及地下1樓 (中華民國)",
+    "filing_date": "2022/11/02",
+    "application_number": "TW111141911",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "資料整合方法及系統",
+    "abstract": "一種資料整合系統包含多個用於多種不同資料服務服務資料庫、及連接整合伺服器的請求伺服器。該請求伺服器自儲存的資料服務查找表查找出與接收到或護得的目標資料服務代碼對應的目標設定資訊，其包含來源資料庫代碼資料、來源資料表名稱資料、來源語法資料、服務資料庫代碼資料和服務資料表名稱資料。該整合伺服器根據該目標設定資訊所含的來源語法資料，自多個目標來源資料庫中的多個資料表獲取相關的來源資料，將該來源資料轉換成符合於目標資料表的欄位規劃的目標資料並將該目標資料以目標資料表的形式寫入到目標服務資料庫中。 A data integration system comprises multiple service databases for various data services and a request server connected to an integration server. The request server retrieves target setting information corresponding to a received or obtained target data service code from a stored data service lookup table, in which the target setting information contains source database code data, source data table name data, source syntax data, service database code data, and service data table name data. The integration server, based on the source syntax data contained in the target setting information, obtains relevant source data from multiple data tables in multiple target source databases, converts the source data into target data that complies with the field planning of the target data table, and writes the target data into the target service database in the form of the target data table.",
+    "applicant": "凱基證券股份有限公司",
+    "applicant_raw": "凱基證券股份有限公司 臺北市中山區明水路700號3樓 (中華民國)",
+    "filing_date": "2022/08/31",
+    "application_number": "TW111132851",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於高傳導性閥之控制板",
+    "abstract": "一種高純度流體控制閥包含一可移動控制板，該可移動控制板具有用以增強內部閥容積之流體掃掠之一流通通道。該閥係噴射式及座式，其使用巢套孔脊來以小的致動器移動達成高傳導性。可藉由選擇性地併入比構成該孔脊之材料軟之控制板材料而另外提供閥切斷狀態中之經增強氣密性。該控制板在諸如半導體製造中之氣體遞送等的高傳導性、快速作用及比例控制應用中係尤其有用的。 A high purity fluid control valve includes a moveable control plate having a flow-through passage to enhance fluid sweep of the internal valve volume. The valve is of jet and seat type using nested orifice ridges to achieve high conductance with small actuator movement. Enhanced leak tightness in the valve shut-off condition may additionally be provided by selectively incorporating into the control plate materials softer than the material comprising the orifice ridge. The control plate is especially useful in high conductance, fast acting, and proportional control applications such as gas delivery in semiconductor manufacturing.",
+    "applicant": "美商依利諾器具機械公司",
+    "applicant_raw": "美商依利諾器具機械公司 (美國)",
+    "filing_date": "2018/11/13",
+    "application_number": "TW112112100",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "具有防摔功能之觸控筆",
+    "abstract": "本揭露提供了一種具有防摔功能之觸控筆，包括一本體、一保護元件以及一驅動元件。本體具有一容置空間，並且本體包含一筆身以及一筆頭。筆頭可拆卸地連接於筆身。筆頭與筆身沿著一長軸方向排列，並且筆頭與筆身之間形成有一開口。保護元件設置於容置空間內。驅動元件設置於容置空間內並且連接於保護元件。當觸控筆移動時的一移動加速度大於或等於一預設加速度時，驅動元件配置以驅動保護元件由容置空間內的一第一位置移動穿過開口至本體外的一第二位置，以使保護元件包圍筆頭。 A stylus with drop-proof function includes a main body, a protection element and a driving element. The main body has an accommodating space, and the main body includes a pen body and a pen head. The pen head is detachably connected to the pen body. The pen head and the pen body are arranged along a long axis, and an opening is formed between the pen head and the pen body. The protection element is disposed in the accommodating space. The driving element is disposed in the accommodating space and connected to the protection element. When a movement acceleration of the stylus is greater than or equal to a preset acceleration, the driving element is configured to drive the protection element to move from a first position in the accommodating space through the opening to a second position outside the body, so that the protective element encloses the pen head with.",
+    "applicant": "宏碁股份有限公司",
+    "applicant_raw": "宏碁股份有限公司 新北市汐止區新台五路一段88號8樓 (中華民國)",
+    "filing_date": "2021/11/25",
+    "application_number": "TW110143904",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "耐磨鋼板及其製造方法",
+    "abstract": "本發明提供一種耐磨鋼板及其製造方法，其係藉由微合金處理，以控制鋼板內介在物的種類及型態，並藉由特定淬火製程的條件，而使鋼板顯微組織中大部分為自回火麻田散鐵，進而獲得高強度、高延伸率、高彎曲性及具有良好加工成形性的耐磨鋼板。 A wear resistant steel plate and a method of fabricating the same are provided. A microalloying treatment is applied to control type and shape morphology of inclusions in a steel plate. Moreover, by specific condition of quenching process, microscopic structure of the steel plate contains most self-tempered martensite. In this way, the wear resistant steel plate with high strength, high elongation, high flexibility and great formability can be obtained.",
+    "applicant": "中國鋼鐵股份有限公司",
+    "applicant_raw": "中國鋼鐵股份有限公司 高雄市小港區中鋼路1號 (中華民國)",
+    "filing_date": "2021/08/05",
+    "application_number": "TW110128972",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "銀/錫電鍍浴及其使用方法",
+    "abstract": "一種用於在基材上沉積銀/錫合金之電鍍浴。該電鍍浴包含(a)錫離子之來源；(b)銀離子之來源；(c)酸；(d)第一錯合劑；(e)第二錯合劑，其中該第二錯合劑係選自由下列所組成之群組：烯丙基硫脲、芳基硫脲、及烷基硫脲、以及其組合；以及(f)任選地，潤濕劑、及(g)任選地，抗氧化劑。 An electroplating bath for depositing a silver/tin alloy on a substrate. The electroplating bath comprises (a) a source of tin ions; (b) a source of silver ions; (c) an acid; (d) a first complexing agent; (e) a second complexing agent, wherein the second complexing agent is selected from the group consisting of allyl thioureas, aryl thioureas, and alkyl thioureas, and combinations thereof; and (f) optionally, a wetting agent, and (g) optionally, an antioxidant.",
+    "applicant": "美商麥克達米德恩索龍股份有限公司",
+    "applicant_raw": "美商麥克達米德恩索龍股份有限公司 (美國)",
+    "filing_date": "2021/05/20",
+    "application_number": "TW110118217",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於高電導率閥門的控制板",
+    "abstract": "用於高電導率、比例控制應用中的高純度控制閥門包括可移動的控制板，此可移動的控制板具有流通通道，以增強內部閥門體積的流體掃掠。嵌套的孔脊用來以小的致動器移動來實現高電導率。藉由將比包含孔脊的材料更軟的材料結合到控制板中，可提供增強的密封性。控制板包括控制板主體，此控制板主體具有與導管、徑向流體流動路徑和軸向流體流動路徑流體連通的埋孔。控制板的平坦側包括連續的、不間斷的平坦部分，以切斷閥門中的流體流動。徑向流體流動路徑提供從埋孔到控制板的周界的流體連通，而軸向流體流動路徑提供通過中間閥室部分與流體導管的流體連通。 A high purity control valve for use in high conductance, proportional control applications includes a moveable control plate having a flow-through passage to enhance fluid sweep of the internal valve volume. Nested orifice ridges are used to achieve high conductance with small actuator movement. Enhanced leak tightness can be provided by incorporating into the control plate materials softer than the material comprising the orifice ridge. The control plate comprises a control plate body having a counterbore in fluid communication with a conduit, radial fluid flow paths and axial fluid flow paths. A flat side of the control plate includes a continuous uninterrupted flat portion to shut-off fluid flow in the valve. The radial fluid flow paths provide fluid communication from the counterbore to a circumferential perimeter of the control plate and the axial fluid flow paths provide fluid communication with the fluid conduit through an intermediate valve chamber portion.",
+    "applicant": "美商伊利諾工具工程公司",
+    "applicant_raw": "美商伊利諾工具工程公司 (美國)",
+    "filing_date": "2021/03/03",
+    "application_number": "TW110107536",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "基於家庭關係的家庭戶網絡管理方法及系統",
+    "abstract": "一種家庭戶網絡管理系統中，家庭關係判定模型根據多筆參考客戶關係資料，利用機器學習方法而建立且定義出與多個特徵關係有關的多個重要值，每筆參考客戶關係資料包含對應客戶的定期轉帳交易資料、特定數位通路瀏覽紀錄、信用卡繳費資料及聯絡資料其中至少一者；處理模組根據包含與兩個客戶有關的定期轉帳交易資料、特定數位通路瀏覽紀錄、信用卡繳費資料和聯絡資料其中至少一者的輸入資料，利用該家庭關係判定模型，估算出該兩個客戶間具有家庭關係的機率值，並在該機率值大於預定門檻值時，形成一具有彼此連結的該兩個客戶的新家庭戶網絡。 In a household network management system, a machine learning method is used to establish a family relationship determination model based on multiple reference of customer relationship data, and define multiple important values related to multiple feature relationships. Each reference of customer relationship data includes at least one of regular account transfer transaction data, browsing records of specific digital channels, credit card payment information, and contact information corresponding to the customer. The processing module uses the family relationship determination model to estimate the probability value of the family relationship between two customers based on the input data of at least one of the regular account transfer transaction data, browsing records of specific digital channels, credit card payment information, and contact information related to two customers. When the probability value is greater than a predetermined threshold value, a new household network with the two customers connected to each other is formed.",
+    "applicant": "第一商業銀行股份有限公司",
+    "applicant_raw": "第一商業銀行股份有限公司 臺北市中正區重慶南路1段30號 (中華民國)",
+    "filing_date": "2020/03/02",
+    "application_number": "TW109106694",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "基於自然語言處理的智能對話管理方法及系統",
+    "abstract": "一種基於自然語言處理的智能對話管理方法及系統中，管理伺服器在收到對話文本內容和有關於通道伺服器與客戶的參考資料後，根據該參考資料及預定路由規則從N(N≧2)個對話引擎選出N1(N≧N1≧1)個第一候選者；當N1≠1時根據該對話文本內容所含的一個或多個對話特徵從該N1個第一候選者選出N2(N1≧N2≧1)個第二候選者，當N2≠1時根據該N2個第二候選者所對應的對話狀態從其決定出N3(N2≧N3≧1)個第三候選者；將該對話文本內容傳送至第一/二/三候選者；並當N3≠1時從來自該N3個第三候選者的所有回覆文本內容選出最適切者回傳至該通道伺服器。 The present invention relates to an intelligent conversation management method and system based on natural language processing. After receiving a conversation text content and reference data related to a tunnel server and a customer, a management server selects N1 (N ≥ N1 ≥ 1) first candidates from N (N ≥ 2) conversation engines according to the reference data and predetermined routing rules. When N1 is not equal to 1, N2 (N1 ≥ N2 ≥ 1) second candidates are selected from the N1 first candidates according to one or more conversation features contained in the conversation text content. When N2 is not equal to 1, N3 (N2 ≥ N3 ≥ 1) third candidates are determined from the second candidates according to the conversation state corresponding to the N2 second candidates. The conversation text content is sent to the first/second/third candidates. When N3 is not equal to 1, the most appropriate replay text content is selected from all the reply text content of the N3 third candidates and sent back to the tunnel server.",
+    "applicant": "中國信託商業銀行股份有限公司",
+    "applicant_raw": "中國信託商業銀行股份有限公司 臺北市南港區經貿二路166、168、170、186、188號 (中華民國)",
+    "filing_date": "2019/10/30",
+    "application_number": "TW108139256",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "智能語音資訊質檢方法及系統",
+    "abstract": "一種智能語音資訊質檢方法及系統中，語音辨識模組利用語音辨識技術並根據通用詞彙資料與領域詞彙資料，將客服人員與客戶之通話的語音資訊轉譯成原始文本，並獲得對應於該原始文本的辨識信心度資料。精緻文本模組根據該辨識信心度資料及領域詞彙資料、精確詞彙資料和冗餘詞彙資料，檢核並適應性修正該原始文本以獲得精緻文本。質檢分析模組根據有關於質檢項目的質檢判定規則且利用與多個意圖詞彙相關聯的意圖標註演算法，在語法和文意上分析該精緻文本，以便決定出歸屬於該精緻文本的意圖標籤，並根據該意圖標籤輸出該質檢項目的質檢結果。 In an intelligent voice information quality inspection method and system, a voice recognition module uses voice recognition technology, general vocabulary data and domain vocabulary data to translate the voice information of a call between the customer service personnel and the customer into original text, and obtain the recognition confidence data corresponding to the original text. A refined text module checks and adaptively corrects the original text to obtain a refined text based on the recognition confidence data, the domain vocabulary data, accurate vocabulary data and redundant vocabulary data. A quality inspection analysis module analyzes the refined text in terms of syntax and context based on the judgment rules of quality inspection and the intention labeling algorithm associated with multiple intention words, so as to determine the intention label pertaining to the refined text and output the quality inspection results of the quality inspection project according to the intention label.",
+    "applicant": "中國信託商業銀行股份有限公司",
+    "applicant_raw": "中國信託商業銀行股份有限公司 臺北市南港區經貿二路166、168、170、186、188號 (中華民國)",
+    "filing_date": "2019/10/17",
+    "application_number": "TW108137426",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "基於區塊鏈之停車費交易方法及系統",
+    "abstract": "本發明揭露一種區塊鏈之停車費交易方法及系統，該方法適用於包含使用者、停車場、特約商、交易平台及區塊鏈之系統。使用者將車輛停放於停車場，依據停車時間計算停車費用，使用者選擇特約商並使用交易平台來支付停車費用。區塊鏈設置以連接使用者、交易平台、停車場及特約商，其包含交易平台與停車場之第一智能合約及交易平台與特約商之第二智能合約。通過第一智能合約記錄停車場費用，且通過第二智能合約記錄特約商費用。 A parking fee transaction method and system based on the block chain is disclosed. The method is suitable of the system including a user, a parking lot, a contractor, a transaction platform and the block chain. The user parks the car in the parking lot and the parking fees is calculated based on the parking times. The user selects the contractor and uses the transaction platform to pay the parking fees. The block chain is disposed to connect the user, the transaction platform, the parking lot and the contractor. The first smart contract is set between the transaction platform and the contractor and the second smart contract is set between the transaction platform and the contractor. The fee for the parking lot is recorded through the first smart contract and the fee for the contractor is recorded through the second smart contract.",
+    "applicant": "張劭農；董大宇；程秋華",
+    "applicant_raw": "張劭農 苗栗縣苗栗市北苗里中山北路207巷23號 (中華民國)；董大宇 新北市樹林區學成路776號11樓 (中華民國)；程秋華 新北市樹林區學成路778號11樓 (中華民國)",
+    "filing_date": "2019/08/20",
+    "application_number": "TW108129674",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "募資與動支的控管系統",
+    "abstract": "募資與動支的控管系統包含募資代幣發行平台、資金託管系統、預測性應變性會計系統以及費用稽核模組。募資代幣發行平台用以提供證券型代幣之發行。資金託管系統用以接收發行證券型代幣所得之資金，並分階段且選擇性地撥發資金，並產生資金撥發結果。預測性應變性會計系統用以預測出即時現金流量表。費用稽核模組用以比對即時現金流量表及會計系統之真實現金流量表以產生稽核結果。資金託管系統根據稽核結果選擇性地撥發部分之資金作為下一階段性資金。募資與動支的控管系統可以降低投資人的投資風險，亦可與區塊鏈網路連接以提高可信度。 Fundraising and dealing control system includes a fundraising token offering platform, a fund escrow system, a predictive contingency accounting system, and a fee auditing module. The fundraising token offering platform is configured to offer security tokens. The fund escrow system is configured to receive funds from offering the security tokens, and to selectively allocate funds in stages, and to generate fund allocation results. The predictive contingency accounting system is configured to predict the real-time cash-flow statement. The fee audit module is configured to compare the real-time cash-flow statement and the actual cash-flow statement of the accounting system to generate an audit result. The fund escrow system selectively allocates part of the funds as the next stage of funds based on the audit result. The fundraising and dealing control system can reduce the investment risk of investors and can also be connected with the blockchain network to improve credibility.",
+    "applicant": "全球智能股份有限公司；郁傑營創顧問有限公司",
+    "applicant_raw": "全球智能股份有限公司 臺北市大安區師大路92巷5號2樓 (中華民國)；郁傑營創顧問有限公司 臺北市大安區和平東路1段87號10樓 (中華民國)",
+    "filing_date": "2019/08/14",
+    "application_number": "TW108128908",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "行動支付管理方法及系統",
+    "abstract": "一種行動支付管理方法及系統中，管理伺服器產生一個或多個指派給商家且含有商家識別資料及該服務伺服器的連結網址的條碼，並儲存代表一支付機構的機構識別碼及對應於該機構識別碼的支付伺服器的連結網址；當接收到來自於該支付機構之客戶的行動裝置且包含該機構識別碼、及獲得自該(等)條碼其中一者的該商家識別資料的支付請求時，利用儲存的連結網址連結該支付伺服器，並將含有該商家識別資料的識別碼請求發送至該支付伺服器，以使該支付伺服器對管理伺服器發送與該商家識別資料相聯的唯一識別碼；及將接收到的識別碼發送至該行動裝置。 In a method and system for mobile payment management, a management server generates one or more barcodes that are assigned to a merchant and contain a link URL of the service server, and stores an institution identification code that represents a payment institution, and a link URL that corresponds to a payment server provided by the payment institution. When the management server receives, from a mobile device of a client of the payment institution, a payment request that includes the institution identification code, the link URL of the payment server, and the merchant identification data obtained from one of the barcode(s), the management server connects the payment server by using the stored link URL, and sends to the payment server a request that contains the merchant identification data, so that the payment server sends to the management server a unique identification code associated with the merchant identification data. The management server sends to the mobile device the identification code from the payment server.",
+    "applicant": "玉山商業銀行股份有限公司",
+    "applicant_raw": "玉山商業銀行股份有限公司 臺北市松山區民生東路3段117號 (中華民國)",
+    "filing_date": "2019/07/30",
+    "application_number": "TW108126901",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "法令遵循管理方法及系統",
+    "abstract": "一種法規遵循管理方法及系統中，前端伺服器在獲得法規訊息時對後端伺服器發送訊息通知，並根據有關金融法規的法規訊息更新對應的金融法規資訊；及該後端伺服器在確認該訊息通知的適用性時，將對應於該訊息通知的紀錄內容新增於適用法規訊息紀錄表，並且可回應一手冊產生請求，根據已預先儲存且對應於該適用法規訊息紀錄表的一項或多項紀錄內容的一筆或多筆遵循程序資訊、及預存的歷史法令遵循手冊資料產生當前法令遵循手冊資料且儲存該當前法令遵循手冊資料以供下載。 In a legal compliance management method and system, a front-end sever, upon receiving a regulation message, sends a message notification to a back-end server and updates corresponding financial regulation information according to regulation information associated with financial regulations; and the back-end server, upon confirming the applicability of the message notification, adds the record contents corresponding to the message notification in an applicable regulation message record list and returns a response of requesting generation of a handbook and generates a current version of legal compliance handbook data according to one or multiple pieces of legal compliance procedure information of one or multiple items of record contents stored in advance and corresponding to the applicable regulation message record list and historical legal compliance handbook data that have been stored previously, and stores the current version of legal compliance handbook data for downloading.",
+    "applicant": "台灣人壽保險股份有限公司",
+    "applicant_raw": "台灣人壽保險股份有限公司 臺北市南港區經貿二路188號8樓 (中華民國) 8F., NO.188, JINGMAO 2ND RD.,NANGANG DIST., TAIPEI CITY 11568, TAIWAN (R.O.C.) (TW)",
+    "filing_date": "2019/07/04",
+    "application_number": "TW108123643",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "客製化金融商品推薦系統",
+    "abstract": "本發明提供一種客製化金融商品推薦系統，包括第一主機。第一主機包括儲存裝置、傳輸裝置、以及處理器。傳輸裝置用以接收使用者之至少一個個人化資訊。儲存裝置儲存一偏好分析模組及一客戶資料庫，其中客戶資料庫包含從傳輸裝置接收的個人化資訊。處理器電性連接至儲存裝置及傳輸裝置，且處理器用以執行偏好分析模組，以根據個人化資訊產生一預測商品偏好資料。 A personalized financial product recommendation system includes a first host. The first host includes a storage device, a transmission device, and a processor. The transmission device is configured to receive at least one personalized information of the user. The storage device stores a preference analysis module and a customer database, in which the customer database contains the personalized information received from the transmission device. The processor is electrically connected to the storage device and the transmission device, and the processor is configured to execute the preference analysis module to generate a predicted product preference data according to the personalized information.",
+    "applicant": "合作金庫商業銀行股份有限公司",
+    "applicant_raw": "合作金庫商業銀行股份有限公司 臺北市松山區長安東路2段225號 (中華民國)",
+    "filing_date": "2019/06/11",
+    "application_number": "TW108120159",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "攝影模組",
+    "abstract": "一種攝影模組，其包含：一透鏡單元，其包含一液體透鏡，該液體透鏡包含一導電性液體及一非導電性液體；一印刷電路板，其上安置有一影像感測器，該影像感測器與該透鏡單元之一光學軸線對準；一驅動電路，設置於該印刷電路板上且用以控制該液體透鏡之該導電性液體與該非導電性液體間所形成之一介面；一迴轉感應器，其安置於該印刷電路板上，該迴轉感應器用以感測該攝影模組之移動；及一傳導性驅動訊號線路，其安置於該印刷電路板上且用以傳輸由該驅動電路輸出之一訊號以控制該液體透鏡之該介面。該傳導性驅動訊號線路係經設置以致不在與該光學軸線平行之垂直方向上與該迴轉感應器重疊。 A camera module is disclosed. The camera module includes a lens unit including a liquid lens including a conductive liquid and a non-conductive liquid, a printed circuit board on which an image sensor aligned with the optical axis of the lens unit is disposed, a driving circuit disposed on the printed circuit board and configured to control the interface formed between the conductive liquid and the non-conductive liquid of the liquid lens, a gyro sensor disposed on the printed circuit board and configured to sense movement of the camera module, and a conductive driving signal line disposed on the printed circuit board and configured to transmit a signal output from the driving circuit to control the interface of the liquid lens. The conductive driving signal line is disposed so as not to overlap the gyro sensor in the vertical direction parallel to the optical axis.",
+    "applicant": "韓商ＬＧ伊諾特股份有限公司",
+    "applicant_raw": "韓商ＬＧ伊諾特股份有限公司 (南韓)",
+    "filing_date": "2020/03/19",
+    "application_number": "TW109109243",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "法令遵循管理系統及其方法",
+    "abstract": "一種法令遵循管理系統及其方法，其中法令遵循管理服務模組、分析模組與資料庫可以將法規資料或待查詢資料進行分析，並與相關的規範、作業流程及人員建立連結，以提供有效率的法令遵循管理方法。 A regulatory compliance management system and method thereof, wherein a regulatory compliance management service module, an analysis module, and a database can analyze regulatory data or pending data, and establish links with related regulations, operation procedures and the person in charge of the regulations or operation procedures to provide efficient regulatory compliance management method.",
+    "applicant": "台北富邦商業銀行股份有限公司",
+    "applicant_raw": "台北富邦商業銀行股份有限公司 臺北市中山區中山北路2段50號 (中華民國)",
+    "filing_date": "2019/02/23",
+    "application_number": "TW108106183",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於高傳導性閥之控制板",
+    "abstract": "一種高純度流體控制閥包含一可移動控制板，該可移動控制板具有用以增強內部閥容積之流體掃掠之一流通通道。該閥係噴射式及座式，其使用巢套孔脊來以小的致動器移動達成高傳導性。可藉由選擇性地併入比構成該孔脊之材料軟之控制板材料而另外提供閥切斷狀態中之經增強氣密性。該控制板在諸如半導體製造中之氣體遞送等的高傳導性、快速作用及比例控制應用中係尤其有用的。 A high purity fluid control valve includes a moveable control plate having a flow-through passage to enhance fluid sweep of the internal valve volume. The valve is of jet and seat type using nested orifice ridges to achieve high conductance with small actuator movement. Enhanced leak tightness in the valve shut-off condition may additionally be provided by selectively incorporating into the control plate materials softer than the material comprising the orifice ridge. The control plate is especially useful in high conductance, fast acting, and proportional control applications such as gas delivery in semiconductor manufacturing.",
+    "applicant": "美商威士塔戴爾泰克有限責任公司",
+    "applicant_raw": "美商威士塔戴爾泰克有限責任公司 (美國)",
+    "filing_date": "2018/11/13",
+    "application_number": "TW107140211",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "個人銀行自動記帳系統及方法",
+    "abstract": "個人銀行自動記帳系統包含一自動整合單元、一即時核銷單元及一自動帳本單元；該自動整合單元自動彙整使用者在數個交易平台進行交易時所產生的初始交易訊息；該即時核銷單元從外部銀行自動接收帳務明細訊息，並將帳務明細訊息自動勾稽該自動整合單元中對應的初始交易訊息，進行即時核銷，產生已核銷交易訊息；該自動帳本單元自動分類已核銷交易訊息並建立歷史財務數據；本發明功效在於透過將帳務明細訊息自動勾稽初始交易訊息，即時核銷並自動分類以建立歷史財務數據，確實達成自動勾稽以自動記帳的目的。 The personal bank automatic billing system includes an automatic integration unit, an instant verification unit and an automatic book unit. The automatic integration unit automatically aggregates the initial transaction message generated by the user when trading on several trading platforms. The instant verification unit automatically receives the account detail message from the external bank, and automatically checks the account detailed information to the corresponding initial transaction message in the automatic integration unit, and immediately writes off the generated transaction information. The automatic ledger unit automatically classifies the written transaction information and establishes historical financial data. The effect of the invention is that the account transaction detail information is automatically checked and the initial transaction message is automatically checked and automatically classified to establish historical financial data, and the purpose of automatic checking is automatically achieved.",
+    "applicant": "臺灣銀行股份有限公司",
+    "applicant_raw": "臺灣銀行股份有限公司 臺北市中正區重慶南路1段120號 (中華民國)",
+    "filing_date": "2018/10/23",
+    "application_number": "TW107137430",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "智慧物流之系統、方法及行動載具",
+    "abstract": "本發明揭露一種智慧物流之系統，係包括電子裝置、雲端伺服器及行動載具。該電子裝置顯示商品資訊以供使用者選擇商品訂單，該雲端伺服器用以接收該商品訂單以根據該商品訂單分派給該行動載具，該行動載具在移動至目的地前將該商品訂單的商品製作完成，以供領取者領取該商品。本發明另揭露一種智慧物流之方法及行動載具。 A system for smart logistics is disclosed. The system includes an electronic device, a cloud server, and a mobile carrier, wherein the electronic device displays a product information to select a product order for a user, the cloud server receives the product order and dispatches it to the mobile carrier based on the product order, and the products in the product order are made by the mobile carrier before arriving to the destination for a receiver to receive the products. A method and a mobile carrier for smart logistics are also disclosed.",
+    "applicant": "陳逸芬",
+    "applicant_raw": "陳逸芬 臺北市內湖區新豐街156號 (中華民國)",
+    "filing_date": "2018/07/06",
+    "application_number": "TW107123508",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "運營資料匯流系統與方法",
+    "abstract": "關於一種運營資料匯流系統，系統主要採用一種三層式的資料儲存架構，分別以高效資料處理的關聯式資料庫實現原始資料區，以提供原始資料服務；由高性價比存儲及分散處理的大數據平台實現資料加值區，即時同步關聯式資料庫的資料，以提供加值彙整服務；以及由低成本庫存的檔案伺服器實現資料備存區，用以提供備存與稽核服務。其中，提供一訊息系統作為關聯式資料庫與大數據平台間的資料傳送工具，以軟體方法偵測關聯式資料庫中數據流變化，並將變化傳送至訊息系統，將訊息系統中留存的異動資料依序寫入大數據平台，達成資料同步。 The disclosure is related to a system for operational data convergence. The system adopts a three-tier data storage structure. A high-performance relational database is used to implement an original data zone for providing original data. A big data platform with high price-performance ratio storing and distributed processing capability is used to implement a data value-added zone for synchronizing data with the relational database in real time, and data collection. A low-cost file server is used to implement a data storage zone for data storage and auditing. Further, an information system is provided to be a data transmission tool between the relational database and the big data platform. A software method is introduced to monitor the flow change of the relational database and inform the change to the information system. The changed data stored in the information system is then written into the big data platform in sequence for data synchronization.",
+    "applicant": "玉山商業銀行股份有限公司",
+    "applicant_raw": "玉山商業銀行股份有限公司 臺北市松山區民生東路3段117號 (中華民國)",
+    "filing_date": "2018/05/14",
+    "application_number": "TW107116271",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "交易授權設定系統",
+    "abstract": "一種交易授權設定系統包含有一流程設定裝置、一角色設定裝置、一人員權限設定裝置以及一交易流程設定裝置。流程設定裝置用以設定至少一流程模組，角色設定裝置連接於流程設定裝置，用以設定至少一角色。人員權限設定裝置連接於角色設定裝置，用以設定至少一人員的權限，而交易流程設定裝置連接於人員權限設定裝置，以設定至少一交易流程。 A transaction authorization setting system includes a flow setting device, a character setting device, a personal authority setting device, and a transaction flow setting device. The flow setting device is used for setting at least one flow module, and the character setting device is connected to the flow setting device for setting at least one character. The personal authority setting device is connected to the character setting device for setting the authority of at least one person, and the transaction flow setting device is connected to the personal authority setting device to set at least one transaction flow.",
+    "applicant": "彰化商業銀行股份有限公司",
+    "applicant_raw": "彰化商業銀行股份有限公司 臺北市中山區中山北路2段57號 (中華民國)",
+    "filing_date": "2018/03/30",
+    "application_number": "TW107111368",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "基於區塊鏈的風險名單共享系統",
+    "abstract": "一種基於區塊鏈的風險名單共享系統，將金融機構、監理單位與金融情報中心兩者至少其中之一設置為區塊鏈網路的節點，當金融機構欲對該交易對象進行風險查詢時，金融機構於區塊鏈網路之節點針對該交易對象進行廣播，進而取得模糊比對結果，以進行後續對該機交易對象的審查及風險評估與分級作業，據此，金融機構不再需要耗費重覆成本自建或購置高風險名單資料庫及相關軟硬體電腦設備，亦可達到符合法令遵循與減少對風險名單更新疏漏的風險。 A shared watch list system using Blockchain Proof of Concept (PoC) technology is provided. The financial sectors and at least one of the financial supervisory and the financial intelligent center are joined into the blockchain network to become a Node. The blockchain network is used for every Node querying online if their customer is in the high risk lists of ML/TF. According to the filtering result, the Node in Blockchain can go back to their intra systems through the application programming interface (API) to conduct the following customer due diligence and other internal processes. Hence, the cost for the implement or buy the high risk list database and software/hardware equipment are reduced. Furthermore, the financial sector and other designated sectors can make sure the compliance of AML/CFT measures and the Financial Supervisory can audit from the trails and conduct an online inspection if necessary.",
+    "applicant": "李智婷",
+    "applicant_raw": "李智婷 臺北市文山區興隆路4段105巷19號11樓 (中華民國)",
+    "filing_date": "2018/10/18",
+    "application_number": "TW107136717",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "懸吊系統及其可撓控制臂",
+    "abstract": "一種懸吊系統包含一可撓控制臂及一減震器，該可撓控制臂具有一滑動端、一可撓段及一固定端，該滑動端可滑動地與一車架耦接，該可撓段位於該滑動端及該固定端之間，該固定端耦接一固定件，其中該可撓段可沿該可撓段之一表面的法線方向彎曲，而可取代減震器之環狀彈簧，以達成輕量化之目的。 A suspension system includes a flexible control arm and a shock absorber. The flexible control arm comprises a slide end coupled with a car frame, a flexible section and a fixing end coupled with a fixing member, the flexible section is located between the slide end and the fixing end, wherein the flexible section of the control arm could be bent along a normal direction of a surface of the flexible section, so that the control arm could be substituted for a ring spring to achieve the purpose of lightweight.",
+    "applicant": "財團法人金屬工業研究發展中心",
+    "applicant_raw": "財團法人金屬工業研究發展中心 高雄市楠梓區高楠公路1001號 (中華民國)",
+    "filing_date": "2017/07/27",
+    "application_number": "TW106125368",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "潤滑劑淋灑系統",
+    "abstract": "本揭露提出一種用以改善線材盤元之滑擦傷缺陷之方法，此方法包括：上鉤步驟、設定步驟、淋灑步驟與打包步驟。於上鉤步驟將軋延成形之線材盤元吊掛於吊鉤上，其中線材盤元係位於複數個噴嘴之下方。於設定步驟透過儀控面板來設定潤滑劑濃度、淋灑時間與打包壓力。於淋灑步驟開啟噴嘴來使具有潤滑劑濃度之潤滑劑以淋灑時間來淋灑於線材盤元上。打包步驟透過打包機以打包壓力來綑綁淋灑潤滑劑後之線材盤元。 A method for improving an abrasion defect of a wire rod is provided. The method includes: a hanging step, a setting step, a spraying step, and a packing step. In the hanging step, a wire rod after rolling molding is hanged on a hook. The wire rod is positioned under plural nozzles. In setting step, a lubricant concentration, a spraying time, and a packing pressure are set through a controlling panel. In the spraying step, the nozzles are opened with the spraying time to let a lubricant having the lubricant concentration to be sprayed on the wire rod. In the packing step, the wire rod sprayed with the lubricant is packed through a packing machine with the packing pressure.",
+    "applicant": "中國鋼鐵股份有限公司",
+    "applicant_raw": "中國鋼鐵股份有限公司 高雄市小港區中鋼路1號 (中華民國)",
+    "filing_date": "2017/07/17",
+    "application_number": "TW106123858",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於高傳導性閥之控制板",
+    "abstract": "本發明揭示一種高純度流體控制閥，其包含具有一流通通道以增強內部閥容積之流體掃掠之一可移動控制板。該閥屬於使用嵌套孔口脊來用小致動器移動達成高傳導性之噴座式(jet and seat type)。該流通控制板尤其用於諸如半導體製造中之氣體輸送之快速作用比例控制應用中。 A high purity fluid control valve includes a moveable control plate having a flow-through passage to enhance fluid sweep of the internal valve volume. The valve is of jet and seat type using nested orifice ridges to achieve high conductance with small actuator movement. The flow-through control plate is especially useful in fast acting proportional control applications such as gas delivery in semiconductor manufacturing.",
+    "applicant": "美商威士塔戴爾泰克有限責任公司",
+    "applicant_raw": "美商威士塔戴爾泰克有限責任公司 (美國)",
+    "filing_date": "2018/06/04",
+    "application_number": "TW107119187",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "具有穿隧接面紫外光發光二極體的製造",
+    "abstract": "一種製造一發光二極體(LED)之方法包含形成經結構化以發射紫外(UV)光並經安置於一第一n型半導體區域與一第一p型半導體區域之間之一主動區域。該方法亦包含形成一穿隧接面，其中該第一p型半導體區域經安置於該主動區域與該穿隧接面之間，且其中該穿隧接面經電耦合以將電荷載體通過該第一p型半導體區域注入至該主動區域中。亦形成一第二n型半導體區域，其中該穿隧接面經安置於該第二n型半導體區域與該第一p型半導體區域之間。 A method of fabricating a light emitting diode (LED) includes forming an active region structured to emit ultraviolet (UV) light and disposed between a first n-type semiconductor region and a first p-type semiconductor region. The method also includes forming a tunnel junction, where the first p-type semiconductor region is disposed between the active region and the tunnel junction, and where the tunnel junction is electrically coupled to inject charge carriers into the active region through the first p-type semiconductor region. A second n-type semiconductor region is also formed, where the tunnel junction is disposed between the second n-type semiconductor region and the first p-type semiconductor region.",
+    "applicant": "美商X開發有限責任公司",
+    "applicant_raw": "美商X開發有限責任公司 (美國)",
+    "filing_date": "2018/05/11",
+    "application_number": "TW107116202",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "控制材料及控制材料的製造方法",
+    "abstract": "本發明之課題在於提供：於球墨鑄鐵(ductile iron)之製造中進行石墨球狀化處理用的餵線(wire injection)法中，能控制鎂之反應，同時能輕量化之線(wire)。 本發明之解決手段為：於進行石墨球狀化處理用的餵線法中，與鎂合金一起填充於線內部者，特徵為其係包含70～75重量%的SiO2之多孔質的火山性矽酸鹽礦物。 The invention has for its object to provide a control material that is used with a wire injection process for graphite spheroidization in ductile cast iron production for the purpose of gaining control of the reaction of magnesium and achieving weight reductions. In the wire injection process for graphite spheroidization, the control material characterized by comprising a porous, volcanic silicate mineral containing 70 to 75% by weight of SiO 2 is filled together with a magnesium alloy in the wire.",
+    "applicant": "日商石川硅石工業股份有限公司",
+    "applicant_raw": "日商石川硅石工業股份有限公司 (日本)",
+    "filing_date": "2017/12/26",
+    "application_number": "TW106145717",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於多維時序資料的互動性視覺化分析學之系統與方法",
+    "abstract": "多維時序資料可提供對型式、趨勢及相關性的洞察。傳統二維圖表廣泛用以支援領域分析師的工作，但限於直觀呈現大規模複雜資料且不允許進一步探索以取得洞察。提供支援多維時序資料的互動性分析的視覺化分析學系統及方法，併有新穎視覺化方法的觀念。系統藉由基於由色彩、運動及聲音增強的三維幾何學使領域資料視覺化來擴展映射技術的能力。系統允許大規模資料的緊湊宇宙概觀，及供進一步探索的深度探討。藉由可定製視覺化，其可適應於不同資料模型且應用於多個領域。系統幫助分析師直接與大規模資料互動，洞察資料，且制定更好決策。 Multi-dimensional temporal data can provide insight into patterns, trends and correlations. Traditional 2D-charts are widely used to support domain analysts’ work, but are limited to present large-scale complicated data intuitively and do not allow further exploration to gain insight. A visual analytics system and method which supports interactive analysis of multi-dimensional temporal data, incorporating the idea of a novel visualization method is provided. The system extends the ability of mapping techniques by visualizing domain data based on a 3D geometry enhanced by color, motion and sound. It allows a compact universal overview of large-scale data and drilling down for further exploration. By customizable visualization, it can be adapted to different data models and applied to multiple domains. It helps analysts interact directly with large-scale data, gain insight into the data, and make better decisions.",
+    "applicant": "美商美國道富股份有限公司",
+    "applicant_raw": "美商美國道富股份有限公司 (美國)",
+    "filing_date": "2014/09/05",
+    "application_number": "TW107117196",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "雙平台基金轉換方法",
+    "abstract": "一種雙平台基金轉換方法，該方法係由一基金投資與贖回系統所執行，該雙平台包括一成長基金平台及一配息基金平台，該方法包括：接收一保戶的投資設定及一保險商品的約定資訊，該投資設定包括一投資分配、一停利點及一預定轉換金額，該約定資訊包括一預定配息金額及一投資比例規定；根據該投資分配及該投資比例規定將該保戶的一保費投入該成長基金平台或該配息基金平台，該配息基金平台包括一配息基金群組，該成長基金平台包括低風險之穩健型基金及高風險之積極型基金群組；判斷該配息基金平台的一配息金額是否大於該預定配息金額；當該配息金額小於該預定配息金額時，將該配息金額轉投入該成長基金平台的該穩健型基金；判斷該積極型基金群組的報酬率是否達到該停利點；當該積極型基金群組的報酬率達到該停利點時，贖回該積極型基金群組並將一贖回金額轉投入該穩健型基金；判斷該穩健型基金的一保價是否大於該預定轉換金額；及當該保價大於該預定轉換金額時，將該預定轉換金額從該穩健型基金轉投入該積極型基金群組。 A method of transformation between funds in two platforms is provided, wherein the platforms comprises a growing fund platform and a payout fund platform. The method is operated by a fund investment and redemption system. The steps of the method comprises receiving an investment setting from a user, wherein the investment setting includes an investment distribution, a determined payout amount, a locking point in gains and a determined transformation amount; putting a premium of the user into the growing fund or the payout fund according to the investment distribution, wherein the payout fund platform comprises a group of payout funds, and the growing fund platform comprises a group of stable funds and a group of aggressive funds; determining whether a payout amount of the payout fund platform is greater than the determined payout amount; putting the payout amount into the group of stable funds and the group of aggressive funds if the payout amount is smaller than the determined payout amount; determining whether a return rate of the group of aggressive funds reaches to locking point; purchasing back the group of aggressive funds and putting a redemption amount into the group of stable funds if the return rate reaches to locking point; determining whether a policy value of the group of stable funds is greater than the determined transformation amount; and putting the determined transformation amount from the group of stable funds into the group of aggressive funds if the policy value of the group of stable funds is greater than the determined transformation amount.",
+    "applicant": "國泰人壽保險股份有限公司",
+    "applicant_raw": "國泰人壽保險股份有限公司 臺北市大安區仁愛路4段296號 (中華民國)",
+    "filing_date": "2016/07/15",
+    "application_number": "TW105122502",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "中繼裝置、終端裝置及通訊方法",
+    "abstract": "提供一種使中繼節點所相關之資訊處理效率化的機制。一種中繼裝置，係具備：記憶部，係記憶位址資訊的第1轉換表；和控制部，係將在連接目標之上游節點與旗下之下游節點之間所被收送訊的封包之送訊目的地資訊或送訊來源資訊，基於前記記憶部中所記憶之前記第1轉換表而加以轉換然後予以中繼。 To provide a mechanism for improving the efficiency of information processing pertaining to a relay node. A relay device equipped with: a storage unit that stores a first conversion table for address information; and a control unit that, on the basis of the first conversion table stored in the storage unit, converts and then relays transmission destination information or transmission origin information for packets transmitted/received between an upstream node, which is a connection destination, and a subordinate downstream node.",
+    "applicant": "新力股份有限公司",
+    "applicant_raw": "新力股份有限公司 (日本)",
+    "filing_date": "2017/03/17",
+    "application_number": "TW106109017",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "中繼裝置、終端裝置、通訊控制裝置及方法",
+    "abstract": "提供一種考慮到移動的中繼節點之相關機制。一種中繼裝置，係具備：中繼部，係在連接目標之第1裝置與旗下的一個以上之第2裝置之間，中繼無線訊號；和控制部，係對一個以上之前記第2裝置之每一者，指派前綴部分之至少一部分為共通的網路層IP位址。 To provide a configuration relating to a relay node that takes movement into account. A relay device is provided with: a relay unit which relays a radio signal between a first device, which is a connection destination, and one or more subordinate second devices; and a control unit which assigns to each of the one or more second devices a network layer IP address of which at least a portion of a prefix part is shared.",
+    "applicant": "新力股份有限公司",
+    "applicant_raw": "新力股份有限公司 (日本)",
+    "filing_date": "2017/01/19",
+    "application_number": "TW106101901",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "電子材料用銅合金",
+    "abstract": "本發明提供一種應用於電子材料之具有合適的0.2%降伏强度和導電率、在沖壓加工時提高尺寸穩定性的電子材料用銅合金。本發明的電子材料用銅合金，含有0.5~3.0質量%的Co、0.1~1.0質量%的Si、餘量由Cu和不可避免的雜質構成，軋製平行方向的0.2%降伏强度為500MPa以上，導電率為60%IACS以上，軋製平行斷面中的平均結晶粒徑為10μm以下，表面上之來自{200}結晶面的X射線衍射積分强度I{200}、來自{220}結晶面的X射線衍射積分强度I{220}、來自{311}結晶面的X射線衍射積分强度I{311}，滿足(I{220}+I{311})/I{200}5.0的關係。 The present invention provides a copper alloy for electronic material applied to the electronic material and having suitable 0.2% yielding strength and conductivity and capable of enhancing dimensional stability during stamping processing. The copper foil for electronic material contains 0.5~3.0 mass% of Co and 0.1~1.0 mass% of Si, with the remainder constituted by Cu and inevitable impurities, whose 0.2% yielding strength parallel to the rolling direction is above 500 MPa, conductivity is above 60% IACS, the average crystalline particle diameter on the rolling parallel cross section is below 10 <mu>m, while the X-ray diffraction integral strength I {200} coming from {200} crystalline surface, the X-ray diffraction integral strength I {220} coming from {220} crystalline surface, and the X-ray diffraction integral strength I {311} coming from {311} crystalline surface on the surface satisfy the relationship of (I{220}+I{311})/I{200} ≥ 5.0.",
+    "applicant": "ＪＸ金屬股份有限公司",
+    "applicant_raw": "ＪＸ金屬股份有限公司 (日本)",
+    "filing_date": "2017/03/31",
+    "application_number": "TW106111225",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "內毒素奈米微粒：親水性奈米金控制內毒素聚集結構形成奈米微粒進而調節免疫反應",
+    "abstract": "本發明揭露一種內毒素奈米微粒，係用於增強第一型輔助性T細胞誘導之免疫反應。該內毒素奈米微粒包含：(a)脂多醣分子，係聚集為一具有包圍一內部空間之壁的微粒；及(b)親水性金奈米點，係位在該微粒之壁中。本發明亦揭露在脂多醣聚合或聚集時抑制立方體及/或六方體形成的方法，以及製備一脂多醣佐劑的方法。本發明亦揭露組成物，包含一內毒素聚集體或一內毒素奈米微粒，以及一選擇性地免疫性產生抗原。 An endotoxin nanovesicle for enhancing type 1 T helper cell-induced immunological responses is disclosed. The endotoxin nanovesicle comprises: (a) lipopolysaccharide molecules, assembled into a vesicle with a wall surrounding an inner space; and (b) hydrophilic gold nanodots, localized in the wall of the vesicle. Methods of suppressing formation of cubosomes and/or hexosomes in lipopolysaccharide aggregation or assembly, and methods of preparing a lipopolysaccharide adjuvant are also disclosed. Also disclosed are compositions comprising an endotoxin aggregate or an endotoxin nanovesicle and optionally an immunogenic antigen.",
+    "applicant": "財團法人國家衛生研究院",
+    "applicant_raw": "財團法人國家衛生研究院 苗栗縣竹南鎮科研路35號 (中華民國)",
+    "filing_date": "2016/03/03",
+    "application_number": "TW105106483",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "閥之控制板",
+    "abstract": "一種用於實現一成比例控制閥中之極佳關斷之控制板，其包括一可移動碟形元件，該元件具有當閉合時一般垂直於閥對稱軸之一平坦表面，及平移朝向或遠離由一窄唇或孔口隆起線環繞之一孔口。藉由選擇性地併入至比包括孔口隆起線之材料更軟的控制板材料內來達成閥關斷狀況中之增強的密封性。 A control plate for effecting superior shut-off in a proportional control valve comprises a moveable disk-shaped element that has a flat surface, generally perpendicular to the valve axis of symmetry when closed, and translates toward or away from an orifice surrounded by a narrow lip or orifice ridge. Enhanced leak tightness in the valve shut-off condition is achieved by selectively incorporating into the control plate materials that are softer than the material comprising the orifice ridge.",
+    "applicant": "威士塔戴爾泰克有限責任公司",
+    "applicant_raw": "威士塔戴爾泰克有限責任公司 (美國)",
+    "filing_date": "2016/07/07",
+    "application_number": "TW105121627",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "盤元的製程方法",
+    "abstract": "一種盤元的製程方法，包含一散置步驟、一輸送步驟，及一收集步驟。在該散置步驟中，將完軋的多數長條狀鋼料送至一盤捲機，並控制該盤捲機使每一鋼料盤繞出多個直徑大小呈週期性交替的線圈部。在該輸送步驟中，以一冷卻輸送帶將散置於該冷卻輸送帶上的該等線圈部沿一製程方向移動。在該收集步驟中，以一再成型筒承接由該冷卻輸送帶輸送而來的該等線圈部而成為一盤元。藉由控制該盤捲機使該等線圈部散置於該冷卻輸送帶上時，其直徑大小是呈週期性交替，故在落入該再成型筒內時不易傾斜並能緊密堆疊以避免自體錯位摩擦產生。 A process method of rod wire comprises an interspersing step, a conveying step, and a collecting step. In the interspersing step, a plurality of long strip steel material, which is completely rolled, is delivered to a coiling machine, and the coiling machine is controlled to enable each steel material to be winded into a plurality of coil portions in which the diameter size is periodically alternated. In the conveying step, the coil portions scattered on the cooled conveying belt are moved by a cooled conveying belt along a process direction. In the collecting step, the coil portions conveyed by the cooled conveying belt are received by a re-shaped drum to form a rod wire. By controlling the coiling machine, when the coil portions scatter on the cooled conveying belt, the diameter sizes thereof are periodically alternated. Therefore, these may not easily to incline while falling into the re-shaped drum and these can tightly stack to avoid generating self-dislocation friction.",
+    "applicant": "中國鋼鐵股份有限公司",
+    "applicant_raw": "中國鋼鐵股份有限公司 高雄市小港區中鋼路1號 (中華民國) (TW)",
+    "filing_date": "2015/05/18",
+    "application_number": "TW104115772",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "向用戶提供金融數據的方法和裝置",
+    "abstract": "本發明提出一種向用戶提供金融數據的方法和裝置。該方法主要包括：通過資料庫儲存用戶上傳的個人資訊，伺服器從資料庫獲取儲存的個人資訊，並以伺服器內部的審核模組將各用戶的個人資訊分項進行評分及分類，審核模組並會針對分類結果計算各用戶的相對交易條件，伺服器再透過用戶的使用者終端顯示這些分類結果及交易條件。相較於先前網路金融交易用戶無法判別其交易對象，對於網路金融交易缺乏信任感，本發明可以方便線上查詢其他用戶所屬的分類及其交易條件，提昇用戶對於交易平台的信任感，也節省用戶驗證其交易對象的時間。 The present invention provides a method and a device for providing financial data to a user. The method mainly includes: storing personal data uploaded by users into a database; obtaining the personal data from the database stored by a server; scoring the personal data individually for each user and sorting scores, and calculating relative transaction conditions of the users according to sorting results by an examination module in the server; and displaying the sorting results and the transaction conditions via user terminals of the users by the server. As compared to the conventional online transactions where the user cannot determine the credit statuses of the transaction counterparts and is lack of sense of trust to the online financial transactions, the present invention allows the user to inquire online categories of and transaction conditions of other users to improve the sense of trust to the transaction platform and to save the time taken by the users to authenticate their transaction counterparts.",
+    "applicant": "喬美國際網路股份有限公司",
+    "applicant_raw": "喬美國際網路股份有限公司 臺北市南港區忠孝東路6段21號12樓之7 (中華民國) (TW)",
+    "filing_date": "2014/12/11",
+    "application_number": "TW103143206",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於流體及氣體之高傳導性閥",
+    "abstract": "本發明揭示一種用於流體輸送系統之高傳導性(high conductance；高流導)閥，其由一平坦非圓形孔脊組成，具有一平面控制表面之一控制板最接近地相鄰於該平坦非圓形孔脊定位以調整閥有效開口面積且藉此調整該閥之傳導性。該非圓形孔脊周邊之長度實質上大於一類似大小圓孔之圓周且因此其所實現之有效開口面積儘管具有一類似覆蓋區，亦實質上較大。 A high conductance valve for use in fluid delivery systems is comprised of a flat non-circular orifice ridge adjacent to which a control plate having a planar control surface is proximally positioned to adjust the valve effective opening area and thereby the conductance of the valve. The length of the non-circular orifice ridge periphery is substantially greater than the circumference of a similarly sized circular orifice and therefore the realized effective opening area is also substantially greater despite having a similar footprint.",
+    "applicant": "威士塔戴爾泰克有限責任公司",
+    "applicant_raw": "威士塔戴爾泰克有限責任公司 (美國)",
+    "filing_date": "2015/06/12",
+    "application_number": "TW104119193",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "金融商品交易方法與系統",
+    "abstract": "一種金融商品交易方法，包含：(a)使用者執行行動裝置的金融商品交易應用程式而設定金融商品通知條件與對應的預計執行金融商品交易資料，並發送至金融商品資訊伺服器；(b)金融商品資訊伺服器定期檢測該金融商品通知條件是否成立，且在成立時發送通知交易訊息至行動裝置；(c)使用者開啟通知交易訊息而觸發行動裝置啟動金融商品交易應用程式；及(d)金融商品交易應用程式的通知交易模組將預計執行金融商品交易資料載入交易畫面供使用者下單完成交易。本方法能讓使用者在接收到通知交易訊息後快速且方便地完成交易。本發明還提供金融商品交易系統。 A financial commodity transaction method comprises: (a) a user executing a financial commodity transaction application program in a mobile device to set up and transmit a financial commodity notification condition and corresponding financial commodity transaction data to be executed to a financial commodity information server; (b) the financial commodity information server periodically monitoring if the financial commodity notification condition is reached and issuing a transaction notifying message to the mobile device once it has been reached; (c) a user opening the transaction notifying message and activating the mobile device to start the financial commodity transaction application program; and (d) the financial commodity transaction application program notifying a transaction module to load the financial commodity transaction data to be executed into the transaction screen to allow the user to place a order submission and complete the transaction. The method of the present invention allows a user to efficiently and conveniently completely a transaction upon receiving a transaction notifying message. The present invention also provides a financial commodity transaction system.",
+    "applicant": "富邦綜合證券股份有限公司",
+    "applicant_raw": "富邦綜合證券股份有限公司 臺北市松山區敦化南路1段108號地下1樓、3、4、5、6樓 (中華民國) (TW)",
+    "filing_date": "2013/11/12",
+    "application_number": "TW102141066",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "用於多維時序資料的互動性視覺化分析學之系統與方法",
+    "abstract": "多維時序資料可提供對型式、趨勢及相關性的洞察。傳統二維圖表廣泛用以支援領域分析師的工作，但限於直觀呈現大規模複雜資料且不允許進一步探索以取得洞察。提供支援多維時序資料的互動性分析的視覺化分析學系統及方法，併有新穎視覺化方法的觀念。系統藉由基於由色彩、運動及聲音增強的三維幾何學使領域資料視覺化來擴展映射技術的能力。系統允許大規模資料的緊湊宇宙概觀，及供進一步探索的深度探討。藉由可定製視覺化，其可適應於不同資料模型且應用於多個領域。系統幫助分析師直接與大規模資料互動，洞察資料，且制定更好決策。 Multi-dimensional temporal data can provide insight into patterns, trends and correlations. Traditional 2D-charts are widely used to support domain analysts’work, but are limited to present large-scale complicated data intuitively and do not allow further exploration to gain insight. A visual analytics system and method which supports interactive analysis of multi-dimensional temporal data, incorporating the idea of a novel visualization method is provided. The system extends the ability of mapping techniques by visualizing domain data based on a 3D geometry enhanced by color, motion and sound. It allows a compact universal overview of large-scale data and drilling down for further exploration. By customizable visualization, it can be adapted to different data models and applied to multiple domains. It helps analysts interact directly with large-scale data, gain insight into the data, and make better decisions.",
+    "applicant": "美國道富股份有限公司",
+    "applicant_raw": "美國道富股份有限公司 (美國)",
+    "filing_date": "2014/09/05",
+    "application_number": "TW103130679",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "鋁合金表面微粗化之方法及其使用之化學反應劑組成物",
+    "abstract": "本發明係有關於一種鋁合金表面微粗化之方法及其使用之化學反應劑組成物，主要目的是在鋁合金表面形成適合黏著之微粗化表面。本發明包括有下列步驟：A.脫脂與水洗程序；B.第一次反應與水洗程序；C.第二次反應與水洗程序；D.第三次反應與水洗程序；E.乾燥程序。步驟A的脫脂與水洗程序係在各步驟之反應前事先清潔鋁合金表面，步驟B的第一次反應則在鋁合金表面形成多數的第一微孔，而步驟C的第二次反應係用以清除執行步驟A及步驟B之後殘留於該鋁合金表面之生成物，步驟D的第三次反應則在該鋁合金表面及第一微孔內形成多數的第二微孔。藉此，達成使鋁合金表面微粗化之目的。 The present invention relates to a micro-roughening method of an aluminum alloy surface and the chemical reaction agent composition applied in the method, of which the primary object is to form a micro-roughened surface suitable for adhesive bonding. The present invention comprises the following steps: (A) a degreasing and water washing process; (B) a first reaction and water washing process; (C) a second reaction and water washing process; (D) a third reaction and water washing process; and (E) a drying process. The surface of the aluminum alloy is cleaned in the degreasing and water washing process of step (A) before the reactions of the subsequent steps. The first reaction of step (B) forms a plurality of first micro pores on the surface of the aluminum alloy. The second reaction of step (C) removes the reaction products remaining on the surface of the aluminum alloy after steps (A) and (B). The third reaction of step (D) forms a plurality of second micro pores on the surface of the aluminum alloy and in the first micro pores. As a result, the purpose of micro-roughening the aluminum alloy surface can be achieved.",
+    "applicant": "孫玉芝",
+    "applicant_raw": "孫玉芝 臺南市東區東寧路154號之7　3樓 (中華民國)",
+    "filing_date": "2012/03/28",
+    "application_number": "TW101110889",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "金融商品與工具聚單效應之系統",
+    "abstract": "金融聚單的網站架構包含一預購金融商品單元，投資人輸入一預購金融商品至一位在金融服務供方中的指定金融機構；其他投資人可經由所屬的投資人電腦加入以形成聚單；一金融服務供方資料庫，記錄所有參與之金融商品；一金融機構供方競價單元，接收指定之金融機構對於該預購金融商品提出依據投資金額的對應價格及服務；一專家中心，由平台聘請或徵求投資者中之專家或外聘專家評估後將意見公佈在網上；投資人可在線上選擇、聚單；並主動發至投資人接收網址或手機中以降底風險；以及一決策中心接收來自該預購金融商品單元、金融服務供方資料庫、供方競價單元、以及該專家中心的訊息，以令投資者作決策。聚合眾多投資人的金融需求，以要求金融機構提供隨著量增而增加服務或增加客戶收益或降低投資風險或減少收費的方案以令投資人選購。 A financial commodity and instrument accumulating system has a pre-purchase unit by that an investor can input a pre-purchase financial commodity for calling other investors to join this action so as to form a large amount for buying the commodity; a financial supplier database recording all the financial commodities related; a financial supplier bidding unit for receiving the bidding conditions from the financial instruments, which records the prices and services about the pre-purchase commodity; an expert center providing specialized suggestions to the pre-purchase commodity to the investors so that the investors can make choose from the suggestions; the experts can be from the investors or be invited by the website managers; and a decision center receiving the messages from the pre-purchase unit, the financial supplier database, the financial bidding unit, and the expert center so that the investors make decisions in this decision center. In the present invention, the financial instruments provide the conditions from bidding including the properties of increasing services and profits with the amount of pre-purchase commodity, and reducing the investing risk and fees with the amount of the pre-purchase commodity.",
+    "applicant": "楊裴生；楊善合；楊東餘",
+    "applicant_raw": "楊裴生 臺北市中正區重慶南路1段57號12樓之6 (中華民國)；楊善合 臺北市中正區重慶南路1段57號12樓之6 (中華民國)；楊東餘 臺北市中正區重慶南路1段57號12樓之6 (中華民國)",
+    "filing_date": "2011/08/04",
+    "application_number": "TW100127755",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "電力裝置用之焊料合金與高電流密度之焊接接頭",
+    "abstract": "本發明係關於一種由Sn-Ag-Bi-In系合金所形成之用於電力裝置等中、不會產生電遷移而可耐受高電流密度之焊接接頭。該焊接接頭係由本質上由2~4質量%之Ag、2~4質量%之Bi、2~5質量%之In、其餘部分為Sn所構成之焊料合金所形成。該焊料合金亦可進而含有Ni、Co及Fe之一種以上。 A soldered joint capable of withstanding a high current density without the occurrence of electromigration such that it can be used in a power device and the like is formed from an Sn-Ag-Bi-In alloy. This soldered joint is formed from a solder alloy that essentially comprises 2 to 4 mass% of Ag, 2 to 4 mass% of Bi, 2 to 5 mass% of In, and Sn as the balance. This solder alloy can also contain one or more selected from Ni, Co, and Fe.",
+    "applicant": "千住金屬工業股份有限公司",
+    "applicant_raw": "千住金屬工業股份有限公司 (日本)",
+    "filing_date": "2012/02/29",
+    "application_number": "TW101106527",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "形成及加工合金錠之系統及方法",
+    "abstract": "本發明揭示一種製造、加工及熱加工合金錠之製程及方法。形成包括一內錠芯及冶金黏合於該內錠芯之一外層的一合金錠。該等製程及方法之特徵為降低熱加工期間該合金錠表面破裂之發生率。 Processes and methods related to producing, processing, and hot working alloy ingots are disclosed. An alloy ingot is formed including an inner ingot core and an outer layer metallurgically bonded to the inner ingot core. The processes and methods are characterized by a reduction in the incidence of surface cracking of the alloy ingot during hot working.",
+    "applicant": "ＡＴＩ產物公司",
+    "applicant_raw": "ＡＴＩ產物公司 (美國)",
+    "filing_date": "2011/02/01",
+    "application_number": "TW100104022",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "三維地圖之立體建物結合外嵌之動靜態資料呈現方法及系統",
+    "abstract": "本發明揭示一種三維地圖之立體建物結合外嵌之動靜態資料呈現方法，包含：建立地形服務，以形成地形資料；建立網路服務，以發佈該地形服務；建立空間圖層服務、三維地圖模型服務及連結之動靜態資料；建立包含該地形服務之專案資料庫，連結空間圖層服務、三維地圖模型服務及連結之動靜態資料；以及建立客戶端服務，用以透過網路傳輸介面讀取該專案資料庫。 The present invention discloses a method for presenting three-dimensional buildings combined with snap-in dynamic and static data in a three-dimensional map, including: establishing a terrain service to form terrain data; creating a network service to publish the terrain service; setting up a spatial layer service, three-dimensional map model service and linked dynamic and static data; building a project database that contains the terrain service for linking the spatial layer service, three-dimensional map model service and linked dynamic and static data; and establishing a client end service for reading the project database through the network transmission interface.",
+    "applicant": "九鼎科技股份有限公司",
+    "applicant_raw": "九鼎科技股份有限公司 臺北市中正區思源街18號5樓B棟504室 (中華民國) (TW)",
+    "filing_date": "2009/05/08",
+    "application_number": "TW098115322",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "一種併發數據處理方法、裝置及一種電子記帳系統",
+    "abstract": "本發明公開了一種併發資料處理方法及裝置,解決併發處理過程中,多個請求在同一時間內佔用同一資源的問題。所述方法包括:將處理時間劃分為多個時間片;將併發請求分配到不同的時間片上;循環處理每個時間片上的請求。本發明將時間片的概念應用於網路請求的處理,不需要像傳統方式一樣逐個的處理請求,而是面向時間片進行處理,從而解決了在同一時間佔用同一資源的問題,提高了處理效率。而且,在處理同一時間片上的請求時,將同類請求進行合併處理,減少了系統的處理次數,從而減少了對同一資源的頻繁加鎖、解鎖次數,同時降低了該資源訪問的佇列等待時間。 The present invention discloses a concurrent data processing method and device, capable of solving the problem in that multiple requests occupy the same resource at the same time during a concurrent process. The method of the present invention comprises: dividing a processing time into a plurality of time slices; distributing concurrent requests into different time slices; and circularly processing the requests at each time slice. The present invention adopts the concept of time slice for being applied in processing web requests without processing the requests one by one as traditionally implemented. The present invention processes the requests according to the time slices, so as to solve the problem in that the same resource is occupied at the same, thereby increasing processing efficiency. Further, while processing the requests at the same time slice, the present invention combines the same kind of requests for being processed, so as to reduce the processing time of the system, reduce the number of frequently locking/unlocking the same resource, and reduce the queue waiting time of resource access as well.",
+    "applicant": "阿里巴巴集團控股有限公司",
+    "applicant_raw": "阿里巴巴集團控股有限公司 (開曼群島)",
+    "filing_date": "2009/02/10",
+    "application_number": "TW098104231",
+    "search_keyword": "金控"
+  },
+  {
+    "title": "一種緩衝記帳方法及裝置",
+    "abstract": "本發明公開了一種緩衝記帳方法及裝置,以解決現有的緩衝記帳機制不能滿足用戶對帳需求、在下一個會計日才可以看到到帳資金的問題。所述方法包括:對高併發帳戶,記錄每一個請求事件,並產生緩衝記錄;提取緩衝記錄,並對應高併發帳戶進行記帳處理,所述記帳處理包括記錄記帳資訊和更新帳戶的操作。本發明可以保證帳務明細與帳戶餘額同步更新,滿足用戶的對帳需求。而且,帳務資金在較短的時間範圍內可查詢並可用,該時間可以根據帳戶的併發量設置。 The present invention discloses a buffered bookkeeping method and device capable of solving the problem in that an existing buffered bookkeeping mechanism does not satisfy a user's account-checking need of seeing a revenue fund until the next accounting date. The method of the present invention comprises: with regard to an account having high-volume concurrent transactions, recording each request event and generating a buffer record; fetching the buffer record and performing a bookkeeping process to the corresponding account having high-volume concurrent transactions, wherein the bookkeeping process comprises operations of recording bookkeeping information and updating the account. The present invention can assure the transaction details and the account balance to be updated synchronously, so as to satisfy the user's account-checking need. Further, the transaction funds in the account are made available for inquiries and become accessible after only a short period of time upon the occurrence of the transaction, wherein the time is configurable according to the level of concurrent transactions of the account.",
+    "applicant": "阿里巴巴集團控股有限公司",
+    "applicant_raw": "阿里巴巴集團控股有限公司 (開曼群島)",
+    "filing_date": "2009/02/10",
+    "application_number": "TW098104229",
+    "search_keyword": "金控"
+  }
+]

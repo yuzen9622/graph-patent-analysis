@@ -12,6 +12,7 @@ import type {
   GraphMethodology,
 } from "@/types/graph";
 import { computeGodNodes, computeSurprisingConnections } from "@/lib/graph-analysis";
+import { normalizeApplicantName } from "@/lib/excel-parser";
 import {
   applicantSize,
   conceptSize,
@@ -90,6 +91,11 @@ export function buildGraph(
       type: "applicant",
       label: name,
       patent_count: 0,
+      // PRD v2 P0 §3.4: the merge key travels on the node so that reloading a
+      // saved graph can still tell which labels denote the same organisation.
+      // It never replaces `label` / the node id — the displayed name must stay
+      // byte-identical to v1.2 (§7-5).
+      applicant_key: normalizeApplicantName(name),
       color,
       size: applicantSize(0),
     };
@@ -135,7 +141,14 @@ export function buildGraph(
   }
 
   for (const patent of patents) {
-    const applicantNames = splitApplicants(patent.applicant);
+    // Prefer the deduped applicants[] union when present; it survives
+    // cross-row merges intact (§4.6). It isn't guaranteed to be clean by
+    // every caller (e.g. `{ dedupe: false }` snapshot parsing), so dedupe
+    // it here rather than assuming the source already did.
+    const applicantNames =
+      patent.applicants && patent.applicants.length > 0
+        ? Array.from(new Set(patent.applicants.map((s) => s.trim()).filter(Boolean)))
+        : splitApplicants(patent.applicant);
 
     // Determine patent color from first applicant
     const accentApplicant = applicantNames[0] ?? "未知申請人";
@@ -159,6 +172,15 @@ export function buildGraph(
       year,
       abstract: patent.abstract,
       application_number: patent.application_number,
+      // PRD v2 P0 §6.1: carried on the node, not only on the transient
+      // PatentRow, so IPC / provenance filters survive a reload.  Absent values
+      // stay `undefined` — they must never surface as 0 or an empty label.
+      ipc5: patent.ipc5,
+      ipc_primary: patent.ipc_primary,
+      ipc_depth: patent.ipc_depth,
+      source_files: patent.source_files,
+      cited_by_count: patent.cited_by_count,
+      case_status: patent.case_status,
       color: patentColor,
       size: PATENT_NODE_SIZE,
     };
@@ -280,7 +302,7 @@ export function buildGraph(
   };
 
   return {
-    schema_version: 2,
+    schema_version: 3,
     nodes: allNodes,
     edges,
     communities: communitiesList,
