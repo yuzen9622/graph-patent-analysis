@@ -6,22 +6,45 @@ import {
   FileSpreadsheet,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PatentRow } from "@/types/graph";
-import type { FieldMapping } from "@/lib/excel-parser";
+import type {
+  DataQualityWarnings,
+  FieldMapping,
+  ParseResult,
+} from "@/lib/excel-parser";
+import {
+  DEFAULT_LIMITS,
+  buildFileSummaries,
+  summarizeWarnings,
+  validateUploadFiles,
+  type FileSummary,
+} from "@/lib/analyze-limits";
 
 type UploadState = "idle" | "dragging" | "parsing" | "success" | "error";
 
+/** Everything the page needs after a multi-file parse (PRD v2 P0 §5.3). */
+export interface ParsedUpload {
+  /** De-duplicated rows across every file. */
+  patents: PatentRow[];
+  /** Per-file parse results, in upload order. */
+  results: ParseResult[];
+  /** Summed valid rows before the cross-file merge. */
+  originalCount: number;
+  /** Rows left after the merge — the sample-size default (§5.2). */
+  dedupedCount: number;
+  warnings: DataQualityWarnings;
+  citations: Array<{ from: string; to: string }>;
+  filenames: string[];
+  /** The original files, so the caller can archive them and keep only the URLs. */
+  files: File[];
+}
+
 interface UploadZoneProps {
-  onParsed: (
-    patents: PatentRow[],
-    mappings: FieldMapping[],
-    filename: string,
-    /** The original file, so the caller can archive it and keep only its URL. */
-    file: File,
-  ) => void;
+  onParsed: (upload: ParsedUpload) => void;
   onError: (msg: string) => void;
 }
 
@@ -61,39 +84,67 @@ function getZoneClass(state: UploadState) {
 
 export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
   const [state, setState] = useState<UploadState>("idle");
-  const [filename, setFilename] = useState<string | null>(null);
+  const [filenames, setFilenames] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  /** Field mappings of the first file — the per-field checklist stays single-file. */
   const [mappings, setMappings] = useState<FieldMapping[] | null>(null);
-  const [totalRows, setTotalRows] = useState<number | null>(null);
+  const [summaries, setSummaries] = useState<FileSummary[] | null>(null);
+  const [counts, setCounts] = useState<{ original: number; deduped: number } | null>(
+    null,
+  );
+  const [warnings, setWarnings] = useState<DataQualityWarnings | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropCounter = useRef(0);
 
   // ── File processing ──────────────────────────────────────────────────────
 
-  const processFile = useCallback(
-    async (file: File) => {
-      if (!file.name.endsWith(".xlsx")) {
-        const msg = `不支援的格式「${file.name}」，請上傳 .xlsx 檔案。`;
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      // Same ceilings the server enforces (§5.2), applied here purely so the
+      // user hears about it before the bytes travel. `DEFAULT_LIMITS` rather
+      // than readLimits(): server-side overrides are not visible in a browser
+      // bundle, and the server stays the authority either way.
+      const failure = validateUploadFiles(
+        files.map((f) => ({ name: f.name, size: f.size })),
+        DEFAULT_LIMITS,
+      );
+      if (failure) {
         setState("error");
-        setErrorMsg(msg);
+        setErrorMsg(failure.error);
         setMappings(null);
-        onError(msg);
+        setSummaries(null);
+        setCounts(null);
+        setWarnings(null);
+        onError(failure.error);
         return;
       }
 
       setState("parsing");
       setErrorMsg(null);
       setMappings(null);
-      setFilename(file.name);
+      setSummaries(null);
+      setCounts(null);
+      setWarnings(null);
+      setFilenames(files.map((f) => f.name));
 
       try {
-        const buffer = await file.arrayBuffer();
-        const { parseExcel } = await import("@/lib/excel-parser");
-        const result = parseExcel(buffer, file.name);
+        const buffers = await Promise.all(
+          files.map(async (file) => ({
+            buffer: await file.arrayBuffer(),
+            filename: file.name,
+          })),
+        );
+        const { parseExcelFiles } = await import("@/lib/excel-parser");
+        const result = parseExcelFiles(buffers);
 
-        setMappings(result.field_mappings);
-        setTotalRows(result.total_rows);
+        setMappings(result.results[0]?.field_mappings ?? null);
+        setSummaries(buildFileSummaries(result.results));
+        setCounts({
+          original: result.original_count,
+          deduped: result.deduped_count,
+        });
+        setWarnings(result.warnings);
 
         if (result.errors.length > 0 && result.patents.length === 0) {
           const msg = result.errors[0];
@@ -104,7 +155,16 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         }
 
         setState("success");
-        onParsed(result.patents, result.field_mappings, result.filename, file);
+        onParsed({
+          patents: result.patents,
+          results: result.results,
+          originalCount: result.original_count,
+          dedupedCount: result.deduped_count,
+          warnings: result.warnings,
+          citations: result.citations,
+          filenames: files.map((f) => f.name),
+          files,
+        });
       } catch (err) {
         const msg =
           err instanceof Error
@@ -113,6 +173,9 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         setState("error");
         setErrorMsg(msg);
         setMappings(null);
+        setSummaries(null);
+        setCounts(null);
+        setWarnings(null);
         onError(msg);
       }
     },
@@ -124,10 +187,12 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
   const handleReset = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setState("idle");
-    setFilename(null);
+    setFilenames([]);
     setErrorMsg(null);
     setMappings(null);
-    setTotalRows(null);
+    setSummaries(null);
+    setCounts(null);
+    setWarnings(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
@@ -163,19 +228,20 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
       e.stopPropagation();
       dropCounter.current = 0;
       if (state === "parsing") return;
-      const xlsx = Array.from(e.dataTransfer.files).find((f) =>
-        f.name.endsWith(".xlsx"),
+      // Every dropped .xlsx counts, not just the first one (§5.3).
+      const dropped = Array.from(e.dataTransfer.files).filter((f) =>
+        f.name.toLowerCase().endsWith(".xlsx"),
       );
-      if (!xlsx) {
+      if (dropped.length === 0) {
         const msg = "請拖入 .xlsx 格式的 Excel 檔案。";
         setState("error");
         setErrorMsg(msg);
         onError(msg);
         return;
       }
-      void processFile(xlsx);
+      void processFiles(dropped);
     },
-    [state, processFile, onError],
+    [state, processFiles, onError],
   );
 
   // ── Click / keyboard ─────────────────────────────────────────────────────
@@ -195,10 +261,10 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) void processFile(file);
+      const files = Array.from(e.target.files ?? []);
+      if (files.length > 0) void processFiles(files);
     },
-    [processFile],
+    [processFiles],
   );
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -206,6 +272,13 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
   const matchedCount =
     mappings?.filter((m) => m.matched_column !== null).length ?? 0;
   const totalFields = mappings?.length ?? 0;
+  const warningSummary = summarizeWarnings(warnings);
+  const filesLabel =
+    filenames.length === 0
+      ? ""
+      : filenames.length === 1
+        ? filenames[0]
+        : `${filenames.length} 個檔`;
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -217,10 +290,10 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         tabIndex={state === "parsing" ? -1 : 0}
         aria-label={
           state === "success"
-            ? `已上傳 ${filename}，點擊以重新上傳`
+            ? `已上傳 ${filesLabel}，點擊以重新上傳`
             : state === "parsing"
               ? "正在解析檔案，請稍候"
-              : "點擊或拖曳 .xlsx 檔案至此上傳"
+              : "點擊或拖曳 .xlsx 檔案至此上傳，可一次選多個"
         }
         aria-disabled={state === "parsing"}
         aria-busy={state === "parsing"}
@@ -236,6 +309,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
           ref={fileInputRef}
           type="file"
           accept=".xlsx"
+          multiple
           aria-hidden
           tabIndex={-1}
           className="hidden"
@@ -264,7 +338,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
                 : "拖曳 .xlsx 至此，或點擊選擇"}
             </p>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              僅支援 .xlsx 格式
+              僅支援 .xlsx 格式，可一次選多個檔（最多 {DEFAULT_LIMITS.uploadMaxFiles} 個）
             </p>
           </>
         )}
@@ -278,7 +352,7 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
               aria-hidden
             />
             <p className="text-base text-muted-foreground">
-              正在解析 {filename}…
+              正在解析 {filesLabel}…
             </p>
           </>
         )}
@@ -300,11 +374,11 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
                 <X size={15} aria-hidden />
               </button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {filename}
-              {totalRows !== null && (
+            <p className="text-sm text-muted-foreground text-center">
+              {filenames.join("、")}
+              {counts && (
                 <span className="text-foreground ml-2">
-                  （共 {totalRows} 列）
+                  （合計 {counts.original} 筆 → 去重後 {counts.deduped} 筆）
                 </span>
               )}
             </p>
@@ -350,7 +424,94 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
         </p>
       )}
 
-      {/* Field mapping results */}
+      {/* Per-file parse summary (§5.1, §5.3) */}
+      {summaries &&
+        summaries.length > 0 &&
+        (state === "success" || state === "error") && (
+          <div
+            role="region"
+            aria-label="每個檔案的解析結果"
+            className="mt-4 bg-black/[0.01] dark:bg-white/[0.03] border border-black/5 dark:border-white/8 rounded-xl p-4 backdrop-blur-sm"
+          >
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              檔案解析結果 — 共 {summaries.length} 個檔
+            </p>
+            <ul role="list" className="space-y-3">
+              {summaries.map((summary, index) => (
+                <li
+                  key={`${summary.filename}-${index}`}
+                  className="text-sm border-b border-black/5 dark:border-white/8 last:border-b-0 pb-3 last:pb-0"
+                >
+                  <p className="font-medium text-foreground break-all">
+                    {summary.filename}
+                  </p>
+                  <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                    <dt>判定格式</dt>
+                    <dd className="text-foreground">{summary.formatLabel}</dd>
+                    <dt>工作表</dt>
+                    <dd className="text-foreground">
+                      {summary.sheetName || "（未指定）"}
+                    </dd>
+                    <dt>有效筆數</dt>
+                    <dd className="text-foreground">{summary.validRows} 筆</dd>
+                    <dt>未識別欄位</dt>
+                    <dd
+                      className={
+                        summary.unmappedColumns.length > 0
+                          ? "text-foreground break-all"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {summary.unmappedColumns.length > 0
+                        ? `${summary.unmappedColumns.length} 個：${summary.unmappedColumns.join("、")}`
+                        : "無"}
+                    </dd>
+                  </dl>
+                  {summary.errors.length > 0 && (
+                    <p className="mt-1 text-xs text-error">
+                      {summary.errors.join("；")}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {counts && (
+              <p className="mt-3 pt-3 border-t border-black/5 dark:border-white/8 text-sm font-semibold text-foreground">
+                合計 {counts.original} 筆 → 去重後 {counts.deduped} 筆
+              </p>
+            )}
+
+            {/* Data-quality warnings — collapsed, counts per category (§5.1) */}
+            {warningSummary.total > 0 && (
+              <details className="mt-3">
+                <summary className="text-xs text-warning cursor-pointer flex items-center gap-1.5">
+                  <AlertTriangle size={13} aria-hidden />
+                  資料品質警告 {warningSummary.total} 筆（
+                  {warningSummary.rows.length} 類）— 點擊展開
+                </summary>
+                <ul role="list" className="mt-2 space-y-1">
+                  {warningSummary.rows.map((row) => (
+                    <li
+                      key={row.key}
+                      className="flex items-baseline justify-between gap-3 text-xs"
+                    >
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className="text-foreground font-mono">
+                        {row.count} 筆
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[0.65rem] text-muted-foreground leading-snug">
+                  警告不會阻擋分析：所有有效資料都會送入萃取，這裡只是讓你知道哪些欄位需要人工確認。
+                </p>
+              </details>
+            )}
+          </div>
+        )}
+
+      {/* Field mapping results — the first file's header match */}
       {mappings &&
         mappings.length > 0 &&
         (state === "success" || state === "error") && (
@@ -361,6 +522,11 @@ export default function UploadZone({ onParsed, onError }: UploadZoneProps) {
           >
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               欄位對應 — {matchedCount} / {totalFields} 已辨識
+              {summaries && summaries.length > 1 && (
+                <span className="ml-1 normal-case tracking-normal font-normal">
+                  （第一個檔：{summaries[0].filename}）
+                </span>
+              )}
             </p>
             <ul role="list" className="space-y-2">
               {mappings.map((fm) => {

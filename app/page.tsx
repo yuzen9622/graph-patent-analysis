@@ -7,19 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import UploadZone from "@/components/UploadZone";
+import UploadZone, { type ParsedUpload } from "@/components/UploadZone";
 import ProgressPanel from "@/components/ProgressPanel";
 import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
 import UserMenu from "@/components/UserMenu";
 import { notifyHistoryChanged } from "@/lib/analysis-history";
+import {
+  DEFAULT_LIMITS,
+  defaultSampleSize,
+  formatUploadLabel,
+} from "@/lib/analyze-limits";
 import type { PatentRow } from "@/types/graph";
-import type { FieldMapping } from "@/lib/excel-parser";
+import type { DataQualityWarnings } from "@/lib/excel-parser";
 import type { ProviderType } from "@/lib/llm/providers";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 
 // Only Gemini is supported; the model is fixed and not user-selectable.
 const PROVIDER: ProviderType = "gemini";
+
+// v1.2's 2000 ceiling would have silently truncated a 1741-row upload down the
+// road; §5.2 raises it to the same figure the API enforces.
+const MAX_SAMPLE = DEFAULT_LIMITS.analyzeMaxPatents;
 
 function Step({
   n,
@@ -57,10 +66,15 @@ function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [patents, setPatents] = useState<PatentRow[]>([]);
-  const [_mappings, setMappings] = useState<FieldMapping[]>([]);
-  const [filename, setFilename] = useState<string>("");
-  const [uploadId, setUploadId] = useState<string | null>(null);
-  const [sampleSize, setSampleSize] = useState(50);
+  const [filenames, setFilenames] = useState<string[]>([]);
+  const [uploadIds, setUploadIds] = useState<string[]>([]);
+  const [citations, setCitations] = useState<
+    Array<{ from: string; to: string }>
+  >([]);
+  const [warnings, setWarnings] = useState<DataQualityWarnings | null>(null);
+  // Default is "all of them", filled in once the upload has been parsed (§5.2);
+  // the input stays editable so a smaller sample is still possible.
+  const [sampleSize, setSampleSize] = useState(1);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -76,32 +90,33 @@ function HomePageContent() {
     patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;
   const sampleHint =
     patents.length > 0
-      ? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆`
+      ? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆` +
+        (filenames.length > 1 ? `（${formatUploadLabel(filenames)}）` : "")
       : null;
   const canStart = patents.length > 0;
 
-  function handleParsed(
-    rows: PatentRow[],
-    mappings: FieldMapping[],
-    fname: string,
-    file: File,
-  ) {
-    setPatents(rows);
-    setMappings(mappings);
-    setFilename(fname);
+  function handleParsed(upload: ParsedUpload) {
+    setPatents(upload.patents);
+    setFilenames(upload.filenames);
+    setCitations(upload.citations);
+    setWarnings(upload.warnings);
     setUploadError(null);
     setSubmitError(null);
+    // "Analyse everything" is the default the teacher asked for: the box is
+    // pre-filled with the de-duplicated count, not 50 (§5.2).
+    setSampleSize(defaultSampleSize(upload.dedupedCount, MAX_SAMPLE));
 
-    // Archive the original spreadsheet server-side; the database keeps only
-    // the resulting URL, never the bytes. Failure here must not block the
+    // Archive the original spreadsheets server-side; the database keeps only
+    // the resulting URLs, never the bytes. Failure here must not block the
     // analysis, so it degrades to "no source file recorded".
-    setUploadId(null);
+    setUploadIds([]);
     const form = new FormData();
-    form.append("file", file);
+    for (const file of upload.files) form.append("file", file);
     void fetch("/api/uploads", { method: "POST", body: form })
       .then((res) => (res.ok ? res.json() : null))
-      .then((body: { upload_id?: string } | null) => {
-        if (body?.upload_id) setUploadId(body.upload_id);
+      .then((body: { upload_ids?: string[]; upload_id?: string } | null) => {
+        if (body?.upload_ids?.length) setUploadIds(body.upload_ids);
+        else if (body?.upload_id) setUploadIds([body.upload_id]);
       })
       .catch(() => {});
   }
@@ -109,8 +124,10 @@ function HomePageContent() {
   function handleUploadError(msg: string) {
     setUploadError(msg);
     setPatents([]);
-    setFilename("");
-    setUploadId(null);
+    setFilenames([]);
+    setUploadIds([]);
+    setCitations([]);
+    setWarnings(null);
     setSubmitError(null);
   }
 
@@ -134,15 +151,24 @@ function HomePageContent() {
           provider: PROVIDER,
           sample_size: sampleSize,
           patents: sampled,
-          upload_id: uploadId,
-          filename: filename || "patents.xlsx",
+          upload_ids: uploadIds,
+          filenames: filenames.length > 0 ? filenames : ["patents.xlsx"],
+          // The spreadsheet is parsed in the browser, so these two only reach
+          // the database if they travel in this body (§5-5).
+          citations,
+          warnings,
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        // The API reports failures as `error` (e.g. the 413 that explains a
+        // ceiling was hit); `message` is only kept as an older fallback.
         throw new Error(
-          (data as { message?: string }).message ?? `伺服器錯誤 ${res.status}`,
+          data.error ?? data.message ?? `伺服器錯誤 ${res.status}`,
         );
       }
 
@@ -264,12 +290,15 @@ function HomePageContent() {
                         id={sampleInputId}
                         type="number"
                         min={1}
-                        max={2000}
+                        max={MAX_SAMPLE}
+                        // Meaningless before a parse: the default is filled in
+                        // from the de-duplicated count once files are read.
+                        disabled={patents.length === 0}
                         value={sampleSize}
                         onChange={(e) => {
                           const v = parseInt(e.target.value, 10);
                           if (!isNaN(v))
-                            setSampleSize(Math.min(2000, Math.max(1, v)));
+                            setSampleSize(Math.min(MAX_SAMPLE, Math.max(1, v)));
                         }}
                         className="h-9 w-28 border-border bg-background focus-visible:ring-primary text-sm backdrop-blur-sm"
                       />

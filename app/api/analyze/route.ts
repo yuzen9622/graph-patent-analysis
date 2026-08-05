@@ -1,7 +1,15 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createJob, completeJob, failJob, isJobCancelled, notifyProgress } from '@/lib/store'
-import { createAnalysis, setAnalysisStatus } from '@/lib/db/analyses'
+import { createAnalysis, setAnalysisStatus, type PatentExtras } from '@/lib/db/analyses'
+import { query } from '@/lib/db/client'
+import {
+  checkContentLength,
+  checkProxyBodyLimit,
+  readLimits,
+  toPatentExtras,
+  validateAnalyzeBody,
+} from '@/lib/analyze-limits'
 import { requireUser, UnauthorizedError } from '@/lib/db/sessions'
 import { EXTRACTION_PROMPT_VERSION, runBatchExtraction } from '@/lib/llm/extractor'
 import { detectCommunities } from '@/lib/community'
@@ -62,11 +70,24 @@ async function generateTrendReport(
 
 // ── Background analysis runner ────────────────────────────────────────────────
 
+/**
+ * Parser output that only exists in the browser (the spreadsheet is parsed
+ * client-side), forwarded through the request body so it can be persisted
+ * (§5-5): without this, `citations` and `data_quality_warnings` would never
+ * reach the database and §9-7 could not be verified.
+ */
+interface ParserContext {
+  citations: Array<{ from: string; to: string }>
+  warnings: unknown
+  uploads: Array<{ uploadId: string; originalName?: string | null }>
+}
+
 async function runAnalysis(
   jobId: string,
   patents: PatentRow[],
   provider: ProviderType,
   apiKey: string,
+  parserContext: ParserContext,
 ): Promise<void> {
   try {
     const concurrency = provider === 'nvidia' ? 3 : 5
@@ -107,15 +128,15 @@ async function runAnalysis(
     const aiReport = await generateTrendReport(extractions, provider, apiKey)
     graph.ai_report = aiReport
 
-    // Fields the graph nodes do not carry, keyed by patent node id.
-    const patentExtras = new Map<string, { search_keyword?: string; translated_abstract?: string }>()
+    // Fields the graph nodes do not carry, keyed by patent node id (§6.2).
+    const patentExtras = new Map<string, PatentExtras>()
     const applicantCountries = new Map<string, string>()
     for (const patent of patents) {
       const extraction = extractions.find((e) => e.patent_id === patent.id)
-      patentExtras.set(`patent:${patent.id}`, {
-        search_keyword: patent.search_keyword,
-        translated_abstract: extraction?.translated_abstract,
-      })
+      patentExtras.set(
+        `patent:${patent.id}`,
+        toPatentExtras(patent, extraction?.translated_abstract),
+      )
 
       // The cleaned name is what the graph uses; the country only survives in
       // the raw cell, so map one to the other here.
@@ -130,7 +151,15 @@ async function runAnalysis(
       }
     }
 
-    await completeJob(jobId, graph, { patentExtras, applicantCountries })
+    await completeJob(jobId, graph, {
+      patentExtras,
+      applicantCountries,
+      // Only pass a citation set when the browser actually sent one: saveGraph()
+      // deletes existing citations whenever this key is present.
+      citations: parserContext.citations.length > 0 ? parserContext.citations : undefined,
+      dataQualityWarnings: parserContext.warnings,
+      uploads: parserContext.uploads.length > 0 ? parserContext.uploads : undefined,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[analyze] job ${jobId} failed:`, message)
@@ -151,45 +180,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     throw err
   }
 
-  let body: {
-    provider?: string
-    sample_size?: number
-    patents?: PatentRow[]
-    upload_id?: string
-    filename?: string
+  const limits = readLimits()
+
+  // Content-Length precheck, before json() buffers anything (§5.2). The second
+  // check is Next's own proxy body cap, which truncates silently and currently
+  // sits below the §5.2 ceiling — see checkProxyBodyLimit().
+  const contentLength = request.headers.get('content-length')
+  const tooBig =
+    checkContentLength(contentLength, limits.analyzeMaxBodyBytes) ??
+    checkProxyBodyLimit(contentLength)
+  if (tooBig) {
+    return NextResponse.json({ error: tooBig.error }, { status: tooBig.status })
   }
 
+  let rawBody: unknown
   try {
-    body = await request.json()
+    rawBody = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { provider, patents } = body
-  const sampleSize: number = body.sample_size ?? 50
-
-  if (!provider || !['nvidia', 'gemini', 'openai'].includes(provider)) {
+  const validated = validateAnalyzeBody(rawBody, limits)
+  if (!validated.ok) {
     return NextResponse.json(
-      { error: 'provider must be one of: nvidia, gemini, openai' },
-      { status: 400 },
+      { error: validated.failure.error },
+      { status: validated.failure.status },
     )
   }
+  const { provider, patents, sampleSize, uploadIds, filenames, citations, warnings } =
+    validated.value
 
   // API key comes from the server environment, not the client.
-  const apiKey = getEnvApiKey(provider as ProviderType)
+  const apiKey = getEnvApiKey(provider)
   if (!apiKey) {
     return NextResponse.json(
       {
         error: `Server is missing the API key for provider "${provider}". Set the matching environment variable (e.g. GEMINI_API_KEY).`,
       },
       { status: 500 },
-    )
-  }
-
-  if (!Array.isArray(patents) || patents.length === 0) {
-    return NextResponse.json(
-      { error: 'patents must be a non-empty array' },
-      { status: 400 },
     )
   }
 
@@ -203,8 +231,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await createAnalysis({
       id: jobId,
       ownerId: user.id,
-      uploadId: body.upload_id ?? null,
-      filename: body.filename ?? null,
+      uploadId: uploadIds[0] ?? null,
+      filename: filenames[0] ?? null,
       provider,
       sampleSize: selectedPatents.length,
     })
@@ -213,8 +241,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: '無法寫入資料庫，分析未啟動。' }, { status: 503 })
   }
 
+  const uploads = uploadIds.map((uploadId, index) => ({
+    uploadId,
+    originalName: filenames[index] ?? null,
+  }))
+
+  // Link every upload right away so the history sidebar can list all filenames
+  // while the job is still running; saveGraph() re-applies the same rows
+  // (ON CONFLICT DO NOTHING) when the analysis completes. A failure here only
+  // costs the multi-file label, so it must not abort the analysis.
+  if (uploads.length > 0) {
+    try {
+      await query(
+        `INSERT INTO analysis_uploads (analysis_id, upload_id, original_name)
+         SELECT $1, u.id, pair.original_name
+         FROM unnest($2::uuid[], $3::text[]) AS pair(upload_id, original_name)
+         JOIN uploads u ON u.id = pair.upload_id
+         ON CONFLICT DO NOTHING`,
+        [jobId, uploads.map((u) => u.uploadId), uploads.map((u) => u.originalName)],
+      )
+    } catch (err) {
+      console.error('[analyze] could not link uploads:', err)
+    }
+  }
+
   // Fire and forget — do not await
-  runAnalysis(jobId, selectedPatents, provider as ProviderType, apiKey).catch((err) => {
+  runAnalysis(jobId, selectedPatents, provider, apiKey, {
+    citations,
+    warnings,
+    uploads,
+  }).catch((err) => {
     console.error(`[analyze] job ${jobId} crashed:`, err)
     void setAnalysisStatus(jobId, 'error', String(err)).catch(() => {})
   })
