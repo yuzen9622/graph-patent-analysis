@@ -59,7 +59,13 @@ async function runMigrations(): Promise<void> {
   `)
 
   const files = fs.existsSync(MIGRATIONS_DIR)
-    ? fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()
+    ? fs
+        .readdirSync(MIGRATIONS_DIR)
+        // Skip macOS AppleDouble sidecars (`._foo.sql`): on exFAT volumes they are
+        // created next to every file and would be executed as SQL, crashing boot.
+        // Down-migrations live in `migrations/down/` so they are never auto-applied.
+        .filter((f) => f.endsWith('.sql') && !f.startsWith('._'))
+        .sort()
     : []
 
   for (const file of files) {

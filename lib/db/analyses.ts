@@ -133,9 +133,11 @@ async function insertRows(
   table: string,
   columns: string[],
   rows: unknown[][],
-  chunkSize = 500,
+  options: { chunkSize?: number; onConflict?: string } = {},
 ): Promise<void> {
   if (rows.length === 0) return
+  const chunkSize = options.chunkSize ?? 500
+  const suffix = options.onConflict ? ` ${options.onConflict}` : ''
   for (let start = 0; start < rows.length; start += chunkSize) {
     const chunk = rows.slice(start, start + chunkSize)
     const params: unknown[] = []
@@ -147,7 +149,7 @@ async function insertRows(
       return `(${placeholders.join(', ')})`
     })
     await client.query(
-      `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${tuples.join(', ')}`,
+      `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${tuples.join(', ')}${suffix}`,
       params,
     )
   }
@@ -155,11 +157,45 @@ async function insertRows(
 
 // ── Save ────────────────────────────────────────────────────────────────────
 
+/**
+ * Per-patent columns that have no home on `GraphNode`.
+ *
+ * `GraphNode` only carries the six fields the graph UI can filter on
+ * (PRD v2 P0 §6.1: `ipc5` / `ipc_primary` / `ipc_depth` / `source_files` /
+ * `cited_by_count` / `case_status`).  The remaining §6.2 patent columns are
+ * stored for querying and export only, so they travel here — straight off the
+ * `PatentRow` the parser produced — rather than bloating every graph payload.
+ */
+export interface PatentExtras {
+  search_keyword?: string
+  translated_abstract?: string
+  patent_number?: string
+  publication_number?: string
+  publication_date?: string
+  ipc5_raw?: string[]
+  design_class?: string
+  external_references?: string[]
+}
+
 export interface SaveContext {
   /** Extra per-patent fields not carried on GraphNode (keyed by patent node id). */
-  patentExtras?: Map<string, { search_keyword?: string; translated_abstract?: string }>
+  patentExtras?: Map<string, PatentExtras>
   /** Cleaned applicant name → country, recovered from the raw spreadsheet cell. */
   applicantCountries?: Map<string, string>
+  /**
+   * Internal 參考文獻 links (§3.5), as `PatentRow.id` pairs — i.e. exactly
+   * `ParseResult.citations`.  Optional because the value originates in the
+   * browser-side parse and only reaches the server if the caller forwards it;
+   * `saveGraph()`'s signature stays backwards compatible either way.
+   */
+  citations?: Array<{ from: string; to: string }>
+  /** `ParseResult.warnings` — stored on `analyses.data_quality_warnings`. */
+  dataQualityWarnings?: unknown
+  /**
+   * Every upload backing this analysis (§6.2 `analysis_uploads`).  Upstream
+   * currently supplies a single upload; multi-file uploads are stage 3.
+   */
+  uploads?: Array<{ uploadId: string; originalName?: string | null }>
 }
 
 export async function saveGraph(
@@ -178,6 +214,12 @@ export async function saveGraph(
     await client.query('DELETE FROM concepts WHERE analysis_id = $1', [analysisId])
     await client.query('DELETE FROM patents WHERE analysis_id = $1', [analysisId])
     await client.query('DELETE FROM applicants WHERE analysis_id = $1', [analysisId])
+    // Only clear citations when this save actually carries a citation set;
+    // otherwise a re-save that lacks the parser context would silently drop
+    // links a previous save had already stored.
+    if (context.citations) {
+      await client.query('DELETE FROM citations WHERE analysis_id = $1', [analysisId])
+    }
 
     await client.query(
       `UPDATE analyses SET
@@ -198,6 +240,7 @@ export async function saveGraph(
          surprising = $14,
          ai_report = $15,
          generated_at = $16,
+         data_quality_warnings = COALESCE($17, data_quality_warnings),
          completed_at = now()
        WHERE id = $1`,
       [
@@ -219,13 +262,26 @@ export async function saveGraph(
           : null,
         graph.ai_report ?? null,
         graph.generated_at ? new Date(graph.generated_at) : new Date(),
+        context.dataQualityWarnings === undefined
+          ? null
+          : JSON.stringify(context.dataQualityWarnings),
       ],
     )
 
     await insertRows(
       client,
       'applicants',
-      ['analysis_id', 'node_id', 'name', 'country', 'org_type', 'patent_count', 'color', 'size'],
+      [
+        'analysis_id',
+        'node_id',
+        'name',
+        'country',
+        'org_type',
+        'patent_count',
+        'applicant_key',
+        'color',
+        'size',
+      ],
       applicantNodes.map((node) => [
         analysisId,
         node.id,
@@ -235,6 +291,7 @@ export async function saveGraph(
         context.applicantCountries?.get(node.label) ?? extractCountry(node.label),
         classifyOrgType(node.label),
         node.patent_count ?? 0,
+        node.applicant_key ?? null,
         node.color,
         node.size,
       ]),
@@ -254,6 +311,19 @@ export async function saveGraph(
         'filing_date',
         'year',
         'search_keyword',
+        // --- PRD v2 P0 §6.2 additions -------------------------------------
+        'patent_number',
+        'publication_number',
+        'publication_date',
+        'ipc5',
+        'ipc5_raw',
+        'ipc_primary',
+        'ipc_depth',
+        'cited_by_count',
+        'case_status',
+        'design_class',
+        'source_files',
+        'external_references',
         'color',
         'size',
       ],
@@ -270,6 +340,20 @@ export async function saveGraph(
           node.filing_date ?? null,
           node.year ?? null,
           extra?.search_keyword ?? null,
+          // Absent values stay NULL rather than ''/0/{}, so loadGraph() can
+          // hand back `undefined` and the UI never shows a 0 impostor (§6.1).
+          extra?.patent_number ?? null,
+          extra?.publication_number ?? null,
+          extra?.publication_date ?? null,
+          node.ipc5 ?? null,
+          extra?.ipc5_raw ?? null,
+          node.ipc_primary ?? null,
+          node.ipc_depth ?? null,
+          node.cited_by_count ?? null,
+          node.case_status ?? null,
+          extra?.design_class ?? null,
+          node.source_files ?? null,
+          extra?.external_references ?? null,
           node.color,
           node.size,
         ]
@@ -279,13 +363,25 @@ export async function saveGraph(
     await insertRows(
       client,
       'concepts',
-      ['analysis_id', 'node_id', 'label', 'frequency', 'community_id', 'color', 'size'],
+      [
+        'analysis_id',
+        'node_id',
+        'label',
+        'frequency',
+        'community_id',
+        // §6.2: previously written only to patent_concepts and never read back,
+        // so a concept node's source_patents vanished on every reload.
+        'source_patents',
+        'color',
+        'size',
+      ],
       conceptNodes.map((node) => [
         analysisId,
         node.id,
         node.label,
         node.frequency ?? 0,
         node.community_id ?? null,
+        node.source_patents ?? null,
         node.color,
         node.size,
       ]),
@@ -364,6 +460,40 @@ export async function saveGraph(
        ON CONFLICT DO NOTHING`,
       [analysisId],
     )
+
+    // Internal 參考文獻 links (§3.5).  from/to are PatentRow.id values, so no
+    // ordering dependency on the patents rows' surrogate keys.  De-duplicated
+    // before insert because the composite primary key would otherwise reject
+    // the whole chunk and roll back the transaction.
+    if (context.citations?.length) {
+      const seen = new Set<string>()
+      const citationRows: unknown[][] = []
+      for (const link of context.citations) {
+        if (!link?.from || !link?.to) continue
+        const key = `${link.from} ${link.to}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        citationRows.push([analysisId, link.from, link.to])
+      }
+      await insertRows(client, 'citations', ['analysis_id', 'from_patent', 'to_patent'], citationRows, {
+        onConflict: 'ON CONFLICT DO NOTHING',
+      })
+    }
+
+    // §6.2 analysis_uploads.  Additive on purpose: re-saving a graph must not
+    // unlink uploads recorded by an earlier save, and upstream currently only
+    // ever supplies the single upload that analyses.upload_id already holds.
+    if (context.uploads?.length) {
+      await insertRows(
+        client,
+        'analysis_uploads',
+        ['analysis_id', 'upload_id', 'original_name'],
+        context.uploads
+          .filter((upload) => Boolean(upload?.uploadId))
+          .map((upload) => [analysisId, upload.uploadId, upload.originalName ?? null]),
+        { onConflict: 'ON CONFLICT DO NOTHING' },
+      )
+    }
   })
 }
 
@@ -373,6 +503,7 @@ interface ApplicantRow {
   node_id: string
   name: string
   patent_count: number
+  applicant_key: string | null
   color: string | null
   size: number | null
 }
@@ -385,6 +516,12 @@ interface PatentRowDb {
   application_number: string | null
   filing_date: string | null
   year: number | null
+  ipc5: string[] | null
+  ipc_primary: string | null
+  ipc_depth: number | null
+  cited_by_count: number | null
+  case_status: string | null
+  source_files: string[] | null
   color: string | null
   size: number | null
 }
@@ -394,6 +531,7 @@ interface ConceptRow {
   label: string
   frequency: number
   community_id: number | null
+  source_patents: string[] | null
   color: string | null
   size: number | null
 }
@@ -442,16 +580,18 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
 
   const [applicants, patents, concepts, communityRows, edgeRows] = await Promise.all([
     query<ApplicantRow>(
-      'SELECT node_id, name, patent_count, color, size FROM applicants WHERE analysis_id = $1 ORDER BY id',
+      `SELECT node_id, name, patent_count, applicant_key, color, size
+       FROM applicants WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
     query<PatentRowDb>(
-      `SELECT node_id, title, abstract, applicant_raw, application_number, filing_date, year, color, size
+      `SELECT node_id, title, abstract, applicant_raw, application_number, filing_date, year,
+              ipc5, ipc_primary, ipc_depth, cited_by_count, case_status, source_files, color, size
        FROM patents WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
     query<ConceptRow>(
-      `SELECT node_id, label, frequency, community_id, color, size
+      `SELECT node_id, label, frequency, community_id, source_patents, color, size
        FROM concepts WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
@@ -474,6 +614,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       type: 'applicant',
       label: row.name,
       patent_count: row.patent_count,
+      applicant_key: row.applicant_key ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 18,
     })),
@@ -487,6 +628,13 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       application_number: row.application_number ?? undefined,
       filing_date: row.filing_date ?? undefined,
       year: row.year ?? undefined,
+      // NULL → undefined, never 0 / '' / [] (§6.1 compatibility rule).
+      ipc5: row.ipc5 ?? undefined,
+      ipc_primary: row.ipc_primary ?? undefined,
+      ipc_depth: row.ipc_depth ?? undefined,
+      cited_by_count: row.cited_by_count ?? undefined,
+      case_status: row.case_status ?? undefined,
+      source_files: row.source_files ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 18,
     })),
@@ -496,6 +644,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       label: row.label,
       frequency: row.frequency,
       community_id: row.community_id ?? undefined,
+      source_patents: row.source_patents ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 10,
     })),
@@ -528,7 +677,10 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
   }))
 
   return {
-    schema_version: 2,
+    // Report the version actually stored, not a hardcoded 2 — otherwise a v3
+    // graph read back from the database claims to be v2 and normalizeGraphData()
+    // is told the wrong thing about what the payload already contains.
+    schema_version: meta.schema_version === 3 ? 3 : 2,
     nodes,
     edges,
     communities,
