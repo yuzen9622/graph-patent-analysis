@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { SEQUENTIAL_BLUE } from "@/lib/concept-time";
-import type { ColorMode } from "@/lib/graph-view";
+import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode } from "@/lib/graph-view";
 import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
 
 interface Props {
@@ -29,6 +29,7 @@ export default function GraphLegend({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isConceptMode = mode === "concept";
+  const isInstMode = mode === "institution";
   const isOpen = paperMode || expanded;
   const window = methodology.time_window ?? null;
   const isGradient = isConceptMode && colorMode === "first_year" && !!window;
@@ -60,17 +61,51 @@ export default function GraphLegend({
         >
           <div className="mb-2">
             <h2 className="text-xs font-semibold text-foreground">
-              {isConceptMode ? "技術概念網路" : "專利脈絡圖"}
+              {isInstMode
+                ? "機構網絡"
+                : isConceptMode
+                  ? "技術概念網絡"
+                  : "專利脈絡圖"}
             </h2>
             <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted-foreground">
-              {isConceptMode
-                ? "用於觀察技術概念的共現關係與社群結構"
-                : "用於追溯申請人、專利與技術概念之間的資料關係"}
+              {isInstMode
+                ? "圓點＝一家機構；邊＝兩家機構共同投入的技術概念（點開邊看共享概念清單）"
+                : isConceptMode
+                  ? "用於觀察技術概念的共現關係與社群結構"
+                  : "用於追溯申請人、專利與技術概念之間的資料關係"}
             </p>
           </div>
 
           <ul className="space-y-2 text-[0.7rem] leading-relaxed text-foreground">
-            {isConceptMode ? (
+            {isInstMode ? (
+              <>
+                <LegendItem marker={<InstitutionNodeMarker />}>
+                  節點大小＝該機構涉足的不同技術概念數（家，非篇數）
+                </LegendItem>
+                <LegendItem marker={<InstitutionLineMarker />}>
+                  邊＝兩家機構共同投入的概念 ≥ {minSupport} 個；線粗∝共享概念數
+                </LegendItem>
+                <LegendItem marker={<CommunityMarker />}>
+                  顏色＝機構類型（銀行／金控／保險／大學／…）
+                </LegendItem>
+                <li className="flex flex-wrap gap-x-2 gap-y-1 pt-1">
+                  {(
+                    Object.entries(INSTITUTION_TYPE_COLORS) as Array<
+                      [InstitutionType, string]
+                    >
+                  ).map(([type, color]) => (
+                    <span key={type} className="inline-flex items-center gap-1">
+                      <span
+                        aria-hidden
+                        className="size-2 rounded-full"
+                        style={{ background: color }}
+                      />
+                      {type}
+                    </span>
+                  ))}
+                </li>
+              </>
+            ) : isConceptMode ? (
               <>
                 <LegendItem marker={<NodeScaleMarker />}>
                   概念大小＝包含該概念的不同專利篇數（1 篇＝16、4 篇＝22、9 篇＝28）
@@ -213,6 +248,19 @@ function DashedLineMarker() {
 
 function StructuralLineMarker() {
   return <span className="w-8 border-t border-slate-400" />;
+}
+
+function InstitutionNodeMarker() {
+  return (
+    <span className="flex items-end gap-1">
+      <span className="size-3 rounded-full bg-slate-500" />
+      <span className="size-2 rounded-full bg-slate-400" />
+    </span>
+  );
+}
+
+function InstitutionLineMarker() {
+  return <span className="h-1 w-8 rounded-full bg-slate-600" />;
 }
 
 function hasYearRange(range: [number, number]) {

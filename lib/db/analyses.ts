@@ -387,6 +387,8 @@ export async function saveGraph(
         'last_year',
         'median_year',
         'year_counts',
+        // --- PRD v2 / P4: applicant-unit metric ---
+        'applicant_count',
         'color',
         'size',
       ],
@@ -401,6 +403,7 @@ export async function saveGraph(
         node.last_year ?? null,
         node.median_year ?? null,
         node.year_counts ? JSON.stringify(node.year_counts) : null,
+        node.applicant_count ?? null,
         node.color,
         node.size,
       ]),
@@ -556,6 +559,8 @@ interface ConceptRow {
   last_year: number | null
   median_year: number | null
   year_counts: Record<string, number> | null
+  // PRD v2 / P4: applicant-unit metric column.
+  applicant_count: number | null
   color: string | null
   size: number | null
 }
@@ -616,7 +621,8 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     ),
     query<ConceptRow>(
       `SELECT node_id, label, frequency, community_id, source_patents, color, size,
-              first_year, last_year, median_year, year_counts
+              first_year, last_year, median_year, year_counts,
+              applicant_count
        FROM concepts WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
@@ -675,6 +681,8 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       last_year: row.last_year ?? undefined,
       median_year: row.median_year ?? undefined,
       year_counts: row.year_counts ?? undefined,
+      // --- PRD v2 / P4 ---
+      applicant_count: row.applicant_count ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 10,
     })),

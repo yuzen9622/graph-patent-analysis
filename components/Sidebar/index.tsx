@@ -177,6 +177,42 @@ export default function Sidebar({
                 />
               </div>
                 </>
+              ) : mode === "institution" ? (
+                <>
+                  <label className="block text-xs text-foreground">
+                    <span className="flex justify-between mb-2">
+                      <span className="font-medium">最低共享概念數</span>
+                      <span className="font-mono text-primary">{minSupport}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={Math.max(1, maxSupport)}
+                      value={Math.min(minSupport, Math.max(1, maxSupport))}
+                      onChange={(event) => onMinSupportChange(Number(event.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </label>
+                  <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
+                    邊＝兩家機構共同投入 ≥ 該數量的技術概念；調高以聚焦強連帶。
+                  </p>
+                  <div>
+                    <p className="text-xs text-foreground font-medium mb-2">機構類型</p>
+                    <ul className="space-y-1.5">
+                      {communities.map((c) => (
+                        <li key={c.name} className="flex items-center gap-2 text-xs">
+                          <span
+                            aria-hidden
+                            className="size-2.5 rounded-full shrink-0"
+                            style={{ background: c.color }}
+                          />
+                          <span className="text-muted-foreground">{c.name}</span>
+                          <span className="ml-auto font-mono text-primary">{c.node_count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
               ) : (
                 <>
                   <div>

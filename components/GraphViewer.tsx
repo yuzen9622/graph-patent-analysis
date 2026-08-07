@@ -125,14 +125,18 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
 function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
   const isCooccurrence = e.kind === "cooccurrence";
   const isSemantic = e.kind === "semantic";
+  const isInstitution = e.kind === "institution";
   const supportLine = isCooccurrence
     ? `共同出現：${e.support_count ?? 0} 篇專利\nJaccard：${(e.jaccard ?? 0).toFixed(3)}`
     : "";
   const semanticLine = isSemantic
     ? `LLM 語意關係：${e.relation}\n目前保存來源：${e.source_patents?.length ?? 0} 篇`
     : "";
+  const institutionLine = isInstitution
+    ? `共享概念：${e.support_count ?? 0} 個\n${(e.shared_concepts ?? []).slice(0, 6).join("、")}${(e.shared_concepts?.length ?? 0) > 6 ? ` …共 ${e.shared_concepts!.length} 個` : ""}`
+    : "";
   const surprisingLine = surprising ? "\n跨社群罕見橋接" : "";
-  const title = `${supportLine}${semanticLine}${surprisingLine}` || e.relation;
+  const title = `${supportLine}${semanticLine}${institutionLine}${surprisingLine}` || e.relation;
 
   return {
     id: e.id,
@@ -143,20 +147,29 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
     dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
     width: isCooccurrence
       ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.2)
-      : isSemantic
-      ? 1.5
-      : 1,
+      : isInstitution
+        ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.4)
+        : isSemantic
+          ? 1.5
+          : 1,
     color: surprising
       ? { color: "#FF6B35" }
       : isSemantic
-      ? { color: "#8B5CF6", opacity: 0.8 }
-      : isCooccurrence
-      ? { color: "#64748B", opacity: 0.7 }
-      : { color: "#94A3B8", opacity: 0.35 },
-    arrows: { to: { enabled: isSemantic || e.kind === "structural", scaleFactor: 0.4 } },
+        ? { color: "#8B5CF6", opacity: 0.8 }
+        : isInstitution
+          ? { color: "#0f766e", opacity: 0.75 }
+          : isCooccurrence
+            ? { color: "#64748B", opacity: 0.7 }
+            : { color: "#94A3B8", opacity: 0.35 },
+    arrows: {
+      to: {
+        enabled: isSemantic || isCooccurrence || e.kind === "structural",
+        scaleFactor: 0.4,
+      },
+    },
     font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
     // Semantic relations are an evidence overlay and must not alter layout.
-    physics: !isSemantic,
+    physics: !(isSemantic || isInstitution),
     // smooth is controlled globally via options — not set per-edge
     // so that perf-adaptive global setting takes effect
   };

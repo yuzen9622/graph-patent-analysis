@@ -80,6 +80,7 @@ export function buildExportHtml(
   const views = {
     concept: selectGraphView(graph, { ...options, mode: 'concept' }),
     context: selectGraphView(graph, { ...options, mode: 'context' }),
+    institution: selectGraphView(graph, { ...options, mode: 'institution' }),
   }
   const view = views[options.mode]
   const payload = safeSerializeForInlineScript({
@@ -90,10 +91,19 @@ export function buildExportHtml(
   const escapedJobId = escapeHtml(jobId)
   const jobLabelScript = safeSerializeForInlineScript(`Job ${jobId}`)
   const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString('base64')}`
-  const title = options.mode === 'concept' ? '技術概念網路' : '專利脈絡圖'
-  const modeExplanation = options.mode === 'concept'
-    ? `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；顏色＝Louvain 社群。`
-    : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
+  const title =
+    options.mode === 'institution'
+      ? '機構網絡'
+      : options.mode === 'concept'
+        ? '技術概念網路'
+        : '專利脈絡圖'
+  const modeExplanation =
+    options.mode === 'institution'
+      ? '節點＝一家機構；大小＝涉足概念數（家）；邊＝兩家共享 ≥' +
+        `${options.minSupport} 個概念；顏色＝機構類型（銀行/保險/大學/…）。`
+      : options.mode === 'concept'
+        ? `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；顏色＝Louvain 社群。`
+        : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>

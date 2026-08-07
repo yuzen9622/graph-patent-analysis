@@ -77,6 +77,12 @@ export interface GraphNode {
   frequency?: number
   community_id?: number
   source_patents?: string[]
+  // --- PRD v2 / P4: applicant-unit metric (概念被幾家機構碰到) ---
+  applicant_count?: number
+  // --- PRD v2 / P4: institution-view fields (機構節點圖) ---
+  concept_count?: number     // 涉足的概念數（家）
+  org_type?: string          // 機構類型（bank / insurance / university / …）
+  shared_concepts?: string[] // 與相鄰機構共享的概念
   // --- PRD v2 / P3 additions: concept time metadata ------------------
   first_year?: number       // 首次有效申請年
   last_year?: number        // 最近有效申請年
@@ -98,8 +104,8 @@ export interface GraphNode {
   size: number
 }
 
-export type GraphMode = 'concept' | 'context'
-export type GraphEdgeKind = 'structural' | 'cooccurrence' | 'semantic'
+export type GraphMode = 'concept' | 'context' | 'institution'
+export type GraphEdgeKind = 'structural' | 'cooccurrence' | 'semantic' | 'institution'
 
 export interface RelationEvidence {
   patent_id: string
@@ -122,6 +128,8 @@ export interface GraphEdge {
   jaccard?: number        // Co-occurrence similarity; never inferred for semantic edges
   source_patents?: string[]
   evidence?: RelationEvidence[]
+  /** PRD v2 / P4: institution-edge (機構節點圖) shared-concept labels. */
+  shared_concepts?: string[]
 }
 
 export interface Community {

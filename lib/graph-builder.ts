@@ -81,6 +81,9 @@ export function buildGraph(
     }
   }
 
+  // PRD v2 / P4: per-concept 「家計」（概念被幾家機構碰到），用於 NodeInfo 篇/家並陳。
+  const conceptApplicants = new Map<string, Set<string>>();
+
   // ── PRD v2 / P3: per-concept time stats + the gradient window, both pure ──
   // population = multiset of per-patent years (filtered to valid years); the
   // four fields are attached to concept nodes here but colouring stays at the
@@ -216,6 +219,13 @@ export function buildGraph(
       const applicantNode = getOrCreateApplicant(name);
       applicantNode.patent_count = (applicantNode.patent_count ?? 0) + 1;
 
+      // PRD v2 / P4: applicant ← concept membership (for 篇/家 count).
+      for (const keyword of conceptsByPatent.get(patent.id) ?? []) {
+        const s = conceptApplicants.get(keyword) ?? new Set<string>();
+        s.add(name);
+        conceptApplicants.set(keyword, s);
+      }
+
       addEdge({
         id: stableEdgeId('structural', [applicantNode.id, patentNode.id, '申請了']),
         from: applicantNode.id,
@@ -252,6 +262,12 @@ export function buildGraph(
   // Ensure concepts without a patent edge (defensive legacy/input handling) exist.
   for (const label of conceptNetwork.concepts.keys()) {
     getOrCreateConcept(label);
+  }
+
+  // PRD v2 / P4: stamp each concept node with its applicant-unit count (家).
+  for (const [label, applicants] of conceptApplicants) {
+    const node = conceptNodeMap.get(label);
+    if (node) node.applicant_count = applicants.size;
   }
 
   // ── Build Community list ──────────────────────────────────────────────────────

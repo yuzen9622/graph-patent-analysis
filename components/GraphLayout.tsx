@@ -159,6 +159,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             {([
               ["concept", "技術概念網路"],
               ["context", "專利脈絡圖"],
+              ["institution", "機構網絡"],
             ] as const).map(([value, label]) => (
               <button
                 key={value}
@@ -237,8 +238,18 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onNodeSelect={setSelectedNode}
             onEdgeSelect={setSelectedEdge}
             yearRange={yearRange}
-            visibleLayers={mode === "concept" ? new Set<NodeType>(["concept"]) : visibleLayers}
-            hiddenCommunities={mode === "concept" ? hiddenCommunities : undefined}
+            visibleLayers={
+              mode === "concept"
+                ? new Set<NodeType>(["concept"])
+                : mode === "institution"
+                  ? new Set<NodeType>(["applicant"])
+                  : visibleLayers
+            }
+            hiddenCommunities={
+              mode === "concept" || mode === "institution"
+                ? hiddenCommunities
+                : undefined
+            }
             focusNodeId={focusNodeId}
           />
           <GraphLegend

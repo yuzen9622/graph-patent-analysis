@@ -75,7 +75,13 @@ export default function NodeInfo({
       <dl className="space-y-2 text-xs">
         {/* Applicant fields */}
         {node.type === "applicant" && (
-          <Row label="專利件數" value={`${node.patent_count ?? 0} 件`} />
+          <>
+            <Row label="專利件數" value={`${node.patent_count ?? 0} 件`} />
+            {node.org_type && <Row label="機構類型" value={node.org_type} />}
+            {node.concept_count !== undefined && (
+              <Row label="涉足概念" value={`${node.concept_count} 個`} />
+            )}
+          </>
         )}
 
         {/* Patent fields */}
@@ -124,6 +130,9 @@ export default function NodeInfo({
         {node.type === "concept" && (
           <>
             <Row label="專利涵蓋" value={`${node.frequency ?? 0} 篇`} />
+            {node.applicant_count !== undefined && (
+              <Row label="機構涵蓋" value={`${node.applicant_count} 家`} />
+            )}
             {node.first_year !== undefined && (
               <Row label="首次出現" value={`${node.first_year} 年`} />
             )}

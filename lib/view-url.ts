@@ -20,7 +20,7 @@ export interface ViewState {
 }
 
 const isMode = (value: string | null): value is GraphMode =>
-  value === 'concept' || value === 'context'
+  value === 'concept' || value === 'context' || value === 'institution'
 
 const isColorMode = (value: string | null): value is ColorMode =>
   value === 'community' || value === 'first_year'

@@ -58,6 +58,24 @@ export default function EdgeInfo({ edge, nodes, methodology, onClose }: Props) {
         <CooccurrenceDetails edge={edge} sourcePatents={sourcePatents} nodes={nodes} />
       )}
 
+      {kind === "institution" && (
+        <div className="space-y-2 text-xs">
+          <Row label="共享概念數" value={`${edge.support_count ?? (edge.shared_concepts?.length ?? 0)} 個`} />
+          <div>
+            <dt className="mb-1 font-medium text-foreground">共同投入的技術概念</dt>
+            <dd className="m-0">
+              <ul className="space-y-1 text-muted-foreground">
+                {(edge.shared_concepts ?? []).map((concept) => (
+                  <li key={concept} className="break-words">
+                    {concept}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        </div>
+      )}
+
       {kind === "semantic" && (
         <SemanticDetails
           edge={edge}
@@ -241,14 +259,16 @@ function inferLegacyKind(edge: GraphEdge) {
     : "semantic";
 }
 
-function kindLabel(kind: "structural" | "cooccurrence" | "semantic") {
+function kindLabel(kind: "structural" | "cooccurrence" | "semantic" | "institution") {
   if (kind === "cooccurrence") return "共現關係";
   if (kind === "semantic") return "LLM 語意關係";
+  if (kind === "institution") return "機構共享概念";
   return "結構關係";
 }
 
-function kindColor(kind: "structural" | "cooccurrence" | "semantic") {
+function kindColor(kind: "structural" | "cooccurrence" | "semantic" | "institution") {
   if (kind === "cooccurrence") return "#475569";
   if (kind === "semantic") return "#7c3aed";
+  if (kind === "institution") return "#0f766e";
   return "#64748b";
 }
