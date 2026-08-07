@@ -80,3 +80,67 @@ describe("selectGraphView", () => {
     expect(view.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to))).toBe(true);
   });
 });
+
+
+describe("PRD v2 / P3：colorMode 純函式切換", () => {
+  const p3graph: GraphData = {
+    schema_version: 3,
+    nodes: [
+      { id: "concept:A", type: "concept", label: "A", color: "#111111", size: 18, community_id: 0, first_year: 2007 },
+      { id: "concept:B", type: "concept", label: "B", color: "#222222", size: 18, community_id: 0, first_year: 2025 },
+      { id: "concept:C", type: "concept", label: "C", color: "#333333", size: 18, community_id: 1, first_year: 2016 },
+    ],
+    edges: [
+      { id: "c1", from: "concept:A", to: "concept:B", relation: "共同出現", kind: "cooccurrence", support_count: 2, jaccard: 0.5 },
+      { id: "c2", from: "concept:B", to: "concept:C", relation: "共同出現", kind: "cooccurrence", support_count: 1, jaccard: 0.5 },
+    ],
+    communities: [{ id: 0, name: "群0", color: "#111111", node_count: 2 }, { id: 1, name: "群1", color: "#333333", node_count: 1 }],
+    stats: { concept_count: 3, patent_count: 0, applicant_count: 0, community_count: 2, year_range: [2007, 2025] },
+    ai_report: "",
+    generated_at: "2026-08-05T00:00:00.000Z",
+    methodology: {
+      concept_frequency_metric: "unique_patent_count",
+      cooccurrence_metric: "unique_patent_support",
+      concept_size_formula: "x",
+      applicant_size_formula: "x",
+      patent_size: 0,
+      community_algorithm: "louvain",
+      community_edge_weight: "support_count",
+      community_resolution: 1,
+      community_random_walk: false,
+      layout_distance_interpretation: "visual_only",
+      prompt_version: "test",
+      model_provider: "test",
+      model_id: "test",
+      cooccurrence_data: "native",
+      semantic_provenance: "complete",
+      time_window: [2007, 2025],
+      time_color_scale: "sequential_blue",
+    },
+  };
+
+  it("community 是預設：三個概念節點顏色保持原本社群色", () => {
+    const v = selectGraphView(p3graph, { mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025] });
+    const colors = Object.fromEntries(v.nodes.map((n) => [n.id, n.color]));
+    expect(colors["concept:A"]).toBe("#111111");
+    expect(colors["concept:B"]).toBe("#222222");
+    expect(colors["concept:C"]).toBe("#333333");
+  });
+
+  it("切到 first_year：概念節點全部變成漸層色，且切回五可逐步還原", () => {
+    const base = selectGraphView(p3graph, { mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025] });
+    const first = base.nodes.map((n) => ({ ...n, color: n.color }));
+    const n1 = selectGraphView(p3graph, {
+      mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025], colorMode: "first_year",
+    });
+    const gradientColors = Object.fromEntries(n1.nodes.map((n) => [n.id, n.color]));
+    const sequential = ["#EFF6FF", "#DBEAFE", "#BFDBFE", "#93C5FD", "#60A5FA", "#3B82F6", "#2563EB", "#1D4ED8", "#1E3A8A"];
+    // first_year=2007 -> anchor[0]; 2025 -> anchor[8]; 2016 window [2007,2025] -> anchor[4]
+    expect(gradientColors["concept:A"]).toBe(sequential[0]);
+    expect(gradientColors["concept:B"]).toBe(sequential[8]);
+    expect(gradientColors["concept:C"]).toBe(sequential[4]);
+    // 切回 community 與原 community 結果逐欄相同
+    const back = selectGraphView(p3graph, { mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025] });
+    expect(back.nodes.map((n) => n.color)).toEqual(first.map((n) => n.color));
+  });
+});

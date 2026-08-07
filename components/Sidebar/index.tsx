@@ -16,6 +16,7 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
+import type { ColorMode } from "@/lib/graph-view";
 import type {
   GraphNode,
   GraphEdge,
@@ -37,6 +38,8 @@ interface Props {
   selectedEdge: GraphEdge | null;
   methodology: GraphMethodology;
   mode: GraphMode;
+  colorMode: ColorMode;
+  onColorModeChange: (mode: ColorMode) => void;
   showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
@@ -88,6 +91,8 @@ export default function Sidebar({
   selectedEdge,
   methodology,
   mode,
+  colorMode,
+  onColorModeChange,
   showSemantic,
   minSupport,
   maxSupport,
@@ -174,6 +179,42 @@ export default function Sidebar({
                 </>
               ) : (
                 <>
+                  <div>
+                    <p className="text-xs text-foreground font-medium mb-2">
+                      概念顏色
+                    </p>
+                    <div
+                      className="inline-flex rounded-md border border-border bg-background p-0.5"
+                      role="group"
+                      aria-label="概念顏色模式"
+                    >
+                      {(
+                        [
+                          ["community", "社群色"],
+                          ["first_year", "首次出現年"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => onColorModeChange(value)}
+                          aria-pressed={colorMode === value}
+                          className={`rounded px-2 py-1 text-xs transition-colors ${
+                            colorMode === value
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {colorMode === "first_year" && (
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        顏色＝概念首次出現的申請年份（漸層由早至晚）；切換只影響顯示，不改變資料。
+                      </p>
+                    )}
+                  </div>
                   <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
                     <input
                       type="checkbox"

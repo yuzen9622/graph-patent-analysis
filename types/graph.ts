@@ -77,6 +77,11 @@ export interface GraphNode {
   frequency?: number
   community_id?: number
   source_patents?: string[]
+  // --- PRD v2 / P3 additions: concept time metadata ------------------
+  first_year?: number       // 首次有效申請年
+  last_year?: number        // 最近有效申請年
+  median_year?: number      // 中位有效申請年（nearest-rank + lower）
+  year_counts?: Record<string, number>  // 年度分布 {year: count}
   // --- PRD v2 P0 §6.1 additions -------------------------------------------
   // Patent nodes: carried on the node (not only on the transient PatentRow) so
   // that IPC / provenance filters can be recomputed after a reload.
@@ -162,6 +167,9 @@ export interface GraphMethodology {
   community_resolution: number
   community_random_walk: boolean
   layout_distance_interpretation: 'visual_only'
+  // --- PRD v2 / P3 additions (optional, absent on pre-v3 graphs) ---
+  time_window?: [number, number] | null      // 漸層窗 = [min first_year, max first_year]
+  time_color_scale?: 'sequential_blue'       // 漸層色盤名稱
   prompt_version: string
   model_provider: string
   model_id: string

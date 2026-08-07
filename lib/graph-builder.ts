@@ -20,6 +20,12 @@ import {
   stableEdgeId,
   type ConceptNetworkResult,
 } from "@/lib/concept-network";
+import {
+  computeConceptStats,
+  computeTimeWindow,
+  parseFilingYear,
+  SEQUENTIAL_BLUE,
+} from "@/lib/concept-time";
 
 // Tableau-10 colors as defined in PRD Section 6.2
 const TABLEAU_10: string[] = [
@@ -75,6 +81,19 @@ export function buildGraph(
     }
   }
 
+  // ── PRD v2 / P3: per-concept time stats + the gradient window, both pure ──
+  // population = multiset of per-patent years (filtered to valid years); the
+  // four fields are attached to concept nodes here but colouring stays at the
+  // view layer (color_mode lives in GraphViewOptions, not in the graph).
+  const yearsByPatent = new Map<string, number>();
+  for (const patent of patents) {
+    const year = parseFilingYear(patent.filing_date);
+    if (year === undefined) continue
+    yearsByPatent.set(patent.id, year)
+  }
+  const conceptTime = computeConceptStats(conceptNetwork, yearsByPatent)
+  const timeWindow = computeTimeWindow(conceptTime)
+
   // ── Applicant nodes ──────────────────────────────────────────────────────────
   // Map<applicantName, { node, colorIndex }>
   const applicantNodeMap = new Map<string, GraphNode>();
@@ -121,6 +140,12 @@ export function buildGraph(
       frequency: aggregate?.frequency ?? 0,
       community_id: communityId,
       source_patents: aggregate?.source_patents ?? [],
+      // PRD v2 / P3: concept time metadata (undefined when the concept has no
+      // valid filing year).
+      first_year: conceptTime.get(label)?.first_year,
+      last_year: conceptTime.get(label)?.last_year,
+      median_year: conceptTime.get(label)?.median_year,
+      year_counts: conceptTime.get(label)?.year_counts,
       color: communityColor,
       size: conceptSize(aggregate?.frequency ?? 0),
     };
@@ -296,6 +321,10 @@ export function buildGraph(
     community_resolution: 1,
     community_random_walk: false,
     layout_distance_interpretation: 'visual_only',
+    // PRD v2 / P3: the gradient window (data fact) and palette name. No
+    // color_mode here — that is a view-layer option (see lib/graph-view.ts).
+    time_window: timeWindow,
+    time_color_scale: 'sequential_blue',
     cooccurrence_data: 'native',
     semantic_provenance: 'complete',
     ...methodologyMeta,

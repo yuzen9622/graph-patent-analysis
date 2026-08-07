@@ -43,9 +43,18 @@ function buildTitle(n: GraphNode, godInfo?: GodNode): string {
     : n.type === "patent"
     ? `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`
     : n.type === "concept"
-    ? `概念：${n.label}（涵蓋 ${n.frequency ?? 0} 篇專利）`
+    ? `概念：${n.label}（涵蓋 ${n.frequency ?? 0} 篇專利）${timeLines(n)}`
     : n.title ?? n.label;
   return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
+}
+
+/** 概念時間統計的 tooltip 行（只顯示有資料的欄位）。 */
+function timeLines(n: GraphNode): string {
+  const lines: string[] = [];
+  if (n.first_year !== undefined) lines.push(`首次出現：${n.first_year} 年`);
+  if (n.median_year !== undefined) lines.push(`中位年：${n.median_year} 年`);
+  if (n.last_year !== undefined) lines.push(`最近出現：${n.last_year} 年`);
+  return lines.length ? `\n${lines.join("\n")}` : "";
 }
 
 function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNode) {

@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
-import { selectGraphView } from "@/lib/graph-view";
+import { selectGraphView, type ColorMode } from "@/lib/graph-view";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -25,6 +25,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [mode, setMode] = useState<GraphMode>("concept");
   const [showSemantic, setShowSemantic] = useState(false);
   const [minSupport, setMinSupport] = useState(1);
+  const [colorMode, setColorMode] = useState<ColorMode>("community");
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -46,8 +47,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
         showSemantic,
         minSupport,
         yearRange,
+        colorMode,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -66,6 +68,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     mode,
     llm: showSemantic ? "1" : "0",
     paper: paperMode ? "1" : "0",
+    colorMode,
     minSupport: String(minSupport),
     yearStart: String(yearRange[0]),
     yearEnd: String(yearRange[1]),
@@ -208,6 +211,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             mode={mode}
             showSemantic={showSemantic}
             minSupport={minSupport}
+            colorMode={colorMode}
             methodology={graph.methodology}
             capabilityWarning={view.capabilityWarning}
             stats={view.stats}
@@ -229,6 +233,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             selectedEdge={selectedViewEdge}
             methodology={graph.methodology}
             mode={mode}
+            colorMode={colorMode}
+            onColorModeChange={setColorMode}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

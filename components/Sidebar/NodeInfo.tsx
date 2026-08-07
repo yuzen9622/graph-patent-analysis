@@ -124,6 +124,24 @@ export default function NodeInfo({
         {node.type === "concept" && (
           <>
             <Row label="專利涵蓋" value={`${node.frequency ?? 0} 篇`} />
+            {node.first_year !== undefined && (
+              <Row label="首次出現" value={`${node.first_year} 年`} />
+            )}
+            {node.median_year !== undefined && (
+              <Row label="中位年" value={`${node.median_year} 年`} />
+            )}
+            {node.last_year !== undefined && (
+              <Row label="最近出現" value={`${node.last_year} 年`} />
+            )}
+            {node.year_counts && Object.keys(node.year_counts).length > 0 && (
+              <Row
+                label="年度分布"
+                value={Object.entries(node.year_counts)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([year, count]) => `${year}:${count}`)
+                  .join("　")}
+              />
+            )}
             {community && (
               <div className="flex items-center gap-1.5">
                 <dt className="text-foreground font-medium">社群</dt>

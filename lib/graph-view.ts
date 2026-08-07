@@ -1,4 +1,5 @@
 import { applicantSize, conceptSize, PATENT_NODE_SIZE } from './concept-network'
+import { gradientColor } from './concept-time'
 import type {
   Community,
   GraphData,
@@ -7,11 +8,15 @@ import type {
   GraphNode,
 } from '../types/graph'
 
+export type ColorMode = 'community' | 'first_year'
+
 export interface GraphViewOptions {
   mode: GraphMode
   showSemantic: boolean
   minSupport: number
   yearRange: [number, number]
+  /** PRD v2 / P3: concept-node colouring. community = default (unchanged). */
+  colorMode?: ColorMode
 }
 
 export interface GraphViewData {
@@ -51,7 +56,7 @@ function capabilityWarning(graph: GraphData): string | undefined {
 }
 
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
-  const nodes = graph.nodes.filter((node) => node.type === 'concept')
+  let nodes = graph.nodes.filter((node) => node.type === 'concept')
   const nodeIds = new Set(nodes.map((node) => node.id))
   const cooccurrence = graph.edges.filter(
     (edge) => edge.kind === 'cooccurrence' && (edge.support_count ?? 0) >= options.minSupport,
@@ -74,6 +79,9 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
       .filter((edge) => edge.kind === 'cooccurrence')
       .map((edge) => edge.support_count ?? 1),
   )
+  if (options.colorMode === 'first_year') {
+    nodes = applyTimeColour(nodes, graph.methodology?.time_window)
+  }
   return {
     nodes,
     edges,
@@ -86,6 +94,35 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     maxSupport,
     capabilityWarning: capabilityWarning(graph),
   }
+}
+
+/** [min, max] of concept first-years on the given (concept) nodes, or null. */
+function timeWindowOf(nodes: GraphNode[]): [number, number] | null {
+  let min = Infinity
+  let max = -Infinity
+  for (const node of nodes) {
+    if (node.type !== 'concept' || node.first_year === undefined) continue
+    if (node.first_year < min) min = node.first_year
+    if (node.first_year > max) max = node.first_year
+  }
+  return Number.isFinite(min) ? [min, max] : null
+}
+
+/**
+ * PRD v2 / P3: pure view-layer recolour — never mutates graph nodes, never
+ * touches DB. `storedWindow` is the persisted methodology.time_window; fall
+ * back to deriving it from the nodes (old graphs without the stored field).
+ */
+function applyTimeColour(
+  nodes: GraphNode[],
+  storedWindow?: [number, number] | null,
+): GraphNode[] {
+  const window = storedWindow ?? timeWindowOf(nodes)
+  return nodes.map((node) =>
+    node.type === 'concept'
+      ? { ...node, color: gradientColor(node.first_year, window) }
+      : node,
+  )
 }
 
 function selectContextView(graph: GraphData, options: GraphViewOptions): GraphViewData {

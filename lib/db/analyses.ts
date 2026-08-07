@@ -382,6 +382,11 @@ export async function saveGraph(
         // §6.2: previously written only to patent_concepts and never read back,
         // so a concept node's source_patents vanished on every reload.
         'source_patents',
+        // --- PRD v2 / P3: concept time metadata (§2.3) ---
+        'first_year',
+        'last_year',
+        'median_year',
+        'year_counts',
         'color',
         'size',
       ],
@@ -392,6 +397,10 @@ export async function saveGraph(
         node.frequency ?? 0,
         node.community_id ?? null,
         node.source_patents ?? null,
+        node.first_year ?? null,
+        node.last_year ?? null,
+        node.median_year ?? null,
+        node.year_counts ? JSON.stringify(node.year_counts) : null,
         node.color,
         node.size,
       ]),
@@ -542,6 +551,11 @@ interface ConceptRow {
   frequency: number
   community_id: number | null
   source_patents: string[] | null
+  // PRD v2 / P3: concept time metadata columns.
+  first_year: number | null
+  last_year: number | null
+  median_year: number | null
+  year_counts: Record<string, number> | null
   color: string | null
   size: number | null
 }
@@ -601,7 +615,8 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       [analysisId],
     ),
     query<ConceptRow>(
-      `SELECT node_id, label, frequency, community_id, source_patents, color, size
+      `SELECT node_id, label, frequency, community_id, source_patents, color, size,
+              first_year, last_year, median_year, year_counts
        FROM concepts WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
@@ -655,6 +670,11 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       frequency: row.frequency,
       community_id: row.community_id ?? undefined,
       source_patents: row.source_patents ?? undefined,
+      // --- PRD v2 / P3: DB null -> TS undefined; year_counts keys are strings. ---
+      first_year: row.first_year ?? undefined,
+      last_year: row.last_year ?? undefined,
+      median_year: row.median_year ?? undefined,
+      year_counts: row.year_counts ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 10,
     })),

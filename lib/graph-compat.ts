@@ -29,6 +29,25 @@ function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+/** Integer-only number (PRD v2 / P3: years). Anything else is undefined. */
+function asNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && Number.isFinite(value)
+    ? value
+    : undefined
+}
+
+/** {year: finite number} map, or undefined if absent / not a plain object. */
+function asYearCounts(value: unknown): Record<string, number> | undefined {
+  if (!isRecord(value)) return undefined
+  const out: Record<string, number> = {}
+  for (const [key, v] of Object.entries(value)) {
+    const n = asFiniteNumber(v)
+    if (n === undefined) return undefined
+    out[key] = n
+  }
+  return out
+}
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return Array.from(new Set(value.filter((item): item is string => typeof item === 'string'))).sort()
@@ -48,6 +67,13 @@ function normalizeNode(value: unknown): GraphNode | null {
     color: typeof value.color === 'string' ? value.color : '#BAB0AC',
     size: asFiniteNumber(value.size) ?? (type === 'patent' ? PATENT_NODE_SIZE : 18),
     source_patents: asStringArray(value.source_patents),
+    // PRD v2 / P3: the four concept-time fields are validated, not spread
+    // through unchecked — a string / null / 1e309 first_year would compute a
+    // NaN colour, violating the no-NaN guard (§B7). Invalid -> undefined.
+    first_year: asNonNegativeInteger(value.first_year),
+    last_year: asNonNegativeInteger(value.last_year),
+    median_year: asNonNegativeInteger(value.median_year),
+    year_counts: asYearCounts(value.year_counts),
   }
 }
 
@@ -167,7 +193,36 @@ function normalizeMethodology(
       semanticProvenance === 'unavailable'
         ? semanticProvenance
         : defaults.semantic_provenance,
+    // PRD v2 / P3: two methodology fields must survive normalisation or the
+    // admin/import path would permanently drop them (B6). A present-but-invalid
+    // time_window becomes null; an ABSENT field stays omitted (undefined), never
+    // a faked default — the methodology-level "0 impostor" guard.
+    ...normalizeTimeMethodology(raw),
   }
+}
+
+function normalizeTimeMethodology(
+  raw: Record<string, unknown>,
+): Pick<GraphMethodology, 'time_window' | 'time_color_scale'> {
+  const out: Pick<GraphMethodology, 'time_window' | 'time_color_scale'> = {}
+  const tw = raw.time_window
+  if (
+    Array.isArray(tw) &&
+    tw.length === 2 &&
+    typeof tw[0] === 'number' &&
+    typeof tw[1] === 'number' &&
+    Number.isInteger(tw[0]) &&
+    Number.isInteger(tw[1])
+  ) {
+    out.time_window = [tw[0], tw[1]]
+  } else if (tw === null || tw !== undefined) {
+    // Present but invalid, or explicitly null -> "window unknown".
+    out.time_window = null
+  }
+  if (raw.time_color_scale === 'sequential_blue') {
+    out.time_color_scale = 'sequential_blue'
+  }
+  return out
 }
 
 /**
