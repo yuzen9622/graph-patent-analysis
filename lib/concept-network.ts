@@ -3,6 +3,7 @@ import type {
   GraphEdge,
   RelationEvidence,
 } from '../types/graph'
+import { resolveKeyword } from './synonyms'
 
 export interface ConceptAggregate {
   label: string
@@ -44,14 +45,31 @@ export function conceptSize(frequency: number): number {
 
 export const PATENT_NODE_SIZE = 18
 
-function cleanedKeywords(extraction: ExtractionResult): string[] {
+function cleanedKeywords(
+  extraction: ExtractionResult,
+  synonymMap?: ReadonlyMap<string, string>,
+): string[] {
+  // PRD v2 / P1 decision #6: same-term merging must happen at the INPUT layer
+  // of co-occurrence computation, BEFORE any concept/pair map is built.  If it
+  // happened afterwards, (AI, X) and (人工智慧, X) would hash to the same edge
+  // id and addEdge() would discard the second, keeping only the first one's
+  // support_count instead of the union.  So keywords are normalised to their
+  // canonical representative here, then de-duplicated again (two different
+  // spellings can map to one canonical) and re-sorted for a stable pair order.
   return Array.from(
-    new Set((extraction.keywords ?? []).map((keyword) => keyword.trim()).filter(Boolean)),
+    new Set(
+      (extraction.keywords ?? [])
+        .map((keyword) =>
+          synonymMap ? resolveKeyword(keyword, synonymMap) : keyword.trim(),
+        )
+        .filter(Boolean),
+    ),
   ).sort(sortText)
 }
 
 export function buildConceptNetwork(
   extractions: ExtractionResult[],
+  synonymMap?: ReadonlyMap<string, string>,
 ): ConceptNetworkResult {
   const conceptPatents = new Map<string, Set<string>>()
   const pairPatents = new Map<string, { source: string; target: string; patents: Set<string> }>()
@@ -67,7 +85,7 @@ export function buildConceptNetwork(
   >()
 
   for (const extraction of extractions) {
-    const keywords = cleanedKeywords(extraction)
+    const keywords = cleanedKeywords(extraction, synonymMap)
     const keywordSet = new Set(keywords)
 
     for (const keyword of keywords) {
@@ -88,8 +106,15 @@ export function buildConceptNetwork(
     }
 
     for (const rawRelation of extraction.relations ?? []) {
-      const source = rawRelation.source.trim()
-      const target = rawRelation.target.trim()
+      // Same-term merge also applies to relation endpoints (P1): a relation
+      // authored against one spelling must coalesce with one authored against
+      // its synonym before grouping, and dedupe by the canonical pair.
+      const source = synonymMap
+        ? resolveKeyword(rawRelation.source, synonymMap)
+        : rawRelation.source.trim()
+      const target = synonymMap
+        ? resolveKeyword(rawRelation.target, synonymMap)
+        : rawRelation.target.trim()
       const relation = rawRelation.relation.trim()
       if (!source || !target || !relation || source === target) continue
       if (!keywordSet.has(source) || !keywordSet.has(target)) continue

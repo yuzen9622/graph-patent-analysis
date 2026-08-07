@@ -192,6 +192,12 @@ export interface SaveContext {
   /** `ParseResult.warnings` — stored on `analyses.data_quality_warnings`. */
   dataQualityWarnings?: unknown
   /**
+   * PRD v2 / P1: immutable copy of the synonym dictionary used by THIS analysis
+   * (`analyses.synonym_snapshot`). Old analyses must not change when the global
+   * dictionary is later edited — the snapshot is what froze them.
+   */
+  synonymSnapshot?: unknown
+  /**
    * Every upload backing this analysis (§6.2 `analysis_uploads`).  Upstream
    * currently supplies a single upload; multi-file uploads are stage 3.
    */
@@ -241,6 +247,7 @@ export async function saveGraph(
          ai_report = $15,
          generated_at = $16,
          data_quality_warnings = COALESCE($17, data_quality_warnings),
+         synonym_snapshot = COALESCE($18, synonym_snapshot),
          completed_at = now()
        WHERE id = $1`,
       [
@@ -265,6 +272,9 @@ export async function saveGraph(
         context.dataQualityWarnings === undefined
           ? null
           : JSON.stringify(context.dataQualityWarnings),
+        context.synonymSnapshot === undefined
+          ? null
+          : JSON.stringify(context.synonymSnapshot),
       ],
     )
 

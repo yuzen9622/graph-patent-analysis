@@ -18,6 +18,8 @@ import { getModel, getEnvApiKey, PROVIDER_MODELS, type ProviderType } from '@/li
 import { buildConceptNetwork } from '@/lib/concept-network'
 import { cleanApplicantName } from '@/lib/excel-parser'
 import { extractCountry } from '@/lib/applicant-classify'
+import { buildSynonymMap, createSnapshot } from '@/lib/synonyms'
+import { listSynonymGroups } from '@/lib/db/synonyms'
 import { generateText } from 'ai'
 import type { PatentRow, ExtractionResult } from '@/types/graph'
 
@@ -109,7 +111,14 @@ async function runAnalysis(
 
     if (isJobCancelled(jobId)) return
 
-    const conceptNetwork = buildConceptNetwork(extractions)
+    // PRD v2 / P1: load the global synonym dictionary and snapshot it (immutable)
+    // so this analysis records exactly which terms were merged at run time. The
+    // map is applied at the co-occurrence INPUT layer inside buildConceptNetwork.
+    const groups = await listSynonymGroups()
+    const synonym = buildSynonymMap(groups)
+    const synonymSnapshot = createSnapshot(groups)
+
+    const conceptNetwork = buildConceptNetwork(extractions, synonym.map)
     const communityResult = detectCommunities(conceptNetwork)
 
     const graph = buildGraph(
@@ -159,6 +168,7 @@ async function runAnalysis(
       citations: parserContext.citations.length > 0 ? parserContext.citations : undefined,
       dataQualityWarnings: parserContext.warnings,
       uploads: parserContext.uploads.length > 0 ? parserContext.uploads : undefined,
+      synonymSnapshot,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
