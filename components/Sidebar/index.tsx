@@ -16,7 +16,7 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
-import type { ColorMode } from "@/lib/graph-view";
+import type { ColorMode, EdgeWeightMetric } from "@/lib/graph-view";
 import type {
   GraphNode,
   GraphEdge,
@@ -40,6 +40,8 @@ interface Props {
   mode: GraphMode;
   colorMode: ColorMode;
   onColorModeChange: (mode: ColorMode) => void;
+  edgeWeight: EdgeWeightMetric;
+  onEdgeWeightChange: (metric: EdgeWeightMetric) => void;
   showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
@@ -93,6 +95,8 @@ export default function Sidebar({
   mode,
   colorMode,
   onColorModeChange,
+  edgeWeight,
+  onEdgeWeightChange,
   showSemantic,
   minSupport,
   maxSupport,
@@ -227,6 +231,7 @@ export default function Sidebar({
                       {(
                         [
                           ["community", "社群色"],
+                          ["community_applicants", "社群色（家）"],
                           ["first_year", "首次出現年"],
                         ] as const
                       ).map(([value, label]) => (
@@ -250,6 +255,45 @@ export default function Sidebar({
                         顏色＝概念首次出現的申請年份（漸層由早至晚）；切換只影響顯示，不改變資料。
                       </p>
                     )}
+                    {colorMode === "community_applicants" && (
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        顏色＝「家」單位 Louvain 社群（同一機構跨篇碰過的概念聚類）；分區獨立於「篇」單位社群。
+                      </p>
+                    )}
+                    <div className="mt-3">
+                      <p className="text-xs text-foreground font-medium mb-2">
+                        線寬指標
+                      </p>
+                      <div
+                        className="inline-flex rounded-md border border-border bg-background p-0.5"
+                        role="group"
+                        aria-label="線寬指標"
+                      >
+                        {(
+                          [
+                            ["jaccard", "Jaccard"],
+                            ["npmi", "NPMI"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => onEdgeWeightChange(value)}
+                            aria-pressed={edgeWeight === value}
+                            className={`rounded px-2 py-1 text-xs transition-colors ${
+                              edgeWeight === value
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        線寬用有界指標（Jaccard 或 NPMI）；NPMI 在 p_ij=1 時不顯示。指標皆為全量計算，門檻只過濾顯示。
+                      </p>
+                    </div>
                   </div>
                   <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
                     <input

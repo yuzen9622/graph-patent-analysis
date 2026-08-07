@@ -389,6 +389,8 @@ export async function saveGraph(
         'year_counts',
         // --- PRD v2 / P4: applicant-unit metric ---
         'applicant_count',
+        // PRD v2 / P4 Q2: 家單位社群
+        'community_id_applicants',
         'color',
         'size',
       ],
@@ -404,6 +406,7 @@ export async function saveGraph(
         node.median_year ?? null,
         node.year_counts ? JSON.stringify(node.year_counts) : null,
         node.applicant_count ?? null,
+        node.community_id_applicants ?? null,
         node.color,
         node.size,
       ]),
@@ -412,15 +415,53 @@ export async function saveGraph(
     await insertRows(
       client,
       'communities',
-      ['analysis_id', 'community_id', 'name', 'color', 'node_count'],
+      ['analysis_id', 'unit', 'community_id', 'name', 'color', 'node_count'],
       graph.communities.map((community) => [
         analysisId,
+        community.unit ?? 'patent',
         community.id,
         community.name,
         community.color,
         community.node_count,
       ]),
     )
+
+    // PRD v2 / P4 (Q2): 「家」單位社群分區共享治同表，unit 區隔（旧圖無）。
+    if (graph.communities_applicants && graph.communities_applicants.length > 0) {
+      await insertRows(
+        client,
+        'communities',
+        ['analysis_id', 'unit', 'community_id', 'name', 'color', 'node_count'],
+        graph.communities_applicants.map((community) => [
+          analysisId,
+          'applicant',
+          community.id,
+          community.name,
+          community.color,
+          community.node_count,
+        ]),
+      )
+    }
+
+    // PRD v2 / P4 (Q2): 概念→社群歸屬僅多單位各存一份；舊圖只有 patent 單位。
+    const conceptCommunityRows: unknown[][] = []
+    for (const node of conceptNodes) {
+      if (node.community_id !== undefined && node.community_id !== null) {
+        conceptCommunityRows.push([analysisId, node.label, 'patent', node.community_id])
+      }
+      if (node.community_id_applicants !== undefined && node.community_id_applicants !== null) {
+        conceptCommunityRows.push([analysisId, node.label, 'applicant', node.community_id_applicants])
+      }
+    }
+    if (conceptCommunityRows.length > 0) {
+      await insertRows(
+        client,
+        'concept_communities',
+        ['analysis_id', 'label', 'unit', 'community_id'],
+        conceptCommunityRows,
+        { onConflict: 'ON CONFLICT DO NOTHING' },
+      )
+    }
 
     await insertRows(
       client,
@@ -435,6 +476,13 @@ export async function saveGraph(
         'weight',
         'support_count',
         'jaccard',
+        // --- PRD v2 / P4 second slice: per-unit metrics ---
+        'support_applicants',
+        'jaccard_applicants',
+        'npmi',
+        'npmi_applicants',
+        'association_strength',
+        'association_strength_applicants',
         'reason',
         'confidence',
         'source_patent',
@@ -451,6 +499,12 @@ export async function saveGraph(
         edge.weight ?? null,
         edge.support_count ?? null,
         edge.jaccard ?? null,
+        edge.support_applicants ?? null,
+        edge.jaccard_applicants ?? null,
+        edge.npmi ?? null,
+        edge.npmi_applicants ?? null,
+        edge.association_strength ?? null,
+        edge.association_strength_applicants ?? null,
         edge.reason ?? null,
         edge.confidence ?? null,
         edge.source_patent ?? null,
@@ -561,8 +615,16 @@ interface ConceptRow {
   year_counts: Record<string, number> | null
   // PRD v2 / P4: applicant-unit metric column.
   applicant_count: number | null
+  // PRD v2 / P4 (Q2): 家單位社群（由 concept_communities 回填）。
+  community_id_applicants: number | null
   color: string | null
   size: number | null
+}
+
+interface ConceptCommunityRow {
+  label: string
+  unit: string
+  community_id: number
 }
 
 interface EdgeRow {
@@ -574,6 +636,13 @@ interface EdgeRow {
   weight: number | null
   support_count: number | null
   jaccard: number | null
+  // --- PRD v2 / P4 second slice: per-unit metrics ---
+  support_applicants: number | null
+  jaccard_applicants: number | null
+  npmi: number | null
+  npmi_applicants: number | null
+  association_strength: number | null
+  association_strength_applicants: number | null
   reason: string | null
   confidence: RelationConfidence | null
   source_patent: string | null
@@ -607,7 +676,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
   )
   if (!meta || meta.status !== 'done') return null
 
-  const [applicants, patents, concepts, communityRows, edgeRows] = await Promise.all([
+  const [applicants, patents, concepts, communityRows, conceptCommunityRows, edgeRows] = await Promise.all([
     query<ApplicantRow>(
       `SELECT node_id, name, patent_count, applicant_key, color, size
        FROM applicants WHERE analysis_id = $1 ORDER BY id`,
@@ -626,18 +695,31 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
        FROM concepts WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
-    query<Community & { community_id: number }>(
-      `SELECT community_id, name, color, node_count FROM communities
-       WHERE analysis_id = $1 ORDER BY community_id`,
+    query<Community & { community_id: number; unit: string }>(
+      `SELECT community_id, name, color, node_count, unit FROM communities
+       WHERE analysis_id = $1 ORDER BY unit, community_id`,
+      [analysisId],
+    ),
+    query<ConceptCommunityRow>(
+      `SELECT label, unit, community_id FROM concept_communities
+       WHERE analysis_id = $1`,
       [analysisId],
     ),
     query<EdgeRow>(
       `SELECT edge_id, kind, from_node, to_node, relation, weight, support_count, jaccard,
+              support_applicants, jaccard_applicants, npmi, npmi_applicants,
+              association_strength, association_strength_applicants,
               reason, confidence, source_patent, source_patents, evidence
        FROM edges WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
     ),
   ])
+
+  // PRD v2 / P4 (Q2): 「家」單位社群歸屬（concept_communities）回填到概念節點。
+  const applicantCommunitiesByLabel = new Map<string, number>()
+  for (const row of conceptCommunityRows) {
+    if (row.unit === 'applicant') applicantCommunitiesByLabel.set(row.label, row.community_id)
+  }
 
   const nodes: GraphNode[] = [
     ...applicants.map((row): GraphNode => ({
@@ -683,6 +765,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       year_counts: row.year_counts ?? undefined,
       // --- PRD v2 / P4 ---
       applicant_count: row.applicant_count ?? undefined,
+      community_id_applicants: applicantCommunitiesByLabel.get(row.label) ?? undefined,
       color: row.color ?? '#94A3B8',
       size: row.size ?? 10,
     })),
@@ -699,6 +782,15 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     if (row.weight !== null) edge.weight = row.weight
     if (row.support_count !== null) edge.support_count = row.support_count
     if (row.jaccard !== null) edge.jaccard = row.jaccard
+    // --- PRD v2 / P4 second slice: per-unit metrics ---
+    if (row.support_applicants !== null) edge.support_applicants = row.support_applicants
+    if (row.jaccard_applicants !== null) edge.jaccard_applicants = row.jaccard_applicants
+    if (row.npmi !== null) edge.npmi = row.npmi
+    if (row.npmi_applicants !== null) edge.npmi_applicants = row.npmi_applicants
+    if (row.association_strength !== null) edge.association_strength = row.association_strength
+    if (row.association_strength_applicants !== null) {
+      edge.association_strength_applicants = row.association_strength_applicants
+    }
     if (row.reason !== null) edge.reason = row.reason
     if (row.confidence !== null) edge.confidence = row.confidence
     if (row.source_patent !== null) edge.source_patent = row.source_patent
@@ -707,12 +799,25 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     return edge
   })
 
-  const communities: Community[] = communityRows.map((row) => ({
-    id: row.community_id,
-    name: row.name,
-    color: row.color,
-    node_count: row.node_count,
-  }))
+  const communities: Community[] = communityRows
+    .filter((row) => row.unit !== 'applicant')
+    .map((row) => ({
+      id: row.community_id,
+      name: row.name,
+      color: row.color,
+      node_count: row.node_count,
+    }))
+
+  // PRD v2 / P4 (Q2): 「家」單位社群分區；舊圖（migration 006 前）沒有。
+  const communitiesApplicants: Community[] = communityRows
+    .filter((row) => row.unit === 'applicant')
+    .map((row) => ({
+      id: row.community_id,
+      name: row.name,
+      color: row.color,
+      node_count: row.node_count,
+      unit: 'applicant' as const,
+    }))
 
   return {
     // Report the version actually stored, not a hardcoded 2 — otherwise a v3
@@ -722,6 +827,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     nodes,
     edges,
     communities,
+    communities_applicants: communitiesApplicants,
     stats: {
       applicant_count: meta.applicant_count,
       patent_count: meta.patent_count,

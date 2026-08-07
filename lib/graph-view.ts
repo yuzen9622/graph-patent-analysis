@@ -9,7 +9,10 @@ import type {
   GraphNode,
 } from '../types/graph'
 
-export type ColorMode = 'community' | 'first_year'
+export type ColorMode = 'community' | 'first_year' | 'community_applicants'
+
+/** 線寬用哪個有界指標（意圖決策 2：只用有界指標當線寬）。 */
+export type EdgeWeightMetric = 'jaccard' | 'npmi'
 
 /** PRD v2 / P4: 分析單位 —— 篇（patent）／家（institution）。 */
 export type Unit = 'patent' | 'applicant'
@@ -19,8 +22,10 @@ export interface GraphViewOptions {
   showSemantic: boolean
   minSupport: number
   yearRange: [number, number]
-  /** PRD v2 / P3: concept-node colouring. `community` = default. */
+  /** PRD v2 / P3: concept-node colouring. `community` = 篇單位預設。 */
   colorMode?: ColorMode
+  /** 線寬指標：jaccard（預設）或 NPMI（決策 2，皆為有界）。 */
+  edgeWeight?: EdgeWeightMetric
 }
 
 /**
@@ -120,12 +125,20 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
   const edges = [...cooccurrence, ...semantic].filter(
     (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
   )
+  // PRD v2 / P4 (Q2): colorMode 'community_applicants' 用「家」單位分區與色盤
+  // （色盤 key = unit + id，兩單位同 id 不共享色）。
+  const useApplicantCommunity = options.colorMode === 'community_applicants'
   const activeCommunityIds = new Set(
     nodes
-      .map((node) => node.community_id)
+      .map((node) =>
+        useApplicantCommunity ? node.community_id_applicants : node.community_id,
+      )
       .filter((id): id is number => typeof id === 'number'),
   )
-  const communities = graph.communities.filter((community) => activeCommunityIds.has(community.id))
+  const communities = (useApplicantCommunity
+    ? graph.communities_applicants ?? []
+    : graph.communities
+  ).filter((community) => activeCommunityIds.has(community.id))
   const maxSupport = Math.max(
     1,
     ...graph.edges
@@ -134,6 +147,8 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
   )
   if (options.colorMode === 'first_year') {
     nodes = applyTimeColour(nodes, graph.methodology?.time_window)
+  } else if (useApplicantCommunity) {
+    nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
   }
   return {
     nodes,
@@ -147,6 +162,24 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     maxSupport,
     capabilityWarning: capabilityWarning(graph),
   }
+}
+
+/**
+ * PRD v2 / P4 (Q2): 純 view 層重上色——概念節點改用「家」單位社群色。
+ * 永不 mutate graph nodes。
+ */
+function applyCommunityApplicantsColour(
+  nodes: GraphNode[],
+  communitiesApplicants: Community[],
+): GraphNode[] {
+  const colorById = new Map(
+    communitiesApplicants.map((community) => [community.id, community.color]),
+  )
+  return nodes.map((node) => {
+    if (node.type !== 'concept' || node.community_id_applicants === undefined) return node
+    const color = colorById.get(node.community_id_applicants)
+    return color ? { ...node, color } : node
+  })
 }
 
 /** [min, max] of concept first-years on the given (concept) nodes, or null. */

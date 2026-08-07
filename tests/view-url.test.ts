@@ -73,3 +73,27 @@ describe('parseViewQuery 容錯', () => {
     expect(parseViewQuery('?paper=1')).toEqual({ paperMode: true })
   })
 })
+describe('edgeWeight（線寬指標）', () => {
+  it('缺省 jaccard 不掛 URL；npmi 掛 ew=NPMI 並可 round-trip', () => {
+    const base = toViewQueryString({ ...fullDefaults(), edgeWeight: 'jaccard' })
+    expect(base).not.toContain('ew=')
+    const withNpmi = toViewQueryString({ ...fullDefaults(), edgeWeight: 'npmi' })
+    expect(withNpmi).toContain('ew=npmi')
+    const parsed = parseViewQuery(`?${withNpmi}`)
+    expect(parsed.edgeWeight).toBe('npmi')
+  })
+  it('無效 edgeWeight 不套用', () => {
+    expect(parseViewQuery('?ew=weight')).toEqual({})
+  })
+})
+
+function fullDefaults(): import('./../lib/view-url').ViewState {
+  return {
+    mode: 'concept',
+    showSemantic: false,
+    paperMode: true,
+    colorMode: 'community',
+    minSupport: 2,
+    yearRange: [2007, 2025],
+  }
+}

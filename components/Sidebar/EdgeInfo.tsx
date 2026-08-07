@@ -106,10 +106,50 @@ function CooccurrenceDetails({
   return (
     <dl className="space-y-2 text-xs">
       <Row label="關係" value={edge.relation || "共同出現"} />
-      <Row label="共同專利數" value={`${edge.support_count ?? sourcePatents.length} 篇`} />
+      <Row label="支持度（篇）" value={`${edge.support_count ?? sourcePatents.length} 篇`} />
       <Row
-        label="Jaccard"
-        value={typeof edge.jaccard === "number" ? formatJaccard(edge.jaccard) : "無資料"}
+        label="支持度（家）"
+        value={
+          edge.support_applicants !== undefined
+            ? `${edge.support_applicants} 家（同一機構跨篇之專利碰過兩概念）`
+            : "—"
+        }
+      />
+      <Row
+        label="Jaccard（篇）"
+        value={typeof edge.jaccard === "number" ? formatJaccard(edge.jaccard) : "—"}
+      />
+      <Row
+        label="Jaccard（家）"
+        value={
+          edge.jaccard_applicants !== undefined
+            ? formatJaccard(edge.jaccard_applicants)
+            : "—"
+        }
+      />
+      <Row
+        label="NPMI（篇）"
+        value={
+          edge.npmi !== undefined
+            ? `${(edge.npmi * 100).toFixed(1)}%`
+            : "—（p=1 不定義）"
+        }
+      />
+      <Row
+        label="NPMI（家）"
+        value={
+          edge.npmi_applicants !== undefined
+            ? `${(edge.npmi_applicants * 100).toFixed(1)}%`
+            : "—"
+        }
+      />
+      <Row
+        label="關聯強度（排序用）"
+        value={
+          edge.association_strength !== undefined
+            ? edge.association_strength.toFixed(2)
+            : "—"
+        }
       />
       <PatentSources sourcePatents={sourcePatents} nodes={nodes} />
     </dl>

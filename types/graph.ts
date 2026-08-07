@@ -75,7 +75,8 @@ export interface GraphNode {
   application_number?: string
   // Concept node fields
   frequency?: number
-  community_id?: number
+  community_id?: number         // 篇單位社群
+  community_id_applicants?: number // PRD v2/P4 Q2: 家單位社群（可缺省＝舊圖）
   source_patents?: string[]
   // --- PRD v2 / P4: applicant-unit metric (概念被幾家機構碰到) ---
   applicant_count?: number
@@ -126,17 +127,28 @@ export interface GraphEdge {
   kind?: GraphEdgeKind    // Optional only for loading pre-v2 graph files
   support_count?: number  // Unique patents supporting a co-occurrence/semantic edge
   jaccard?: number        // Co-occurrence similarity; never inferred for semantic edges
+  // --- PRD v2 / P4 second slice: per-unit metrics (全量, 門檻前; 缺省=舊圖) ---
+  support_applicants?: number        // 同一位申請人（跨篇）其專利同時含過兩概念的家數
+  jaccard_applicants?: number       // 家單位 jaccard
+  npmi?: number                     // 篇單位 NPMI（p_ij=1 → undefined, Q5）
+  npmi_applicants?: number          // 家單位 NPMI
+  association_strength?: number     // 篇單位 association strength（排序用, 意圖決策 2）
+  association_strength_applicants?: number // 家單位 association strength
   source_patents?: string[]
   evidence?: RelationEvidence[]
   /** PRD v2 / P4: institution-edge (機構節點圖) shared-concept labels. */
   shared_concepts?: string[]
 }
 
+export type CommunityUnit = 'patent' | 'applicant'
+
 export interface Community {
   id: number
   name: string
   color: string
   node_count: number
+  /** PRD v2 / P4 (Q2): 分單位。patent 為缺省（舊圖）；兩單位沿用各自分區。 */
+  unit?: CommunityUnit
 }
 
 // graphify-style analysis: hub nodes and cross-community bridge edges
@@ -191,6 +203,8 @@ export interface GraphData {
   nodes: GraphNode[]
   edges: GraphEdge[]
   communities: Community[]
+  /** PRD v2 / P4 (Q2): 「家」單位的社群分區（缺省=舊圖只有 patent 單位）。 */
+  communities_applicants?: Community[]
   stats: {
     applicant_count: number
     patent_count: number

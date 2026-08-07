@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
-import { selectGraphView, type ColorMode } from "@/lib/graph-view";
+import { selectGraphView, type ColorMode, type EdgeWeightMetric } from "@/lib/graph-view";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
@@ -27,6 +27,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [showSemantic, setShowSemantic] = useState(false);
   const [minSupport, setMinSupport] = useState(1);
   const [colorMode, setColorMode] = useState<ColorMode>("community");
+  const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -53,6 +54,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     const parsed = parseViewQuery(window.location.search);
     if (parsed.mode) setMode(parsed.mode);
     if (parsed.colorMode) setColorMode(parsed.colorMode);
+    if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
     if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
@@ -70,9 +72,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
       syncedOnceRef.current = true;
       return;
     }
-    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange });
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight });
     window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
-  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange]);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight]);
 
   const view = useMemo(
     () =>
@@ -82,8 +84,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
         minSupport,
         yearRange,
         colorMode,
+        edgeWeight,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -106,7 +109,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
     minSupport: String(minSupport),
     yearStart: String(yearRange[0]),
     yearEnd: String(yearRange[1]),
-  }).toString();
+  });
+  if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -238,6 +242,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onNodeSelect={setSelectedNode}
             onEdgeSelect={setSelectedEdge}
             yearRange={yearRange}
+            edgeWeight={edgeWeight}
             visibleLayers={
               mode === "concept"
                 ? new Set<NodeType>(["concept"])
@@ -280,6 +285,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             mode={mode}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
+            edgeWeight={edgeWeight}
+            onEdgeWeightChange={setEdgeWeight}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

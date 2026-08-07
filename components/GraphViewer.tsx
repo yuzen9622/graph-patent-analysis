@@ -14,6 +14,7 @@ import {
   isValidGraphViewport,
   type GraphViewport,
 } from "@/lib/graph-viewport";
+import type { EdgeWeightMetric } from "@/lib/graph-view";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -122,12 +123,16 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
   };
 }
 
-function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
+function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: EdgeWeightMetric = 'jaccard') {
   const isCooccurrence = e.kind === "cooccurrence";
   const isSemantic = e.kind === "semantic";
   const isInstitution = e.kind === "institution";
   const supportLine = isCooccurrence
-    ? `共同出現：${e.support_count ?? 0} 篇專利\nJaccard：${(e.jaccard ?? 0).toFixed(3)}`
+    ? `共同出現：${e.support_count ?? 0} 篇 / ${e.support_applicants ?? 0} 家
+` +
+      `Jaccard：篇 ${(e.jaccard ?? 0).toFixed(3)} ｜ 家 ${fmt(e.jaccard_applicants)}
+` +
+      `NPMI：篇 ${fmt(e.npmi)} ｜ 家 ${fmt(e.npmi_applicants)}`
     : "";
   const semanticLine = isSemantic
     ? `LLM 語意關係：${e.relation}\n目前保存來源：${e.source_patents?.length ?? 0} 篇`
@@ -146,7 +151,7 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
     title,
     dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
     width: isCooccurrence
-      ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.2)
+      ? cooccurrenceWidth(e, edgeWeight)
       : isInstitution
         ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.4)
         : isSemantic
@@ -173,6 +178,19 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection) {
     // smooth is controlled globally via options — not set per-edge
     // so that perf-adaptive global setting takes effect
   };
+}
+
+function fmt(value: number | undefined): string {
+  return value === undefined ? "—" : value.toFixed(3)
+}
+
+/** 線寬用有界指標（意圖決策 2）：jaccard（預設）或 NPMI（p_ij=1 → 不顯示）。 */
+function cooccurrenceWidth(e: GraphEdge, metric: EdgeWeightMetric): number {
+  if (metric === 'npmi') {
+    const v = Math.max(0, e.npmi ?? 0)
+    return Math.min(8, 1 + v * 7)
+  }
+  return Math.min(8, 1 + (e.jaccard ?? 0) * 7)
 }
 
 function stableUnit(value: string): number {
@@ -374,6 +392,7 @@ interface Props {
   analysis?: GraphAnalysis;
   onNodeSelect?: (node: GraphNode | null) => void;
   yearRange?: [number, number];
+  edgeWeight?: EdgeWeightMetric;
   visibleLayers?: Set<NodeType>;
   hiddenCommunities?: Set<number>;
   focusNodeId?: string;
@@ -386,6 +405,7 @@ export default function GraphViewer({
   analysis,
   onNodeSelect,
   yearRange,
+  edgeWeight = 'jaccard',
   visibleLayers,
   hiddenCommunities,
   focusNodeId,
@@ -424,7 +444,7 @@ export default function GraphViewer({
         nodes.map((n) => toVisNode(n, initPos.get(n.id), godNodeMap.get(n.id))),
       );
       const edgeDataSet = new DataSet(
-        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id))),
+        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight)),
       );
       nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
       edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
@@ -537,7 +557,7 @@ export default function GraphViewer({
         edgeDataSet.update(
           edges.map((e) => ({
             id: e.id,
-            color: activeEdges.has(e.id) ? toVisEdge(e).color : DIM_EDGE,
+            color: activeEdges.has(e.id) ? toVisEdge(e, undefined, edgeWeight).color : DIM_EDGE,
           })),
         );
         highlightActive = true;
@@ -557,7 +577,7 @@ export default function GraphViewer({
           }),
         );
         edgeDataSet.update(
-          edges.map((e) => ({ id: e.id, color: toVisEdge(e).color })),
+          edges.map((e) => ({ id: e.id, color: toVisEdge(e, undefined, edgeWeight).color })),
         );
         highlightActive = false;
       };
@@ -615,7 +635,7 @@ export default function GraphViewer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges]);
+  }, [nodes, edges, edgeWeight]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
   useEffect(() => {

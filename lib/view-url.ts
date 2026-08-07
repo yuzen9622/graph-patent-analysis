@@ -7,7 +7,7 @@
  * here so they are unit-testable (the repo's convention is pure-logic tests;
  * there is no component test harness in this project).
  */
-import type { ColorMode } from './graph-view'
+import type { ColorMode, EdgeWeightMetric } from './graph-view'
 import type { GraphMode } from '../types/graph'
 
 export interface ViewState {
@@ -17,13 +17,18 @@ export interface ViewState {
   colorMode: ColorMode
   minSupport: number
   yearRange: [number, number]
+  /** PRD v2 / P4: 線寬指標（缺省 jaccard，不掛在 URL 進位位）。 */
+  edgeWeight?: EdgeWeightMetric
 }
 
 const isMode = (value: string | null): value is GraphMode =>
   value === 'concept' || value === 'context' || value === 'institution'
 
 const isColorMode = (value: string | null): value is ColorMode =>
-  value === 'community' || value === 'first_year'
+  value === 'community' || value === 'first_year' || value === 'community_applicants'
+
+const isEdgeWeight = (value: string | null): value is EdgeWeightMetric =>
+  value === 'jaccard' || value === 'npmi'
 
 /**
  * Parse a URL query (pass `window.location.search`, including a leading `?`).
@@ -39,6 +44,9 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 
   const colorMode = p.get('colorMode')
   if (isColorMode(colorMode)) out.colorMode = colorMode
+
+  const edgeWeight = p.get('ew')
+  if (isEdgeWeight(edgeWeight)) out.edgeWeight = edgeWeight
 
   const llm = p.get('llm')
   if (llm === '1') out.showSemantic = true
@@ -66,7 +74,7 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 
 /** Serialise the full view state into a URLSearchParams query string. */
 export function toViewQueryString(state: ViewState): string {
-  return new URLSearchParams({
+  const params: Record<string, string> = {
     mode: state.mode,
     llm: state.showSemantic ? '1' : '0',
     paper: state.paperMode ? '1' : '0',
@@ -74,5 +82,9 @@ export function toViewQueryString(state: ViewState): string {
     minSupport: String(state.minSupport),
     yearStart: String(state.yearRange[0]),
     yearEnd: String(state.yearRange[1]),
-  }).toString()
+  }
+  if (state.edgeWeight && state.edgeWeight !== 'jaccard') {
+    params['ew'] = state.edgeWeight
+  }
+  return new URLSearchParams(params).toString()
 }

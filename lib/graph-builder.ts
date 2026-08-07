@@ -26,6 +26,26 @@ import {
   parseFilingYear,
   SEQUENTIAL_BLUE,
 } from "@/lib/concept-time";
+import {
+  computeUnitMetrics,
+  detectUnitCommunities,
+  pairApplicantSupport,
+} from "@/lib/concept-metrics";
+
+// PRD v2 / P4 (Q2): 「家」單位社群的色盤與「篇」單位分開，同 community_id
+// 在兩單位下不共享色（色盤 key = unit + id）。
+const APPLICANT_COMMUNITY_COLORS: string[] = [
+  "#7B2CBF",
+  "#FF8C42",
+  "#2EC4B6",
+  "#E63946",
+  "#4361EE",
+  "#F4A261",
+  "#7209B7",
+  "#06D6A0",
+  "#EF476F",
+  "#118AB2",
+];
 
 // Tableau-10 colors as defined in PRD Section 6.2
 const TABLEAU_10: string[] = [
@@ -83,6 +103,8 @@ export function buildGraph(
 
   // PRD v2 / P4: per-concept 「家計」（概念被幾家機構碰到），用於 NodeInfo 篇/家並陳。
   const conceptApplicants = new Map<string, Set<string>>();
+  // PRD v2 / P4 second slice: applicant → concepts（跨專利聯集），「家」單位邊計數基礎。
+  const applicantConcepts = new Map<string, Set<string>>();
 
   // ── PRD v2 / P3: per-concept time stats + the gradient window, both pure ──
   // population = multiset of per-patent years (filtered to valid years); the
@@ -224,6 +246,9 @@ export function buildGraph(
         const s = conceptApplicants.get(keyword) ?? new Set<string>();
         s.add(name);
         conceptApplicants.set(keyword, s);
+        const ac = applicantConcepts.get(name) ?? new Set<string>();
+        ac.add(keyword);
+        applicantConcepts.set(name, ac);
       }
 
       addEdge({
@@ -256,8 +281,74 @@ export function buildGraph(
   }
 
   // Add empirical co-occurrence and separately aggregated LLM semantic edges.
+  // PRD v2 / P4 second slice: enrich co-occurrence edges with the applicant-unit
+  // and NPMI/association metrics BEFORE they enter the graph (全量、門檻前, Q4/Q5).
+  const conceptPatents = new Map<string, number>();
+  for (const [label, aggregate] of conceptNetwork.concepts) {
+    conceptPatents.set(label, aggregate.frequency);
+  }
+  const applicantCounts = new Map<string, number>();
+  for (const [label, applicants] of conceptApplicants) {
+    applicantCounts.set(label, applicants.size);
+  }
+  const pairApplicants = pairApplicantSupport(applicantConcepts);
+  const unitMetrics = computeUnitMetrics({
+    cooccurrence: conceptNetwork.cooccurrenceEdges,
+    conceptPatents,
+    conceptApplicants: applicantCounts,
+    pairApplicants,
+    totalPatents: patents.length,
+    totalInstitutions: applicantNodeMap.size,
+  });
+  for (const edge of conceptNetwork.cooccurrenceEdges) {
+    const metrics = unitMetrics.get(edge.id);
+    if (metrics) Object.assign(edge, metrics);
+  }
   for (const edge of conceptNetwork.cooccurrenceEdges) addEdge(edge);
   for (const edge of conceptNetwork.semanticEdges) addEdge(edge);
+
+  // PRD v2 / P4 (Q2): 「家」單位 Louvain 分區（獨立於「篇」單位，各自持久化）。
+  const applicantAssignments = detectUnitCommunities(
+    Array.from(conceptNetwork.concepts.keys()),
+    pairApplicants,
+  );
+  const applicantCommunityNames = new Map<number, string>();
+  const applicantCommunityCounts = new Map<number, number>();
+  for (const [label, cid] of applicantAssignments) {
+    const node = conceptNodeMap.get(label);
+    if (node) node.community_id_applicants = cid;
+    applicantCommunityCounts.set(cid, (applicantCommunityCounts.get(cid) ?? 0) + 1);
+  }
+  // 社群名 = 社群內 applicant 度最高的概念。
+  const applicantDegree = new Map<string, number>();
+  for (const [key, applicants] of pairApplicants) {
+    const [a, b] = key.split("\u0000");
+    const w = applicants.size;
+    applicantDegree.set(a, (applicantDegree.get(a) ?? 0) + w);
+    applicantDegree.set(b, (applicantDegree.get(b) ?? 0) + w);
+  }
+  for (const cid of Array.from(applicantCommunityCounts.keys())) {
+    let best = "";
+    let bestDegree = -1;
+    for (const [label, ccid] of applicantAssignments) {
+      if (ccid !== cid) continue;
+      const deg = applicantDegree.get(label) ?? 0;
+      if (deg > bestDegree) {
+        bestDegree = deg;
+        best = label;
+      }
+    }
+    applicantCommunityNames.set(cid, best || `社群 ${cid}`);
+  }
+  const communitiesApplicants: Community[] = Array.from(applicantCommunityCounts.keys())
+    .sort((a, b) => a - b)
+    .map((cid) => ({
+      id: cid,
+      name: applicantCommunityNames.get(cid) ?? `社群 ${cid}`,
+      color: APPLICANT_COMMUNITY_COLORS[cid % APPLICANT_COMMUNITY_COLORS.length],
+      node_count: applicantCommunityCounts.get(cid) ?? 0,
+      unit: "applicant" as const,
+    }));
 
   // Ensure concepts without a patent edge (defensive legacy/input handling) exist.
   for (const label of conceptNetwork.concepts.keys()) {
@@ -351,6 +442,7 @@ export function buildGraph(
     nodes: allNodes,
     edges,
     communities: communitiesList,
+    communities_applicants: communitiesApplicants,
     stats,
     analysis,
     ai_report: "", // Filled in by the LLM report step (F-07)
