@@ -470,7 +470,7 @@ export async function saveGraph(
       const citationRows: unknown[][] = []
       for (const link of context.citations) {
         if (!link?.from || !link?.to) continue
-        const key = `${link.from} ${link.to}`
+        const key = `${link.from}\u0000${link.to}`
         if (seen.has(key)) continue
         seen.add(key)
         citationRows.push([analysisId, link.from, link.to])

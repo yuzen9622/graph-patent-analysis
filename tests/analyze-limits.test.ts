@@ -56,12 +56,23 @@ function limits(overrides: Partial<Limits> = {}): Limits {
 describe('resource limits (§5.2)', () => {
   it('ships the PRD table as defaults', () => {
     expect(DEFAULT_LIMITS).toEqual({
-      uploadMaxFileBytes: 50 * MB,
+      uploadMaxFileBytes: 8 * MB,
       uploadMaxFiles: 10,
-      uploadMaxTotalBytes: 100 * MB,
+      uploadMaxTotalBytes: 8 * MB,
       analyzeMaxPatents: 20000,
-      analyzeMaxBodyBytes: 100 * MB,
+      analyzeMaxBodyBytes: 8 * MB,
     })
+  })
+
+  // Every byte ceiling must stay under Next's proxy buffer budget (default 10MB),
+  // because past that limit the body is silently truncated before any handler
+  // runs — a ceiling above it would be unenforceable. See the rationale comment
+  // on DEFAULT_LIMITS in lib/analyze-limits.ts.
+  it('keeps every byte ceiling under the 10MB proxy buffer budget', () => {
+    const PROXY_BUDGET = 10 * MB
+    expect(DEFAULT_LIMITS.uploadMaxFileBytes).toBeLessThan(PROXY_BUDGET)
+    expect(DEFAULT_LIMITS.uploadMaxTotalBytes).toBeLessThan(PROXY_BUDGET)
+    expect(DEFAULT_LIMITS.analyzeMaxBodyBytes).toBeLessThan(PROXY_BUDGET)
   })
 
   it('every limit is overridable by an environment variable', () => {
@@ -173,14 +184,18 @@ describe('validateUploadFiles (§5.2, §5.3)', () => {
     expect(failure?.error).toContain('是空的')
   })
 
-  it('rejects a file over the 50 MB single-file ceiling with 413', () => {
-    const failure = validateUploadFiles([ok('big.xlsx', 50 * MB + 1)])
-    expect(failure?.status).toBe(413)
-    expect(validateUploadFiles([ok('big.xlsx', 50 * MB)])).toBeNull()
+  it('rejects a file over the single-file ceiling with 413, accepts one exactly on it', () => {
+    const ceiling = DEFAULT_LIMITS.uploadMaxFileBytes
+    expect(validateUploadFiles([ok('big.xlsx', ceiling + 1)])?.status).toBe(413)
+    expect(validateUploadFiles([ok('big.xlsx', ceiling)])).toBeNull()
   })
 
-  it('rejects a batch whose summed bytes pass the 100 MB ceiling with 413', () => {
-    const files = [ok('a.xlsx', 40 * MB), ok('b.xlsx', 40 * MB), ok('c.xlsx', 30 * MB)]
+  // Distinct from the per-file ceiling: each file here is individually legal,
+  // only the batch total is over. This is the case a per-file check alone misses.
+  it('rejects a batch whose summed bytes pass the total ceiling with 413', () => {
+    const files = [ok('a.xlsx', 5 * MB), ok('b.xlsx', 5 * MB)]
+    files.forEach((f) => expect(f.size).toBeLessThan(DEFAULT_LIMITS.uploadMaxFileBytes))
+    expect(files.reduce((s, f) => s + f.size, 0)).toBeGreaterThan(DEFAULT_LIMITS.uploadMaxTotalBytes)
     const failure = validateUploadFiles(files)
     expect(failure?.status).toBe(413)
     expect(failure?.error).toContain('這批檔案共')

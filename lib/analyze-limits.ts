@@ -30,12 +30,39 @@ export interface Limits {
   analyzeMaxBodyBytes: number
 }
 
+/**
+ * Why 8MB and not something larger:
+ *
+ * This project has a `proxy.ts` whose matcher covers `/api/uploads` and
+ * `/api/analyze`.  Whenever a proxy exists, Next 16 clones the request body and
+ * buffers it in memory so both the proxy and the route handler can read it; the
+ * ceiling is `experimental.proxyClientMaxBodySize`, **default 10MB**.  Past that
+ * limit Next "will only be buffered up to the limit, and a warning will be
+ * logged" — the request still runs, with a *truncated* body and no error to the
+ * client.  (Verbatim from
+ * node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/proxyClientMaxBodySize.md,
+ * checked 2026-08-05.)
+ *
+ * So any ceiling above 10MB here would be a lie: the body is silently cut before
+ * a handler ever sees it.  Raising `proxyClientMaxBodySize` instead is worse —
+ * the buffering happens *before* the route handler, so the Content-Length
+ * prechecks below cannot guard it, and a logged-in user could make the server
+ * hold the full amount in memory before being refused.
+ *
+ * 8MB keeps ~2MB of headroom under the framework budget for multipart
+ * boundaries and headers.  Measured reality: the analyze body for 1741 patents
+ * (abstracts included) is 2–3.5MB, so this is roughly 2–4x actual usage.
+ * Growing past it means raising the proxy budget *and* these numbers together,
+ * accepting the memory cost.
+ */
+const PROXY_BUDGET_HEADROOM_BYTES = 8 * 1024 * 1024
+
 export const DEFAULT_LIMITS: Limits = {
-  uploadMaxFileBytes: 50 * 1024 * 1024,
+  uploadMaxFileBytes: PROXY_BUDGET_HEADROOM_BYTES,
   uploadMaxFiles: 10,
-  uploadMaxTotalBytes: 100 * 1024 * 1024,
+  uploadMaxTotalBytes: PROXY_BUDGET_HEADROOM_BYTES,
   analyzeMaxPatents: 20000,
-  analyzeMaxBodyBytes: 100 * 1024 * 1024,
+  analyzeMaxBodyBytes: PROXY_BUDGET_HEADROOM_BYTES,
 }
 
 /** Environment variable per limit — every ceiling is overridable (§5.2). */
@@ -254,7 +281,7 @@ export function normalizeCitations(raw: unknown): Citation[] {
     const { from, to } = item as { from?: unknown; to?: unknown }
     if (typeof from !== 'string' || typeof to !== 'string') continue
     if (!from || !to) continue
-    const key = `${from} ${to}`
+    const key = `${from}\u0000${to}`
     if (seen.has(key)) continue
     seen.add(key)
     out.push({ from, to })

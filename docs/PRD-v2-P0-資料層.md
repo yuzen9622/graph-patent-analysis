@@ -359,14 +359,40 @@ patentRow.id = sha1hex(identityKey)     // ← PatentRow.id 的新語意
 
 | 端點 | 上限 | 預設 |
 |---|---|---|
-| `POST /api/uploads` | 單檔 bytes | 50 MB（現況 `:8`，不變） |
+| `POST /api/uploads` | 單檔 bytes | **8 MB** |
 | | 單次檔案數 | 10 |
-| | 單次總 bytes（`Content-Length` 預檢，在 `formData()` 之前） | 100 MB |
+| | 單次總 bytes（`Content-Length` 預檢，在 `formData()` 之前） | **8 MB** |
 | `POST /api/analyze` | `patents.length` | 20000（超限 413，不截斷） |
-| | body bytes（`Content-Length` 預檢） | 100 MB |
+| | body bytes（`Content-Length` 預檢） | **8 MB** |
 | | `sample_size` | clamp 到 `[1, 20000]` |
 
-全部可由環境變數調整。
+全部可由環境變數調整（`LIMIT_ENV_KEYS`）。
+
+#### 為什麼是 8 MB，而不是更大（2026-08-05 修正）
+
+本檔早期版本寫「單檔 50 MB、總量 100 MB」。**那是達不到的數字**：
+
+本專案有 `proxy.ts`，matcher 涵蓋 `/api/uploads` 與 `/api/analyze`。Next 16 只要
+存在 proxy 就會 clone request body 並在記憶體 buffer（讓 proxy 與 route handler
+都能讀），上限是 `experimental.proxyClientMaxBodySize`，**預設 10 MB**。超過時
+官方文件原文是「the body will **only be buffered up to the limit**, and a warning
+will be logged」——**請求照樣繼續執行，handler 拿到半截 body，client 收不到錯誤**。
+出處：`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/proxyClientMaxBodySize.md`
+（2026-08-05 逐字核實）。
+
+**為什麼不改成調高 `proxyClientMaxBodySize`**：buffer 發生在 route handler
+**之前**，所以上表的 `Content-Length` 預檢攔不到它。調到 110 MB 等於允許任何
+已登入使用者讓伺服器先吃下 109 MB 再被拒絕——把可執行的上限換成記憶體暴露。
+
+**8 MB 的來源**：在框架 10 MB 預算下留約 2 MB 給 multipart 邊界與 header。
+實測 1741 筆專利（含完整摘要）的 analyze body 為 **2–3.5 MB**，約 2–4 倍餘裕。
+未來要更大檔，必須**同時**調高 proxy 預算與這裡的數字，並接受記憶體代價；
+或把上傳路徑從 proxy matcher 排除（但要確認 auth 仍由 handler 內的
+`requireUser()` 把關）。
+
+此取捨由 `tests/analyze-limits.test.ts` 的
+「keeps every byte ceiling under the 10MB proxy buffer budget」守住——
+任何人把上限調到 10 MB 以上，該測試會紅。
 
 **抽樣預設值改為「全部」（使用者決定 2026-08-05：老師要全跑）**：
 `app/page.tsx:63` 現況 `useState(50)` → 上傳完成後自動設為**去重後的實際筆數**，
