@@ -41,7 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 # data
+# data/<id>.json 為 legacy/便攜快照，忽略根層；runtime 子目錄（store/uploads 寫入）一併忽略。
 data/*.json
+data/uploads/
+data/snapshots/
 
 ._*
 /memory
