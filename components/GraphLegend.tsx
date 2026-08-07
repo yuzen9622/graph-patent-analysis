@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { SEQUENTIAL_BLUE } from "@/lib/concept-time";
-import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode } from "@/lib/graph-view";
+import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode, type Unit } from "@/lib/graph-view";
 import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   showSemantic: boolean;
   minSupport: number;
   colorMode?: ColorMode;
+  unit?: Unit;
   methodology: GraphMethodology;
   capabilityWarning?: string;
   stats: GraphData["stats"];
@@ -26,6 +27,7 @@ export default function GraphLegend({
   stats,
   paperMode = false,
   colorMode = "community",
+  unit = "patent",
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isConceptMode = mode === "concept";
@@ -108,10 +110,14 @@ export default function GraphLegend({
             ) : isConceptMode ? (
               <>
                 <LegendItem marker={<NodeScaleMarker />}>
-                  概念大小＝包含該概念的不同專利篇數（1 篇＝16、4 篇＝22、9 篇＝28）
+                  {unit === "applicant"
+                    ? "概念大小＝涵蓋該概念的不同機構家數（家，非篇數）"
+                    : "概念大小＝包含該概念的不同專利篇數（1 篇＝16、4 篇＝22、9 篇＝28）"}
                 </LegendItem>
                 <LegendItem marker={<SolidLineMarker />}>
-                  實線粗細＝共同出現的不同專利篇數（support）；目前只顯示 support ≥ {minSupport}
+                  {unit === "applicant"
+                    ? `實線粗細＝共同投入的機構家數（support）；目前只顯示家數門檻 ≥ ${minSupport}`
+                    : `實線粗細＝共同出現的不同專利篇數（support）；目前只顯示 support ≥ ${minSupport}`}
                 </LegendItem>
                 {isGradient ? (
                   <LegendItem marker={<TimeBar window={window} />}>
@@ -150,7 +156,8 @@ export default function GraphLegend({
             </p>
             {isConceptMode && (
               <p>
-                社群方法：{methodology.community_algorithm}；邊權重＝共同專利篇數
+                社群方法：{methodology.community_algorithm}；
+                {unit === "applicant" ? "家計邊權重（同一機構跨篇）" : "邊權重＝共同專利篇數"}
               </p>
             )}
             {isGradient && window && (

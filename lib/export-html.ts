@@ -43,13 +43,20 @@ export function parseExportOptions(
   params: URLSearchParams,
   graph: GraphData,
 ): ExportOptions {
-  const mode: GraphMode = params.get('mode') === 'context' ? 'context' : 'concept'
-  const maxSupport = Math.max(
-    1,
-    ...graph.edges
-      .filter((edge) => edge.kind === 'cooccurrence')
-      .map((edge) => edge.support_count ?? 1),
-  )
+  const rawMode = params.get('mode')
+  const mode: GraphMode =
+    rawMode === 'institution' ? 'institution' : rawMode === 'context' ? 'context' : 'concept'
+  const cooccurrence = graph.edges.filter((edge) => edge.kind === 'cooccurrence')
+  const colorMode = params.get('colorMode') === 'first_year'
+    ? 'first_year'
+    : params.get('colorMode') === 'community_applicants'
+      ? 'community_applicants'
+      : 'community'
+  const unit = params.get('unit') === 'applicant' ? 'applicant' : 'patent'
+  const supportOf = unit === 'applicant'
+    ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
+    : (e: { support_count?: number }) => e.support_count ?? 0
+  const maxSupport = Math.max(1, ...cooccurrence.map(supportOf))
   const yearStart = parseClampedInteger(
     params.get('yearStart'),
     graph.stats.year_range[0],
@@ -62,12 +69,17 @@ export function parseExportOptions(
     graph.stats.year_range[0],
     graph.stats.year_range[1],
   )
+  let edgeWeight: GraphViewOptions['edgeWeight'] = 'jaccard'
+  if (params.get('el') === 'npmi' || params.get('ew') === 'npmi') edgeWeight = 'npmi'
   return {
     mode,
     showSemantic: parseBoolean(params.get('llm'), false),
     paper: parseBoolean(params.get('paper'), true),
     minSupport: parseClampedInteger(params.get('minSupport'), 1, 1, maxSupport),
     yearRange: yearStart <= yearEnd ? [yearStart, yearEnd] : [yearEnd, yearStart],
+    colorMode,
+    unit,
+    edgeWeight,
   }
 }
 
@@ -102,7 +114,9 @@ export function buildExportHtml(
       ? '節點＝一家機構；大小＝涉足概念數（家）；邊＝兩家共享 ≥' +
         `${options.minSupport} 個概念；顏色＝機構類型（銀行/保險/大學/…）。`
       : options.mode === 'concept'
-        ? `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；顏色＝Louvain 社群。`
+        ? options.unit === 'applicant'
+          ? `節點大小＝涵蓋的機構家數；實線名稱 = 門檻家數（≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
+          : `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
         : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -135,6 +149,7 @@ export function buildExportHtml(
       <div class="mode-control" aria-label="圖譜模式">
         <button type="button" data-mode="concept" aria-pressed="${options.mode === 'concept'}">技術概念網路</button>
         <button type="button" data-mode="context" aria-pressed="${options.mode === 'context'}">專利脈絡圖</button>
+        <button type="button" data-mode="institution" aria-pressed="${options.mode === 'institution'}">機構網絡</button>
       </div>
     </div>
     <span id="graph-meta" class="meta">Job ${escapedJobId} · ${view.stats.patent_count} 篇專利</span>
@@ -159,13 +174,20 @@ export function buildExportHtml(
       var jobLabel = ${jobLabelScript};
       function renderMode(mode) {
         var view = payload.views[mode];
-        var title = mode === 'concept' ? '技術概念網路' : '專利脈絡圖';
+        var unit = payload.options.unit || 'patent';
+        var ew = payload.options.edgeWeight || 'jaccard';
+        var title = mode === 'institution' ? '機構網絡'
+          : mode === 'concept' ? '技術概念網路' : '專利脈絡圖';
         document.getElementById('graph-title').textContent = title;
         document.getElementById('legend-title').textContent = title + '圖例';
         document.getElementById('graph-meta').textContent = jobLabel + ' · ' + view.stats.patent_count + ' 篇專利';
-        document.getElementById('mode-explanation').textContent = mode === 'concept'
-          ? '節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ' + payload.options.minSupport + '）；顏色＝Louvain 社群。'
-          : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。';
+        document.getElementById('mode-explanation').textContent = mode === 'institution'
+          ? '節點＝一家機構；牠＝兩家共享 ≥ ' + payload.options.minSupport + ' 個概念；顏色＝機構類型。'
+          : mode === 'concept'
+            ? (unit === 'applicant'
+              ? '節點大小＝機構家數；實線家數門檻 ≥ ' + payload.options.minSupport + '；線寬用 ' + (ew === 'npmi' ? 'NPMI' : 'Jaccard')
+              : '節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ' + payload.options.minSupport + '）；線寬用 ' + (ew === 'npmi' ? 'NPMI' : 'Jaccard'))
+            : '申請人大小＝所附年份專利篇數；概念大小＝所附年份涵蓋篇數；結構線不表示強度。';
         document.getElementById('semantic-explanation').textContent = mode === 'concept'
           ? (payload.options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。')
           : '本模式只顯示申請人、專利與概念的來源結構線。';
@@ -195,13 +217,21 @@ export function buildExportHtml(
           from: edge.from,
           to: edge.to,
           label: semantic ? edge.relation : '',
-          width: co ? Math.min(8, 1 + Math.sqrt(edge.support_count || 1) * 1.2) : (semantic ? 1.5 : 1),
+          width: co ? edgeWidth(edge, ew, unit) : (semantic ? 1.5 : 1),
           dashes: semantic ? [6, 4] : false,
           physics: !semantic,
           arrows: { to: { enabled: semantic || edge.kind === 'structural', scaleFactor: .4 } },
-          color: { color: semantic ? '#8b5cf6' : (co ? '#64748b' : '#94a3b8'), opacity: semantic ? .8 : (co ? .7 : .35) }
+          color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: semantic ? .8 : (co ? .7 : .35) }
         };
       });
+      function edgeWidth(edge, ew, unit) {
+        if (ew === 'npmi') {
+          var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
+          return Math.min(8, 1 + v * 7);
+        }
+        var j = unit === 'applicant' ? (edge.jaccard_applicants || 0) : (edge.jaccard || 0);
+        return Math.min(8, 1 + j * 7);
+      }
         if (network) network.destroy();
         network = new vis.Network(document.getElementById('graph'), {
         nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)
@@ -216,17 +246,25 @@ export function buildExportHtml(
         var node = nodesById.get(params.node); if (!node) return;
         var lines = [node.label];
         if (node.type === 'applicant') lines.push('所選範圍專利：' + (node.patent_count || 0) + ' 篇');
-        if (node.type === 'concept') lines.push('專利涵蓋：' + (node.frequency || 0) + ' 篇');
+        if (node.type === 'concept') lines.push((payload.options.unit === 'applicant'
+          ? '機構涵蓋：' + (node.applicant_count || node.frequency || 0) + ' 家'
+          : '專利涵蓋：' + (node.frequency || 0) + ' 篇'));
         if (node.type === 'patent') { lines.push(node.applicant || ''); lines.push(node.filing_date || ''); }
         showText(lines);
       });
         network.on('hoverEdge', function (params) {
         var edge = edgesById.get(params.edge); if (!edge) return;
         var lines = [edge.relation];
-        if (edge.kind === 'cooccurrence') { lines.push('共同出現：' + (edge.support_count || 0) + ' 篇'); lines.push('Jaccard：' + Number(edge.jaccard || 0).toFixed(3)); }
+        if (edge.kind === 'cooccurrence') {
+          lines.push('共同出現（篇）：' + (edge.support_count || 0) + ' 篇 ｜（家）：' + (edge.support_applicants || 0) + ' 家');
+          lines.push('Jaccard：篇 ' + fmt(edge.jaccard) + ' ｜ 家 ' + fmt(edge.jaccard_applicants));
+          lines.push('NPMI：篇 ' + fmt(edge.npmi) + ' ｜ 家 ' + fmt(edge.npmi_applicants));
+        }
         if (edge.kind === 'semantic') { lines.push('目前保存來源：' + ((edge.source_patents || []).length) + ' 篇'); if (edge.reason) lines.push(edge.reason); }
+        if (edge.kind === 'institution') { lines.push('共享概念：' + (edge.support_count || 0) + ' 個——' + ((edge.shared_concepts || []).join('、'))); }
         showText(lines);
       });
+        function fmt(v) { return (v === undefined || v === null) ? '—' : Number(v).toFixed(3); }
         network.on('blurNode', function () { tooltip.style.display = 'none'; });
         network.on('blurEdge', function () { tooltip.style.display = 'none'; });
       }

@@ -16,7 +16,7 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
-import type { ColorMode, EdgeWeightMetric } from "@/lib/graph-view";
+import type { ColorMode, EdgeWeightMetric, Unit } from "@/lib/graph-view";
 import type {
   GraphNode,
   GraphEdge,
@@ -42,6 +42,8 @@ interface Props {
   onColorModeChange: (mode: ColorMode) => void;
   edgeWeight: EdgeWeightMetric;
   onEdgeWeightChange: (metric: EdgeWeightMetric) => void;
+  unit: Unit;
+  onUnitChange: (unit: Unit) => void;
   showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
@@ -97,6 +99,8 @@ export default function Sidebar({
   onColorModeChange,
   edgeWeight,
   onEdgeWeightChange,
+  unit,
+  onUnitChange,
   showSemantic,
   minSupport,
   maxSupport,
@@ -221,6 +225,42 @@ export default function Sidebar({
                 <>
                   <div>
                     <p className="text-xs text-foreground font-medium mb-2">
+                      分析單位
+                    </p>
+                    <div
+                      className="inline-flex rounded-md border border-border bg-background p-0.5"
+                      role="group"
+                      aria-label="分析單位"
+                    >
+                      {(
+                        [
+                          ["patent", "篇（專利）"],
+                          ["applicant", "家（機構）"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => onUnitChange(value)}
+                          aria-pressed={unit === value}
+                          className={`rounded px-2 py-1 text-xs transition-colors ${
+                            unit === value
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                      {unit === "applicant"
+                        ? "門檻/大小/線寬改以「機構家數」計；同一機構跨篇碰過兩概念也算共同投入。"
+                        : "門檻/大小/線寬以「專利篇數」計。"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-foreground font-medium mb-2">
                       概念顏色
                     </p>
                     <div
@@ -311,7 +351,9 @@ export default function Sidebar({
                   </label>
                   <label className="block text-xs text-foreground">
                     <span className="flex justify-between mb-2">
-                      <span className="font-medium">最低共同專利數</span>
+                      <span className="font-medium">
+                        {unit === "applicant" ? "最低共同家數" : "最低共同專利數"}
+                      </span>
                       <span className="font-mono text-primary">{minSupport}</span>
                     </span>
                     <input

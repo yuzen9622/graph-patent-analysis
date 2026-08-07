@@ -57,6 +57,26 @@ describe("offline export security and parity", () => {
       paper: false,
       minSupport: 1,
       yearRange: [2020, 2022],
+      colorMode: "community",
+      unit: "patent",
+      edgeWeight: "jaccard",
+    });
+  });
+
+  it("接受 institution 模式、家單位、NPMI 線寬與社群色（家）", () => {
+    const options = parseExportOptions(
+      new URLSearchParams(
+        "mode=institution&unit=applicant&ew=npmi&colorMode=community_applicants&paper=1&minSupport=2",
+      ),
+      graph,
+    );
+    expect(options).toMatchObject({
+      mode: "institution",
+      unit: "applicant",
+      edgeWeight: "npmi",
+      colorMode: "community_applicants",
+      paper: true,
+      minSupport: 1,
     });
   });
 

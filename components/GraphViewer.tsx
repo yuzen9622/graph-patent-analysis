@@ -14,7 +14,7 @@ import {
   isValidGraphViewport,
   type GraphViewport,
 } from "@/lib/graph-viewport";
-import type { EdgeWeightMetric } from "@/lib/graph-view";
+import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -123,7 +123,7 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
   };
 }
 
-function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: EdgeWeightMetric = 'jaccard') {
+function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: EdgeWeightMetric = 'jaccard', unit: Unit = 'patent') {
   const isCooccurrence = e.kind === "cooccurrence";
   const isSemantic = e.kind === "semantic";
   const isInstitution = e.kind === "institution";
@@ -151,7 +151,7 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: 
     title,
     dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
     width: isCooccurrence
-      ? cooccurrenceWidth(e, edgeWeight)
+      ? cooccurrenceWidth(e, edgeWeight, unit)
       : isInstitution
         ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.4)
         : isSemantic
@@ -185,12 +185,13 @@ function fmt(value: number | undefined): string {
 }
 
 /** 線寬用有界指標（意圖決策 2）：jaccard（預設）或 NPMI（p_ij=1 → 不顯示）。 */
-function cooccurrenceWidth(e: GraphEdge, metric: EdgeWeightMetric): number {
+function cooccurrenceWidth(e: GraphEdge, metric: EdgeWeightMetric, unit: Unit = 'patent'): number {
   if (metric === 'npmi') {
-    const v = Math.max(0, e.npmi ?? 0)
+    const v = Math.max(0, unit === 'applicant' ? (e.npmi_applicants ?? 0) : (e.npmi ?? 0))
     return Math.min(8, 1 + v * 7)
   }
-  return Math.min(8, 1 + (e.jaccard ?? 0) * 7)
+  const j = unit === 'applicant' ? (e.jaccard_applicants ?? 0) : (e.jaccard ?? 0)
+  return Math.min(8, 1 + j * 7)
 }
 
 function stableUnit(value: string): number {
@@ -393,6 +394,7 @@ interface Props {
   onNodeSelect?: (node: GraphNode | null) => void;
   yearRange?: [number, number];
   edgeWeight?: EdgeWeightMetric;
+  unit?: Unit;
   visibleLayers?: Set<NodeType>;
   hiddenCommunities?: Set<number>;
   focusNodeId?: string;
@@ -406,6 +408,7 @@ export default function GraphViewer({
   onNodeSelect,
   yearRange,
   edgeWeight = 'jaccard',
+  unit = 'patent',
   visibleLayers,
   hiddenCommunities,
   focusNodeId,
@@ -444,7 +447,7 @@ export default function GraphViewer({
         nodes.map((n) => toVisNode(n, initPos.get(n.id), godNodeMap.get(n.id))),
       );
       const edgeDataSet = new DataSet(
-        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight)),
+        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit)),
       );
       nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
       edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
@@ -557,7 +560,7 @@ export default function GraphViewer({
         edgeDataSet.update(
           edges.map((e) => ({
             id: e.id,
-            color: activeEdges.has(e.id) ? toVisEdge(e, undefined, edgeWeight).color : DIM_EDGE,
+            color: activeEdges.has(e.id) ? toVisEdge(e, undefined, edgeWeight, unit).color : DIM_EDGE,
           })),
         );
         highlightActive = true;
@@ -577,7 +580,7 @@ export default function GraphViewer({
           }),
         );
         edgeDataSet.update(
-          edges.map((e) => ({ id: e.id, color: toVisEdge(e, undefined, edgeWeight).color })),
+          edges.map((e) => ({ id: e.id, color: toVisEdge(e, undefined, edgeWeight, unit).color })),
         );
         highlightActive = false;
       };
@@ -635,7 +638,7 @@ export default function GraphViewer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, edgeWeight]);
+  }, [nodes, edges, edgeWeight, unit]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
   useEffect(() => {

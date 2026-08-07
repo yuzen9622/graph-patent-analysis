@@ -74,3 +74,29 @@ describe('分單位社群著色（Q2）', () => {
     expect(view.nodes.every((n) => n.color === '#111' || n.color === '#222')).toBe(true)
   })
 })
+describe('家單位門檻（Q3）', () => {
+  const unitGraph: GraphData = {
+    ...graph,
+    edges: [
+      { id: 'ab', from: 'concept:A', to: 'concept:B', relation: '共同出現', kind: 'cooccurrence', support_count: 5, support_applicants: 1 },
+      { id: 'ac', from: 'concept:A', to: 'concept:C', relation: '共同出現', kind: 'cooccurrence', support_count: 1, support_applicants: 4 },
+    ],
+    nodes: graph.nodes.map((n) =>
+      n.id === 'concept:A' ? { ...n, applicant_count: 5, size: 30 } : n,
+    ),
+  }
+
+  it('unit=patent：門檻套 support_count；unit=applicant：門檻套 support_applicants', () => {
+    const byPatent = selectGraphView(unitGraph, { mode: 'concept', showSemantic: false, minSupport: 2, yearRange: [2020, 2021], unit: 'patent' })
+    expect(byPatent.edges.map((e) => e.id)).toEqual(['ab']) // support_count 5 ≥ 2
+    const byApplicant = selectGraphView(unitGraph, { mode: 'concept', showSemantic: false, minSupport: 2, yearRange: [2020, 2021], unit: 'applicant' })
+    expect(byApplicant.edges.map((e) => e.id)).toEqual(['ac']) // support_applicants 4 ≥ 2
+    expect(byApplicant.maxSupport).toBe(4)
+  })
+
+  it('unit=applicant 節點大小改用家數', () => {
+    const view = selectGraphView(unitGraph, { mode: 'concept', showSemantic: false, minSupport: 1, yearRange: [2020, 2021], unit: 'applicant' })
+    const a = view.nodes.find((n) => n.id === 'concept:A')
+    expect(a?.size).toBeGreaterThan(18) // 家數 5 → 較大
+  })
+})

@@ -26,6 +26,8 @@ export interface GraphViewOptions {
   colorMode?: ColorMode
   /** 線寬指標：jaccard（預設）或 NPMI（決策 2，皆為有界）。 */
   edgeWeight?: EdgeWeightMetric
+  /** PRD v2 / P4 (Q3): 分析單位。概念視圖的門檻/大小/圖例跟「家」隨之。 */
+  unit?: Unit
 }
 
 /**
@@ -116,8 +118,13 @@ function capabilityWarning(graph: GraphData): string | undefined {
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
   let nodes = graph.nodes.filter((node) => node.type === 'concept')
   const nodeIds = new Set(nodes.map((node) => node.id))
+  // PRD v2 / P4 (Q3): 概念視圖的門檻/大小跟「家」隨之。缺省 unit='patent'。
+  const applicantUnit = options.unit === 'applicant'
+  const supportOf = applicantUnit
+    ? (edge: GraphEdge) => edge.support_applicants ?? 0
+    : (edge: GraphEdge) => edge.support_count ?? 0
   const cooccurrence = graph.edges.filter(
-    (edge) => edge.kind === 'cooccurrence' && (edge.support_count ?? 0) >= options.minSupport,
+    (edge) => edge.kind === 'cooccurrence' && supportOf(edge) >= options.minSupport,
   )
   const semantic = options.showSemantic
     ? graph.edges.filter((edge) => edge.kind === 'semantic')
@@ -125,6 +132,13 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
   const edges = [...cooccurrence, ...semantic].filter(
     (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
   )
+  // 節點大小跟單位：家→概念涵蓋家數；篇→概念涵蓋篇數。
+  if (applicantUnit) {
+    nodes = nodes.map((node) => {
+      const count = node.applicant_count ?? node.frequency ?? 0
+      return { ...node, size: conceptSize(count) }
+    })
+  }
   // PRD v2 / P4 (Q2): colorMode 'community_applicants' 用「家」單位分區與色盤
   // （色盤 key = unit + id，兩單位同 id 不共享色）。
   const useApplicantCommunity = options.colorMode === 'community_applicants'
@@ -143,7 +157,7 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     1,
     ...graph.edges
       .filter((edge) => edge.kind === 'cooccurrence')
-      .map((edge) => edge.support_count ?? 1),
+      .map((edge) => supportOf(edge)),
   )
   if (options.colorMode === 'first_year') {
     nodes = applyTimeColour(nodes, graph.methodology?.time_window)

@@ -97,3 +97,16 @@ function fullDefaults(): import('./../lib/view-url').ViewState {
     yearRange: [2007, 2025],
   }
 }
+
+describe('unit（分析單位）', () => {
+  it('缺省 patent 不掛 URL；applicant 掛 unit=applicant 並可 round-trip', () => {
+    const base = toViewQueryString({ ...fullDefaults(), unit: 'patent' })
+    expect(base).not.toContain('unit=')
+    const withApp = toViewQueryString({ ...fullDefaults(), unit: 'applicant' })
+    expect(withApp).toContain('unit=applicant')
+    expect(parseViewQuery(`?${withApp}`).unit).toBe('applicant')
+  })
+  it('無效 unit 不套用', () => {
+    expect(parseViewQuery('?unit=family')).toEqual({})
+  })
+})

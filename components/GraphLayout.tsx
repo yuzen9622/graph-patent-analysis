@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
-import { selectGraphView, type ColorMode, type EdgeWeightMetric } from "@/lib/graph-view";
+import { selectGraphView, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
@@ -28,6 +28,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [minSupport, setMinSupport] = useState(1);
   const [colorMode, setColorMode] = useState<ColorMode>("community");
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
+  const [unit, setUnit] = useState<Unit>("patent");
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -55,6 +56,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.mode) setMode(parsed.mode);
     if (parsed.colorMode) setColorMode(parsed.colorMode);
     if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
+    if (parsed.unit) setUnit(parsed.unit);
     if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
@@ -72,9 +74,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
       syncedOnceRef.current = true;
       return;
     }
-    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight });
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit });
     window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
-  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight]);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit]);
 
   const view = useMemo(
     () =>
@@ -85,8 +87,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
         yearRange,
         colorMode,
         edgeWeight,
+        unit,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -111,6 +114,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     yearEnd: String(yearRange[1]),
   });
   if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
+  if (unit && unit !== "patent") exportQuery.set("unit", unit);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -243,6 +247,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onEdgeSelect={setSelectedEdge}
             yearRange={yearRange}
             edgeWeight={edgeWeight}
+            unit={unit}
             visibleLayers={
               mode === "concept"
                 ? new Set<NodeType>(["concept"])
@@ -262,6 +267,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             showSemantic={showSemantic}
             minSupport={minSupport}
             colorMode={colorMode}
+            unit={unit}
             methodology={graph.methodology}
             capabilityWarning={view.capabilityWarning}
             stats={view.stats}
@@ -287,6 +293,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onColorModeChange={setColorMode}
             edgeWeight={edgeWeight}
             onEdgeWeightChange={setEdgeWeight}
+            unit={unit}
+            onUnitChange={setUnit}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

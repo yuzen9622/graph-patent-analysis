@@ -7,7 +7,7 @@
  * here so they are unit-testable (the repo's convention is pure-logic tests;
  * there is no component test harness in this project).
  */
-import type { ColorMode, EdgeWeightMetric } from './graph-view'
+import type { ColorMode, EdgeWeightMetric, Unit } from './graph-view'
 import type { GraphMode } from '../types/graph'
 
 export interface ViewState {
@@ -19,6 +19,8 @@ export interface ViewState {
   yearRange: [number, number]
   /** PRD v2 / P4: 線寬指標（缺省 jaccard，不掛在 URL 進位位）。 */
   edgeWeight?: EdgeWeightMetric
+  /** PRD v2 / P4 (Q3): 分析單位（缺省 patent，不掛 URL）。 */
+  unit?: Unit
 }
 
 const isMode = (value: string | null): value is GraphMode =>
@@ -29,6 +31,9 @@ const isColorMode = (value: string | null): value is ColorMode =>
 
 const isEdgeWeight = (value: string | null): value is EdgeWeightMetric =>
   value === 'jaccard' || value === 'npmi'
+
+const isUnit = (value: string | null): value is Unit =>
+  value === 'patent' || value === 'applicant'
 
 /**
  * Parse a URL query (pass `window.location.search`, including a leading `?`).
@@ -47,6 +52,9 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 
   const edgeWeight = p.get('ew')
   if (isEdgeWeight(edgeWeight)) out.edgeWeight = edgeWeight
+
+  const unit = p.get('unit')
+  if (isUnit(unit)) out.unit = unit
 
   const llm = p.get('llm')
   if (llm === '1') out.showSemantic = true
@@ -85,6 +93,9 @@ export function toViewQueryString(state: ViewState): string {
   }
   if (state.edgeWeight && state.edgeWeight !== 'jaccard') {
     params['ew'] = state.edgeWeight
+  }
+  if (state.unit && state.unit !== 'patent') {
+    params['unit'] = state.unit
   }
   return new URLSearchParams(params).toString()
 }
