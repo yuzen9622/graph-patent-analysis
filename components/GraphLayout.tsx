@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart2, Copy, Check, Download, FileText } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
 import { selectGraphView, type ColorMode } from "@/lib/graph-view";
+import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -39,6 +40,39 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // ── PRD v2 / P3 (N6): view state lives in the URL so a shared link restores
+  // the exact view (gradient colouring included). Hydrate once from the query
+  // on mount, then mirror every change back with history.replaceState — never
+  // a navigation, so the canvas is not remounted. Both directions are pure and
+  // unit-tested in lib/view-url.ts.
+  const hydratedRef = useRef(false);
+  const syncedOnceRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const parsed = parseViewQuery(window.location.search);
+    if (parsed.mode) setMode(parsed.mode);
+    if (parsed.colorMode) setColorMode(parsed.colorMode);
+    if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
+    if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
+    if (parsed.paperMode) setPaperMode(parsed.paperMode);
+    if (parsed.yearRange) setYearRange(parsed.yearRange);
+    hydratedRef.current = true;
+    // Intentional: run once with the initial URL, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    // Skip the very first run: it would overwrite the just-hydrated URL with
+    // the pre-hydration (default) values. From the second run on, mirror.
+    if (!syncedOnceRef.current) {
+      syncedOnceRef.current = true;
+      return;
+    }
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange });
+    window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange]);
 
   const view = useMemo(
     () =>
