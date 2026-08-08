@@ -60,8 +60,11 @@
 - [x] `colorMode='ipc'`：概念節點色＝優勢 IPC（同票取字典較小）；無 IPC 專利中性灰；著色隨子集重算。
 - [x] view-url round-trip：`ipcLevel=4&ipc=A&ipc=B` → 反向一致；缺省不掛；非法值忽略。
 - [x] export-html `parseExportOptions` 接受 ipc/ipcLevel；匯出視圖沿用同一 `selectGraphView`（色已入節點）。
-- [ ] UI：層級 slider（L1–L5 預 L3）；樹狀多選（葉可勾）；「全部 IPC」reset；切層級清空篩選並明示；「依 IPC」選項只在有 IPC 資料時出現。
-- [ ] 圖例：`colorMode='ipc'` 時顯示 IPC 色塊與「優勢 IPC」說明（前 N + 「+M 其餘」）。
+- [x] UI：層級 slider（L1–L5 預 L3）；樹狀多選（葉可勾）；「全部 IPC」reset；切層級清空篩選並明示；「依 IPC」選項只在有 IPC 資料時出現。
+  - agent-browser 實測（2026-08-08，`f3d3b9ac…` 100 篇樣本）：slider 預設 3、label「L3 次類」；勾 G06Q → URL `ipc=G06Q`、子集重算（E05G 專屬的「光學防偽技術」消失）；ArrowRight 切 L5 → URL `ipc` 消失、樹重建至 `E05G1/10`（S6 提示「切換層級會清空 IPC 篩選」）；「全部 IPC」→ URL 移除 `ipc=`、葉全清；與來源檔並存時兩則提示並現（「篩選 1 個檔…」＋「篩選 1 個 IPC…」）；`695d1f88-…`（0 IPC 專利）「依 IPC」button 與 IPC 篩選段皆不出現。
+- [x] 圖例：`colorMode='ipc'` 時顯示 IPC 色塊與「優勢 IPC」說明（前 N + `+M 其餘`）。
+  - agent-browser 實測：色塊 title 如「G06Q40/02（16 篇）」，超過 6 個顯示「+n」其餘；說明文字「顏色＝概念優勢 IPC（L5 次目）」與「無 IPC 資料的概念＝中性（不屬任何分類）」皆在圖例中。
+  - 記限：離線 HTML 圖例的 IPC 說明段仍缺（P8 一併補）；deep-link 中 `ipc` 值與 `ipcLevel` 不一致（手改 URL）時，按 S7 語義當作「已屬該層級的 key」解讀，跨層 key 自然不命中（切層級正常路徑會清空，此情況僅手改 URL 會遇到）。
 - [x] 回歸：全套 v2 測試綠（R）。
 
 ## 5. 誠實記限
