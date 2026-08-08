@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
-import { selectGraphView, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
+import { selectGraphView, sourceFilesOf, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
@@ -29,6 +29,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [colorMode, setColorMode] = useState<ColorMode>("community");
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
   const [unit, setUnit] = useState<Unit>("patent");
+  const [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -42,6 +43,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
+  const allSourceFiles = useMemo(() => sourceFilesOf(graph), [graph]);
 
   // ── PRD v2 / P3 (N6): view state lives in the URL so a shared link restores
   // the exact view (gradient colouring included). Hydrate once from the query
@@ -57,6 +61,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.colorMode) setColorMode(parsed.colorMode);
     if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
     if (parsed.unit) setUnit(parsed.unit);
+    if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
     if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
@@ -74,9 +79,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
       syncedOnceRef.current = true;
       return;
     }
-    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit });
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit, sourceFiles });
     window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
-  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit]);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles]);
 
   const view = useMemo(
     () =>
@@ -88,8 +93,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
         colorMode,
         edgeWeight,
         unit,
+        sourceFiles,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -115,6 +121,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   });
   if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
   if (unit && unit !== "patent") exportQuery.set("unit", unit);
+  for (const source of sourceFiles) exportQuery.append("source", source);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -268,6 +275,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             minSupport={minSupport}
             colorMode={colorMode}
             unit={unit}
+            sourceFiles={sourceFiles}
+            allSourceFiles={allSourceFiles}
             methodology={graph.methodology}
             capabilityWarning={view.capabilityWarning}
             stats={view.stats}
@@ -295,6 +304,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onEdgeWeightChange={setEdgeWeight}
             unit={unit}
             onUnitChange={setUnit}
+            allSourceFiles={allSourceFiles}
+            sourceFiles={sourceFiles}
+            onSourceFilesChange={setSourceFiles}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

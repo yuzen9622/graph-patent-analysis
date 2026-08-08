@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectGraphView } from '../lib/graph-view'
+import { selectGraphView, SOURCE_FILE_COLORS, SOURCE_OVERLAP_COLOR } from '../lib/graph-view'
 import type { GraphData } from '../types/graph'
 
 const methodology = {
@@ -98,5 +98,60 @@ describe('家單位門檻（Q3）', () => {
     const view = selectGraphView(unitGraph, { mode: 'concept', showSemantic: false, minSupport: 1, yearRange: [2020, 2021], unit: 'applicant' })
     const a = view.nodes.find((n) => n.id === 'concept:A')
     expect(a?.size).toBeGreaterThan(18) // 家數 5 → 較大
+  })
+})
+
+describe('P2 來源檔（多檔比對）', () => {
+  const srcGraph: GraphData = {
+    ...graph,
+    nodes: [
+      { id: 'concept:A', type: 'concept', label: 'A', color: '#111', size: 20, frequency: 2, community_id: 0, source_patents: ['P1', 'P2'] },
+      { id: 'concept:B', type: 'concept', label: 'B', color: '#111', size: 20, frequency: 2, community_id: 0, source_patents: ['P1', 'P3'] },
+      { id: 'concept:C', type: 'concept', label: 'C', color: '#222', size: 18, frequency: 1, community_id: 1, source_patents: ['P3'] },
+      { id: 'patent:P1', type: 'patent', label: 'P1', color: '#ccc', size: 18, source_files: ['fileA', 'fileB'] },
+      { id: 'patent:P2', type: 'patent', label: 'P2', color: '#ccc', size: 18, source_files: ['fileA'] },
+      { id: 'patent:P3', type: 'patent', label: 'P3', color: '#ccc', size: 18, source_files: ['fileB'] },
+      { id: 'applicant:X', type: 'applicant', label: 'X', color: '#111', size: 18 },
+      { id: 'applicant:Y', type: 'applicant', label: 'Y', color: '#211', size: 18 },
+    ],
+    edges: [
+      { id: 'a1', from: 'patent:P1', to: 'concept:A', relation: '包含', kind: 'structural' },
+      { id: 'a2', from: 'patent:P2', to: 'concept:A', relation: '包含', kind: 'structural' },
+      { id: 'b1', from: 'patent:P1', to: 'concept:B', relation: '包含', kind: 'structural' },
+      { id: 'b3', from: 'patent:P3', to: 'concept:B', relation: '包含', kind: 'structural' },
+      { id: 'c3', from: 'patent:P3', to: 'concept:C', relation: '包含', kind: 'structural' },
+      { id: 'app1', from: 'applicant:X', to: 'patent:P1', relation: '申請了', kind: 'structural' },
+      { id: 'app2', from: 'applicant:X', to: 'patent:P2', relation: '申請了', kind: 'structural' },
+      { id: 'app3', from: 'applicant:Y', to: 'patent:P3', relation: '申請了', kind: 'structural' },
+      { id: 'coAB', from: 'concept:A', to: 'concept:B', relation: '共同投入', kind: 'cooccurrence', support_count: 1 },
+      { id: 'coBC', from: 'concept:B', to: 'concept:C', relation: '共同投入', kind: 'cooccurrence', support_count: 1 },
+    ],
+  }
+
+  it('依來源著色：僅一檔＝該檔本色；跨檔＝共享灰紫', () => {
+    const view = selectGraphView(srcGraph, { mode: 'concept', showSemantic: false, minSupport: 1, yearRange: [2020, 2021], colorMode: 'source' })
+    const a = view.nodes.find((n) => n.id === 'concept:A')
+    const c = view.nodes.find((n) => n.id === 'concept:C')
+    expect(a?.color).toBe(SOURCE_OVERLAP_COLOR) // A 在 fileA 與 fileB 都有
+    expect(c?.color).toBe(SOURCE_FILE_COLORS[1]) // C 只在 fileB（排序 fileA,fileB）
+  })
+
+  it('來源檔篩選：只留命中專利，重算概念與共現', () => {
+    const view = selectGraphView(srcGraph, { mode: 'concept', showSemantic: false, minSupport: 1, yearRange: [2020, 2021], colorMode: 'community', sourceFiles: ['fileA'] })
+    const a = view.nodes.find((n) => n.id === 'concept:A')
+    const b = view.nodes.find((n) => n.id === 'concept:B')
+    expect(a?.frequency).toBe(2) // P1,P2 皆 fileA
+    expect(b?.frequency).toBe(1) // 僅 P1 在 fileA
+    const co = view.edges.filter((e) => e.kind === 'cooccurrence')
+    expect(co.find((e) => e.id === 'coAB')?.support_count).toBe(1)
+    expect(co.find((e) => e.id === 'coBC')).toBeUndefined() // C 不在 fileA
+  })
+
+  it('來源篩選下「家」門檻同步重算', () => {
+    const view = selectGraphView(srcGraph, { mode: 'concept', showSemantic: false, minSupport: 1, yearRange: [2020, 2021], colorMode: 'community', unit: 'applicant', sourceFiles: ['fileA'] })
+    const a = view.nodes.find((n) => n.id === 'concept:A')
+    expect(a?.applicant_count).toBe(1) // X
+    const co = view.edges.filter((e) => e.kind === 'cooccurrence')
+    expect(co.find((e) => e.id === 'coAB')?.support_applicants).toBe(1) // X 跨 P1,P2
   })
 })

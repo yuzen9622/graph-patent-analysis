@@ -17,6 +17,7 @@ import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
 import type { ColorMode, EdgeWeightMetric, Unit } from "@/lib/graph-view";
+import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
 import type {
   GraphNode,
   GraphEdge,
@@ -44,6 +45,10 @@ interface Props {
   onEdgeWeightChange: (metric: EdgeWeightMetric) => void;
   unit: Unit;
   onUnitChange: (unit: Unit) => void;
+  /** PRD v2 / P2: 可選的來源檔清單與須選取。 */
+  allSourceFiles: string[];
+  sourceFiles: string[];
+  onSourceFilesChange: (files: string[]) => void;
   showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
@@ -101,6 +106,9 @@ export default function Sidebar({
   onEdgeWeightChange,
   unit,
   onUnitChange,
+  allSourceFiles,
+  sourceFiles,
+  onSourceFilesChange,
   showSemantic,
   minSupport,
   maxSupport,
@@ -268,11 +276,13 @@ export default function Sidebar({
                       role="group"
                       aria-label="概念顏色模式"
                     >
-                      {(
-                        [
-                          ["community", "社群色"],
+                      {( [
+                        ["community", "社群色"],
                           ["community_applicants", "社群色（家）"],
                           ["first_year", "首次出現年"],
+                          ...(allSourceFiles.length > 1
+                            ? ([["source", "依來源檔"]] as const)
+                            : []),
                         ] as const
                       ).map(([value, label]) => (
                         <button
@@ -297,7 +307,12 @@ export default function Sidebar({
                     )}
                     {colorMode === "community_applicants" && (
                       <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
-                        顏色＝「家」單位 Louvain 社群（同一機構跨篇碰過的概念聚類）；分區獨立於「篇」單位社群。
+                        顏色＝「家」單位 Louvain 社群（同一機構跨篇碰過的概念對分）；分區獨立於「篇」單位社群。
+                      </p>
+                    )}
+                    {colorMode === "source" && (
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        顏色＝該概念在哪幾個來源檔出現；單獨一文用該檔本色，跨多檔概念用灰紫共享色。<br/>只著色不篩選——想只看某檔再往下「來源檔篩選」。
                       </p>
                     )}
                     <div className="mt-3">
@@ -334,6 +349,72 @@ export default function Sidebar({
                         線寬用有界指標（Jaccard 或 NPMI）；NPMI 在 p_ij=1 時不顯示。指標皆為全量計算，門檻只過濾顯示。
                       </p>
                     </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-foreground font-medium mb-2">
+                      來源檔案篩選
+                    </p>
+                    {allSourceFiles.length <= 1 ? (
+                      <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
+                        此分析只有一個來源檔；多檔上傳後可用來源檔篩選做「比對」。
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-1.5">
+                          {allSourceFiles.map((file, i) => {
+                            const active = sourceFiles.includes(file);
+                            return (
+                              <label
+                                key={file}
+                                className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-colors ${
+                                  active
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border bg-background"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={active}
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...sourceFiles, file]
+                                      : sourceFiles.filter((f) => f !== file);
+                                    onSourceFilesChange(next);
+                                  }}
+                                  className="mt-0.5"
+                                />
+                                <span className="inline-flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    aria-hidden
+                                    className="size-2.5 shrink-0 rounded-full"
+                                    style={{
+                                      background:
+                                        SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length],
+                                    }}
+                                  />
+                                  <span className="truncate">{file}</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-2 flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onSourceFilesChange([])}
+                            aria-pressed={sourceFiles.length === 0}
+                            className="rounded border border-border px-2 py-1 text-[0.65rem] text-muted-foreground hover:bg-accent"
+                          >
+                            全部來源
+                          </button>
+                          <p className="text-[0.65rem] text-muted-foreground self-center">
+                            {sourceFiles.length === 0
+                              ? "未篩選（顯示全圖）"
+                              : `篩選 ${sourceFiles.length} 個檔（任一來源命中即保留）`}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
                     <input

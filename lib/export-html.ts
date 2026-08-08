@@ -51,7 +51,9 @@ export function parseExportOptions(
     ? 'first_year'
     : params.get('colorMode') === 'community_applicants'
       ? 'community_applicants'
-      : 'community'
+      : params.get('colorMode') === 'source'
+        ? 'source'
+        : 'community'
   const unit = params.get('unit') === 'applicant' ? 'applicant' : 'patent'
   const supportOf = unit === 'applicant'
     ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
@@ -71,6 +73,7 @@ export function parseExportOptions(
   )
   let edgeWeight: GraphViewOptions['edgeWeight'] = 'jaccard'
   if (params.get('el') === 'npmi' || params.get('ew') === 'npmi') edgeWeight = 'npmi'
+  const sourceFiles = params.getAll('source').filter(Boolean)
   return {
     mode,
     showSemantic: parseBoolean(params.get('llm'), false),
@@ -80,6 +83,7 @@ export function parseExportOptions(
     colorMode,
     unit,
     edgeWeight,
+    sourceFiles: sourceFiles.length > 0 ? sourceFiles : undefined,
   }
 }
 

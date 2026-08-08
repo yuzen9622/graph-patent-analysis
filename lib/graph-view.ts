@@ -1,4 +1,5 @@
 import { applicantSize, conceptSize, PATENT_NODE_SIZE, stableEdgeId } from './concept-network'
+import { computeUnitMetrics, pairApplicantSupport } from './concept-metrics'
 import { gradientColor } from './concept-time'
 import { classifyOrgType } from './applicant-classify'
 import type {
@@ -9,7 +10,11 @@ import type {
   GraphNode,
 } from '../types/graph'
 
-export type ColorMode = 'community' | 'first_year' | 'community_applicants'
+export type ColorMode =
+  | 'community'
+  | 'first_year'
+  | 'community_applicants'
+  | 'source'
 
 /** 線寬用哪個有界指標（意圖決策 2：只用有界指標當線寬）。 */
 export type EdgeWeightMetric = 'jaccard' | 'npmi'
@@ -28,7 +33,28 @@ export interface GraphViewOptions {
   edgeWeight?: EdgeWeightMetric
   /** PRD v2 / P4 (Q3): 分析單位。概念視圖的門檻/大小/圖例跟「家」隨之。 */
   unit?: Unit
+  /**
+   * PRD v2 / P2: 來源檔篩選。空／未給＝不篩（全部來源）。非空時只保留
+   * source_files 與之相交的專利，並從那份子集重新推導概念圖（不重跑 LLM）。
+   */
+  sourceFiles?: string[]
 }
+
+/**
+ * PRD v2 / P2: 依來源檔著色色盤。檔案依 `sourceFilesOf()` 排序；每檔一色，
+ * 跨檔（在 ≥2 個來源都出現）的概念用共享色以便一眼看出「哪個是獨有、哪個是共有」。
+ */
+export const SOURCE_FILE_COLORS = [
+  '#0ea5e9', // sky（第一檔）
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#f43f5e', // rose
+  '#6366f1', // indigo
+]
+export const SOURCE_OVERLAP_COLOR = '#334155' // 跨多個來源檔出現的概念
 
 /**
  * PRD v2 / P4: coarse institution-type for the 機構節點圖. Splits 大學 out
@@ -116,6 +142,9 @@ function capabilityWarning(graph: GraphData): string | undefined {
 }
 
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
+  // PRD v2 / P2: 來源檔篩選 → 由子集重推導概念視圖（不重跑 LLM）。
+  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
+  if (rawSource) return selectConceptViewFiltered(graph, options, sourceFilesOf(graph), rawSource)
   let nodes = graph.nodes.filter((node) => node.type === 'concept')
   const nodeIds = new Set(nodes.map((node) => node.id))
   // PRD v2 / P4 (Q3): 概念視圖的門檻/大小跟「家」隨之。缺省 unit='patent'。
@@ -163,6 +192,8 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     nodes = applyTimeColour(nodes, graph.methodology?.time_window)
   } else if (useApplicantCommunity) {
     nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
+  } else if (options.colorMode === 'source') {
+    nodes = applySourceColour(graph, nodes, sourceFilesOf(graph))
   }
   return {
     nodes,
@@ -195,6 +226,274 @@ function applyCommunityApplicantsColour(
     return color ? { ...node, color } : node
   })
 }
+
+// ─── PRD v2 / P2: 來源檔（多檔比對）──────────────────────────────────────
+
+/** 全圖所有的來源檔名（依 patents.source_files 聯集、排序）。 */
+export function sourceFilesOf(graph: GraphData): string[] {
+  const set = new Set<string>()
+  for (const node of graph.nodes) {
+    if (node.type !== 'patent') continue
+    for (const f of node.source_files ?? []) set.add(f)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+}
+
+/**
+ * raw patent id（去掉 `patent:` 前缀）→ 其來源檔清單。
+ * key 與 concept.source_patents／graph-builder 的 patent.id 對齊。
+ */
+function patentFilesByRawId(graph: GraphData): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const node of graph.nodes) {
+    if (node.type !== 'patent') continue
+    map.set(node.id.replace(/^patent:/, ''), node.source_files ?? [])
+  }
+  return map
+}
+
+/**
+ * 來源檔篩選 → 被納入的 raw patent id 集合。無篩選（未給／空陣列）回 null。
+ * 語義：該專利的任一來源檔 ∈ 選定 → 納入（多檔並集取任一份）。
+ */
+function sourceSelectedRawIds(
+  graph: GraphData,
+  files: string[] | undefined,
+): Set<string> | null {
+  if (!files || files.length === 0) return null
+  const want = new Set(files)
+  const raw = new Set<string>()
+  for (const node of graph.nodes) {
+    if (node.type !== 'patent') continue
+    const fs = node.source_files ?? []
+    if (fs.some((f) => want.has(f))) raw.add(node.id.replace(/^patent:/, ''))
+  }
+  return raw
+}
+
+/** 概念節點依來源檔著色：恰好一檔→該檔色；≥2 檔→共享色。 */
+export function applySourceColour(
+  graph: GraphData,
+  nodes: GraphNode[],
+  fileList: string[],
+): GraphNode[] {
+  const patentFiles = patentFilesByRawId(graph)
+  const index = new Map(fileList.map((f, i) => [f, i]))
+  return nodes.map((node) => {
+    if (node.type !== 'concept') return node
+    const touch = new Set<string>()
+    for (const raw of node.source_patents ?? []) {
+      for (const f of patentFiles.get(raw) ?? []) touch.add(f)
+    }
+    let color: string
+    if (touch.size === 1) {
+      const f = Array.from(touch)[0]
+      const i = index.get(f)
+      color =
+        i === undefined
+          ? SOURCE_OVERLAP_COLOR
+          : SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length]
+    } else {
+      color = SOURCE_OVERLAP_COLOR
+    }
+    return color === node.color ? node : { ...node, color }
+  })
+}
+
+/**
+ * 從結構邊（申請了／包含）重建 專利↔概念／專利↔機構 索引，
+ * 與 institution view 同樣純 view 層（不用 DB、不重跑 LLM）。
+ */
+interface ConceptIndex {
+  /** raw patent → concept label 集（含） */
+  patentConcepts: Map<string, Set<string>>
+  /** raw patent → 申請機構（label） */
+  patentApplicants: Map<string, Set<string>>
+}
+function buildConceptIndex(graph: GraphData): ConceptIndex {
+  const patentConcepts = new Map<string, Set<string>>()
+  const patentApplicants = new Map<string, Set<string>>()
+  for (const edge of graph.edges) {
+    if (edge.kind !== 'structural') continue
+    if (edge.relation === '包含') {
+      const p = edge.from.replace(/^patent:/, '')
+      const label = edge.to.replace(/^concept:/, '')
+      const s = patentConcepts.get(p) ?? new Set<string>()
+      s.add(label)
+      patentConcepts.set(p, s)
+    } else if (edge.relation === '申請了') {
+      const p = edge.to.replace(/^patent:/, '')
+      const a = edge.from.replace(/^applicant:/, '')
+      const s = patentApplicants.get(p) ?? new Set<string>()
+      s.add(a)
+      patentApplicants.set(p, s)
+    }
+  }
+  return { patentConcepts, patentApplicants }
+}
+
+/**
+ * 依來源檔子集重新推導概念視圖（不重跑 LLM，重載圖與新圖皆可用）。
+ * `rawSel`＝被保留的 raw patent id 集合（sourceSelectedRawIds 回傳）。
+ */
+function selectConceptViewFiltered(
+  graph: GraphData,
+  options: GraphViewOptions,
+  fileList: string[],
+  rawSel: Set<string>,
+): GraphViewData {
+  const idx = buildConceptIndex(graph)
+
+  // label → 子集中的 raw patent／申請機構 集合
+  const conceptPatents = new Map<string, Set<string>>()
+  const conceptApplicants = new Map<string, Set<string>>()
+  const applicantConcepts = new Map<string, Set<string>>()
+  for (const [raw, labels] of idx.patentConcepts) {
+    if (!rawSel.has(raw)) continue
+    const apps = idx.patentApplicants.get(raw) ?? new Set<string>()
+    for (const label of labels) {
+      const ps = conceptPatents.get(label) ?? new Set<string>()
+      ps.add(raw)
+      conceptPatents.set(label, ps)
+      if (apps.size > 0) {
+        const as = conceptApplicants.get(label) ?? new Set<string>()
+        for (const a of apps) as.add(a)
+        conceptApplicants.set(label, as)
+      }
+    }
+    for (const a of apps) {
+      const cs = applicantConcepts.get(a) ?? new Set<string>()
+      for (const label of idx.patentConcepts.get(raw) ?? []) cs.add(label)
+      applicantConcepts.set(a, cs)
+    }
+  }
+
+  // 只保留在子集仍存在的概念節點，並重算大小（篇/家單位）。
+  const applicantUnit = options.unit === 'applicant'
+  let nodes: GraphNode[] = graph.nodes
+    .filter((node) => node.type === 'concept')
+    .map((node) => {
+      const patents = conceptPatents.get(labelOf(node.id)) ?? new Set<string>()
+      const apps = conceptApplicants.get(labelOf(node.id)) ?? new Set<string>()
+      const count = applicantUnit ? apps.size : patents.size
+      return { ...node, source_patents: Array.from(patents), frequency: patents.size, applicant_count: apps.size, size: conceptSize(count) }
+    })
+    .filter((node) => (node.source_patents?.length ?? 0) > 0)
+
+  // 依子集重算 co-occurrence 與各單位指標（全量→門檻顯示過濾，承 Q4）。
+  const conceptPatentCount = new Map(
+    Array.from(conceptPatents.entries()).map(([l, s]) => [l, s.size] as const),
+  )
+  const conceptApplicantCount = new Map(
+    Array.from(conceptApplicants.entries()).map(([l, s]) => [l, s.size] as const),
+  )
+  const pairApplicants = pairApplicantSupport(applicantConcepts)
+  const co = graph.edges
+    .filter((e) => e.kind === 'cooccurrence')
+    .map((e) => {
+      const a = labelOf(e.from)
+      const b = labelOf(e.to)
+      const A = conceptPatents.get(a)
+      const B = conceptPatents.get(b)
+      if (!A || !B) return undefined
+      const inter = intersectSize(A, B)
+      return inter > 0 ? { id: e.id, from: e.from, to: e.to, support_count: inter } : undefined
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== undefined)
+  const totalInstitutions = applicantConcepts.size
+  const metrics = computeUnitMetrics({
+    cooccurrence: co,
+    conceptPatents: conceptPatentCount,
+    conceptApplicants: conceptApplicantCount,
+    pairApplicants,
+    totalPatents: rawSel.size,
+    totalInstitutions,
+  })
+
+  const supportOf = applicantUnit
+    ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
+    : (e: { support_count?: number }) => e.support_count ?? 0
+  const edges: GraphEdge[] = co
+    .map((e): GraphEdge => {
+      const a = labelOf(e.from)
+      const b = labelOf(e.to)
+      const A = conceptPatents.get(a)
+      const B = conceptPatents.get(b)
+      const union = (A?.size ?? 0) + (B?.size ?? 0) - e.support_count
+      const jaccard =
+        e.support_count > 0 && union > 0 ? e.support_count / union : undefined
+      const m = metrics.get(e.id) ?? {}
+      return {
+        id: e.id,
+        from: e.from,
+        to: e.to,
+        relation: '共同投入',
+        kind: 'cooccurrence' as const,
+        support_count: e.support_count,
+        jaccard,
+        support_applicants: m.support_applicants,
+        jaccard_applicants: m.jaccard_applicants,
+        npmi: m.npmi,
+        npmi_applicants: m.npmi_applicants,
+        association_strength: m.association_strength,
+        association_strength_applicants: m.association_strength_applicants,
+      }
+    })
+  const semantic = options.showSemantic
+    ? graph.edges.filter((e) => e.kind === 'semantic')
+    : []
+  const maxSupport = Math.max(1, ...co.map((e) => Math.max(supportOf(e), 0)))
+  const cooEdges = edges.filter((e) => supportOf(e) >= options.minSupport)
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  const allEdges = [...cooEdges, ...semantic].filter(
+    (e) => nodeIds.has(e.from) && nodeIds.has(e.to),
+  )
+
+  // 著色：source／first_year／community 都沿用既有規則（以來源圖為準）。
+  if (options.colorMode === 'first_year') {
+    nodes = applyTimeColour(nodes, graph.methodology?.time_window)
+  } else if (options.colorMode === 'community_applicants') {
+    nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
+  } else if (options.colorMode === 'source') {
+    nodes = applySourceColour(graph, nodes, fileList)
+  }
+
+  const activeCommunityIds = new Set(
+    nodes
+      .map((node) => (options.colorMode === 'community_applicants' ? node.community_id_applicants : node.community_id))
+      .filter((id): id is number => typeof id === 'number'),
+  )
+  const communities = (options.colorMode === 'community_applicants'
+    ? graph.communities_applicants ?? []
+    : graph.communities
+  ).filter((community) => activeCommunityIds.has(community.id))
+
+  return {
+    nodes,
+    edges: allEdges,
+    communities,
+    stats: {
+      ...graph.stats,
+      applicant_count: applicantConcepts.size,
+      patent_count: rawSel.size,
+      concept_count: nodes.length,
+      community_count: communities.length,
+    },
+    maxSupport,
+    capabilityWarning: capabilityWarning(graph),
+  }
+}
+function intersectSize(a: Set<string>, b: Set<string>): number {
+  const [small, big] = a.size <= b.size ? [a, b] : [b, a]
+  let n = 0
+  for (const x of small) if (big.has(x)) n += 1
+  return n
+}
+
+function labelOf(id: string): string {
+  return id.replace(/^concept:/, '')
+}
+
 
 /** [min, max] of concept first-years on the given (concept) nodes, or null. */
 function timeWindowOf(nodes: GraphNode[]): [number, number] | null {
@@ -229,9 +528,11 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
   const [yearStart, yearEnd] = options.yearRange
   const isFullRange =
     yearStart === graph.stats.year_range[0] && yearEnd === graph.stats.year_range[1]
+  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
   const visiblePatents = graph.nodes.filter(
     (node) =>
       node.type === 'patent' &&
+      (!rawSource || rawSource.has(node.id.replace(/^patent:/, ''))) &&
       (typeof node.year === 'number'
         ? node.year >= yearStart && node.year <= yearEnd
         : isFullRange),
@@ -316,15 +617,18 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
  * identically for freshly-built and reloaded graphs — no extra DB columns.
  */
 function selectInstitutionView(graph: GraphData, options: GraphViewOptions): GraphViewData {
+  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
   const appPatents = new Map<string, Set<string>>()
   const patentConcepts = new Map<string, Set<string>>()
   for (const edge of graph.edges) {
     if (edge.kind !== 'structural') continue
     if (edge.relation === '申請了') {
+      if (rawSource && !rawSource.has(edge.to.replace(/^patent:/, ''))) continue
       const s = appPatents.get(edge.from) ?? new Set()
       s.add(edge.to)
       appPatents.set(edge.from, s)
     } else if (edge.relation === '包含') {
+      if (rawSource && !rawSource.has(edge.from.replace(/^patent:/, ''))) continue
       const s = patentConcepts.get(edge.from) ?? new Set()
       s.add(edge.to)
       patentConcepts.set(edge.from, s)

@@ -110,3 +110,13 @@ describe('unit（分析單位）', () => {
     expect(parseViewQuery('?unit=family')).toEqual({})
   })
 })
+describe('P2 來源檔（source= 多值）', () => {
+  it('選定的來源檔 round-trip；未選不掛 URL', () => {
+    const withSrc = toViewQueryString({ ...fullDefaults(), sourceFiles: ['fileA', 'fileB'] } as any)
+    expect(withSrc).toContain('source=fileA')
+    expect(withSrc).toContain('source=fileB')
+    expect(parseViewQuery(`?${withSrc}`).sourceFiles).toEqual(['fileA', 'fileB'])
+    const none = toViewQueryString(fullDefaults())
+    expect(none).not.toContain('source=')
+  })
+})

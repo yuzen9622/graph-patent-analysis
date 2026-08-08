@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { SEQUENTIAL_BLUE } from "@/lib/concept-time";
-import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode, type Unit } from "@/lib/graph-view";
+import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode, type Unit, SOURCE_FILE_COLORS, SOURCE_OVERLAP_COLOR } from "@/lib/graph-view";
 import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
 
 interface Props {
@@ -12,6 +12,9 @@ interface Props {
   minSupport: number;
   colorMode?: ColorMode;
   unit?: Unit;
+  /** PRD v2 / P2: 可用來源檔與當前篩選（供來源檔圖例）。 */
+  allSourceFiles?: string[];
+  sourceFiles?: string[];
   methodology: GraphMethodology;
   capabilityWarning?: string;
   stats: GraphData["stats"];
@@ -28,6 +31,8 @@ export default function GraphLegend({
   paperMode = false,
   colorMode = "community",
   unit = "patent",
+  allSourceFiles = [],
+  sourceFiles = [],
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isConceptMode = mode === "concept";
@@ -35,6 +40,7 @@ export default function GraphLegend({
   const isOpen = paperMode || expanded;
   const window = methodology.time_window ?? null;
   const isGradient = isConceptMode && colorMode === "first_year" && !!window;
+  const isSourceColour = isConceptMode && colorMode === "source";
 
   return (
     <div className="absolute bottom-3 left-3 z-10 w-[min(25rem,calc(100%-1.5rem))]">
@@ -123,6 +129,15 @@ export default function GraphLegend({
                   <LegendItem marker={<TimeBar window={window} />}>
                     顏色＝概念首次出現的申請年份漸層（{window![0]} 早 → {window![1]} 晚）
                   </LegendItem>
+                ) : isSourceColour ? (
+                  <>
+                    <LegendItem marker={<SourceChips files={allSourceFiles} />}>
+                      依來源檔著色：某概念只出現在某一檔→該檔本色
+                    </LegendItem>
+                    <LegendItem marker={<span className="size-2.5 rounded-full" style={{ background: SOURCE_OVERLAP_COLOR }} />}>
+                      同時出現在 ≥2 個來源檔的概念＝共享紫灰
+                    </LegendItem>
+                  </>
                 ) : (
                   <LegendItem marker={<CommunityMarker />}>
                     顏色＝以 support 加權的 Louvain 技術社群
@@ -241,6 +256,27 @@ function CommunityMarker() {
     <span className="flex gap-1">
       <span className="size-2.5 rounded-full bg-violet-500" />
       <span className="size-2.5 rounded-full bg-cyan-500" />
+    </span>
+  );
+}
+
+/** 來源檔色點：一檔一色，最多示三檔（超出顯示 +n）。 */
+function SourceChips({ files }: { files: string[] }) {
+  const shown = files.slice(0, 3);
+  return (
+    <span className="flex gap-1">
+      {shown.map((f, i) => (
+        <span
+          key={f}
+          className="size-2.5 rounded-full"
+          style={{
+            background: SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length],
+          }}
+        />
+      ))}
+      {files.length > shown.length && (
+        <span className="text-[0.6rem] text-muted-foreground">+{files.length - shown.length}</span>
+      )}
     </span>
   );
 }

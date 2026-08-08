@@ -21,13 +21,18 @@ export interface ViewState {
   edgeWeight?: EdgeWeightMetric
   /** PRD v2 / P4 (Q3): 分析單位（缺省 patent，不掛 URL）。 */
   unit?: Unit
+  /** PRD v2 / P2: 來源檔篩選（多檔比對）。空＝不篩；非空以其子集重推導。 */
+  sourceFiles?: string[]
 }
 
 const isMode = (value: string | null): value is GraphMode =>
   value === 'concept' || value === 'context' || value === 'institution'
 
 const isColorMode = (value: string | null): value is ColorMode =>
-  value === 'community' || value === 'first_year' || value === 'community_applicants'
+  value === 'community' ||
+  value === 'first_year' ||
+  value === 'community_applicants' ||
+  value === 'source'
 
 const isEdgeWeight = (value: string | null): value is EdgeWeightMetric =>
   value === 'jaccard' || value === 'npmi'
@@ -55,6 +60,10 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 
   const unit = p.get('unit')
   if (isUnit(unit)) out.unit = unit
+
+  // PRD v2 / P2: 來源檔可重複（多檔）。空／缺省＝不篩。
+  const sources = p.getAll('source').filter(Boolean)
+  if (sources.length > 0) out.sourceFiles = sources
 
   const llm = p.get('llm')
   if (llm === '1') out.showSemantic = true
@@ -97,5 +106,7 @@ export function toViewQueryString(state: ViewState): string {
   if (state.unit && state.unit !== 'patent') {
     params['unit'] = state.unit
   }
-  return new URLSearchParams(params).toString()
+  const searchParams = new URLSearchParams(params)
+  for (const source of state.sourceFiles ?? []) searchParams.append('source', source)
+  return searchParams.toString()
 }
