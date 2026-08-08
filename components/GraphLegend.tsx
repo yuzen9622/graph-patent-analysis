@@ -147,7 +147,7 @@ export default function GraphLegend({
                 ) : isIpcColour ? (
                   <>
                     <LegendItem marker={<IpcChips legend={ipcLegend} />}>
-                      颜色＝概念優勢 IPC（{IPC_LEVEL_NAMES[ipcLevel] ?? `L${ipcLevel}`}）；無 IPC 專利的概包維持中性灰
+                      顏色＝概念優勢 IPC（{IPC_LEVEL_NAMES[ipcLevel] ?? `L${ipcLevel}`}）；無 IPC 專利的概念維持中性灰
                     </LegendItem>
                     <LegendItem marker={<span className="size-2.5 rounded-full" style={{ background: "#94a3b8" }} />}>
                       無 IPC 資料的概念＝中性（不屬任何分類）
