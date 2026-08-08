@@ -8,6 +8,7 @@
  * there is no component test harness in this project).
  */
 import type { ColorMode, EdgeWeightMetric, Unit } from './graph-view'
+import { DEFAULT_IPC_LEVEL, type IpcLevel } from './ipc-filter'
 import type { GraphMode } from '../types/graph'
 
 export interface ViewState {
@@ -23,6 +24,10 @@ export interface ViewState {
   unit?: Unit
   /** PRD v2 / P2: 來源檔篩選（多檔比對）。空＝不篩；非空以其子集重推導。 */
   sourceFiles?: string[]
+  /** PRD v2 / P5: IPC 層級（缺省 3，不掛 URL）。 */
+  ipcLevel?: IpcLevel
+  /** PRD v2 / P5: 選定層級的 IPC key（多值；空＝不篩）。 */
+  ipcFilter?: string[]
 }
 
 const isMode = (value: string | null): value is GraphMode =>
@@ -32,7 +37,8 @@ const isColorMode = (value: string | null): value is ColorMode =>
   value === 'community' ||
   value === 'first_year' ||
   value === 'community_applicants' ||
-  value === 'source'
+  value === 'source' ||
+  value === 'ipc'
 
 const isEdgeWeight = (value: string | null): value is EdgeWeightMetric =>
   value === 'jaccard' || value === 'npmi'
@@ -64,6 +70,15 @@ export function parseViewQuery(search: string): Partial<ViewState> {
   // PRD v2 / P2: 來源檔可重複（多檔）。空／缺省＝不篩。
   const sources = p.getAll('source').filter(Boolean)
   if (sources.length > 0) out.sourceFiles = sources
+
+  // PRD v2 / P5: IPC 層級與篩選（多值）。非法層級忽略（缺省 3）。
+  const levelRaw = p.get('ipcLevel')
+  const level = Number(levelRaw)
+  if (levelRaw !== null && Number.isInteger(level) && level >= 1 && level <= 5) {
+    out.ipcLevel = level as IpcLevel
+  }
+  const ipcKeys = p.getAll('ipc').filter(Boolean)
+  if (ipcKeys.length > 0) out.ipcFilter = ipcKeys
 
   const llm = p.get('llm')
   if (llm === '1') out.showSemantic = true
@@ -106,7 +121,11 @@ export function toViewQueryString(state: ViewState): string {
   if (state.unit && state.unit !== 'patent') {
     params['unit'] = state.unit
   }
+  if (state.ipcLevel && state.ipcLevel !== DEFAULT_IPC_LEVEL) {
+    params['ipcLevel'] = String(state.ipcLevel)
+  }
   const searchParams = new URLSearchParams(params)
   for (const source of state.sourceFiles ?? []) searchParams.append('source', source)
+  for (const key of state.ipcFilter ?? []) searchParams.append('ipc', key)
   return searchParams.toString()
 }

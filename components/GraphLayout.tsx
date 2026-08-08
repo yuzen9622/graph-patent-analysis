@@ -9,6 +9,7 @@ import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
 import { selectGraphView, sourceFilesOf, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
+import { ipcLegendItems, ipcTreeOf, DEFAULT_IPC_LEVEL, type IpcLevel } from "@/lib/ipc-filter";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
@@ -30,6 +31,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
   const [unit, setUnit] = useState<Unit>("patent");
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
+  const [ipcLevel, setIpcLevel] = useState<IpcLevel>(DEFAULT_IPC_LEVEL);
+  const [ipcFilter, setIpcFilter] = useState<string[]>([]);
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -46,6 +49,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   // PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
   const allSourceFiles = useMemo(() => sourceFilesOf(graph), [graph]);
+  // PRD v2 / P5: IPC 樹（目前層級）與圖例（依 IPC 著色用）。
+  const ipcTree = useMemo(() => ipcTreeOf(graph, ipcLevel), [graph, ipcLevel]);
+  const ipcLegend = useMemo(() => ipcLegendItems(graph, ipcLevel), [graph, ipcLevel]);
+  const hasIpcData = ipcLegend.length > 0;
 
   // ── PRD v2 / P3 (N6): view state lives in the URL so a shared link restores
   // the exact view (gradient colouring included). Hydrate once from the query
@@ -62,6 +69,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
     if (parsed.unit) setUnit(parsed.unit);
     if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
+    if (parsed.ipcLevel) setIpcLevel(parsed.ipcLevel);
+    if (parsed.ipcFilter) setIpcFilter(parsed.ipcFilter);
     if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
@@ -79,9 +88,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
       syncedOnceRef.current = true;
       return;
     }
-    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit, sourceFiles });
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter });
     window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
-  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles]);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter]);
 
   const view = useMemo(
     () =>
@@ -94,8 +103,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
         edgeWeight,
         unit,
         sourceFiles,
+        ipcLevel,
+        ipcFilter,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -122,6 +133,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
   if (unit && unit !== "patent") exportQuery.set("unit", unit);
   for (const source of sourceFiles) exportQuery.append("source", source);
+  if (ipcLevel !== DEFAULT_IPC_LEVEL) exportQuery.set("ipcLevel", String(ipcLevel));
+  for (const key of ipcFilter) exportQuery.append("ipc", key);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -281,6 +294,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             capabilityWarning={view.capabilityWarning}
             stats={view.stats}
             paperMode={paperMode}
+            ipcLevel={ipcLevel}
+            ipcLegend={ipcLegend}
           />
         </div>
 
@@ -307,6 +322,15 @@ export default function GraphLayout({ graph, jobId }: Props) {
             allSourceFiles={allSourceFiles}
             sourceFiles={sourceFiles}
             onSourceFilesChange={setSourceFiles}
+            ipcLevel={ipcLevel}
+            onIpcLevelChange={(level) => {
+              setIpcLevel(level);
+              setIpcFilter([]);
+            }}
+            ipcFilter={ipcFilter}
+            onIpcFilterChange={setIpcFilter}
+            ipcTree={ipcTree}
+            hasIpcData={hasIpcData}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

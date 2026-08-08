@@ -18,6 +18,8 @@ import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
 import type { ColorMode, EdgeWeightMetric, Unit } from "@/lib/graph-view";
 import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
+import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
+import IpcTree from "./IpcTree";
 import type {
   GraphNode,
   GraphEdge,
@@ -49,6 +51,13 @@ interface Props {
   allSourceFiles: string[];
   sourceFiles: string[];
   onSourceFilesChange: (files: string[]) => void;
+  /** PRD v2 / P5: IPC 層級與篩選（樹狀多選，S8）。 */
+  ipcLevel: IpcLevel;
+  onIpcLevelChange: (level: IpcLevel) => void;
+  ipcFilter: string[];
+  onIpcFilterChange: (keys: string[]) => void;
+  ipcTree: IpcTreeNode[];
+  hasIpcData: boolean;
   showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
@@ -109,6 +118,12 @@ export default function Sidebar({
   allSourceFiles,
   sourceFiles,
   onSourceFilesChange,
+  ipcLevel,
+  onIpcLevelChange,
+  ipcFilter,
+  onIpcFilterChange,
+  ipcTree,
+  hasIpcData,
   showSemantic,
   minSupport,
   maxSupport,
@@ -283,6 +298,7 @@ export default function Sidebar({
                           ...(allSourceFiles.length > 1
                             ? ([["source", "依來源檔"]] as const)
                             : []),
+                          ...(hasIpcData ? ([["ipc", "依 IPC"]] as const) : []),
                         ] as const
                       ).map(([value, label]) => (
                         <button
@@ -313,6 +329,11 @@ export default function Sidebar({
                     {colorMode === "source" && (
                       <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
                         顏色＝該概念在哪幾個來源檔出現；單獨一文用該檔本色，跨多檔概念用灰紫共享色。<br/>只著色不篩選——想只看某檔再往下「來源檔篩選」。
+                      </p>
+                    )}
+                    {colorMode === "ipc" && (
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        顏色＝概念優勢 IPC（L{ipcLevel}）：該概念的多數專利落在哪個分類。IPC 篩選請見下方「IPC 分類篩選」。
                       </p>
                     )}
                     <div className="mt-3">
@@ -416,6 +437,55 @@ export default function Sidebar({
                       </>
                     )}
                   </div>
+                  {hasIpcData && (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-foreground font-medium mb-2">IPC 層級</p>
+                        <span className="font-mono text-primary">L{ipcLevel}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={5}
+                        value={ipcLevel}
+                        onChange={(event) =>
+                          onIpcLevelChange(Number(event.target.value) as IpcLevel)
+                        }
+                        className="w-full accent-primary"
+                        aria-label="IPC 層級"
+                      />
+                      <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
+                        {ipcLevel} 級（{["L1 部", "L2 類", "L3 次類", "L4 主類", "L5 次目"][ipcLevel - 1]}）。<br/>切換層級會清空 IPC 篩選。
+                      </p>
+                      <p className="mt-3 text-xs text-foreground font-medium mb-1.5">IPC 分類篩選</p>
+                      <IpcTree
+                        nodes={ipcTree}
+                        level={ipcLevel}
+                        selected={ipcFilter}
+                        onToggle={(key) =>
+                          onIpcFilterChange(
+                            ipcFilter.includes(key)
+                              ? ipcFilter.filter((k) => k !== key)
+                              : [...ipcFilter, key],
+                          )
+                        }
+                      />
+                      <div className="mt-2 flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onIpcFilterChange([])}
+                          className="rounded border border-border px-2 py-1 text-[0.65rem] text-muted-foreground hover:bg-accent"
+                        >
+                          全部 IPC
+                        </button>
+                        <p className="text-[0.65rem] text-muted-foreground self-center">
+                          {ipcFilter.length === 0
+                            ? "未篩選（顯示全圖）"
+                            : `篩選 ${ipcFilter.length} 個 IPC（任一命中即保留）`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
                     <input
                       type="checkbox"

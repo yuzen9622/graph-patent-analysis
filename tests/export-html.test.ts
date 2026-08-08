@@ -60,6 +60,19 @@ describe("offline export security and parity", () => {
       colorMode: "community",
       unit: "patent",
       edgeWeight: "jaccard",
+      ipcLevel: 3,
+    });
+  });
+
+  it("接受 IPC 參數（colorMode=ipc / ipcLevel / ipc= 多值）", () => {
+    const options = parseExportOptions(
+      new URLSearchParams("colorMode=ipc&ipcLevel=4&ipc=G06Q10&ipc=H04L9"),
+      graph,
+    );
+    expect(options).toMatchObject({
+      colorMode: "ipc",
+      ipcLevel: 4,
+      ipcFilter: ["G06Q10", "H04L9"],
     });
   });
 

@@ -112,11 +112,37 @@ describe('unit（分析單位）', () => {
 })
 describe('P2 來源檔（source= 多值）', () => {
   it('選定的來源檔 round-trip；未選不掛 URL', () => {
-    const withSrc = toViewQueryString({ ...fullDefaults(), sourceFiles: ['fileA', 'fileB'] } as any)
+    const withSrc = toViewQueryString({ ...fullDefaults(), sourceFiles: ['fileA', 'fileB'] })
     expect(withSrc).toContain('source=fileA')
     expect(withSrc).toContain('source=fileB')
     expect(parseViewQuery(`?${withSrc}`).sourceFiles).toEqual(['fileA', 'fileB'])
     const none = toViewQueryString(fullDefaults())
     expect(none).not.toContain('source=')
+  })
+})
+describe('P5 IPC（ipcLevel / ipc= 多值）', () => {
+  it('層級與篩選 round-trip；缺省層級不掛 URL', () => {
+    const q = toViewQueryString({
+      ...fullDefaults(),
+      ipcLevel: 4,
+      ipcFilter: ['G06Q10', 'H04L9'],
+    })
+    expect(q).toContain('ipcLevel=4')
+    expect(q).toContain('ipc=G06Q10')
+    expect(q).toContain('ipc=H04L9')
+    const parsed = parseViewQuery(`?${q}`)
+    expect(parsed.ipcLevel).toBe(4)
+    expect(parsed.ipcFilter).toEqual(['G06Q10', 'H04L9'])
+  })
+  it('缺省層級（3）不掛；無篩選不掛 ipc=', () => {
+    const def = toViewQueryString({ ...fullDefaults(), ipcLevel: 3, ipcFilter: [] })
+    expect(def).not.toContain('ipcLevel=')
+    expect(def).not.toContain('ipc=')
+  })
+  it('非法層級忽略；colorMode=ipc 可 round-trip', () => {
+    expect(parseViewQuery('?ipcLevel=9&ipc=X')).toEqual({ ipcFilter: ['X'] })
+    expect(parseViewQuery('?colorMode=ipc').colorMode).toBe('ipc')
+    const q = toViewQueryString({ ...fullDefaults(), colorMode: 'ipc' })
+    expect(parseViewQuery(`?${q}`).colorMode).toBe('ipc')
   })
 })

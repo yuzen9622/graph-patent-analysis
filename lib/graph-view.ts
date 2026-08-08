@@ -1,6 +1,7 @@
 import { applicantSize, conceptSize, PATENT_NODE_SIZE, stableEdgeId } from './concept-network'
 import { computeUnitMetrics, pairApplicantSupport } from './concept-metrics'
 import { gradientColor } from './concept-time'
+import { applyIpcColour, DEFAULT_IPC_LEVEL, ipcKeysOfPatents, type IpcLevel } from './ipc-filter'
 import { classifyOrgType } from './applicant-classify'
 import type {
   Community,
@@ -15,6 +16,7 @@ export type ColorMode =
   | 'first_year'
   | 'community_applicants'
   | 'source'
+  | 'ipc'
 
 /** 線寬用哪個有界指標（意圖決策 2：只用有界指標當線寬）。 */
 export type EdgeWeightMetric = 'jaccard' | 'npmi'
@@ -38,6 +40,15 @@ export interface GraphViewOptions {
    * source_files 與之相交的專利，並從那份子集重新推導概念圖（不重跑 LLM）。
    */
   sourceFiles?: string[]
+  /**
+   * PRD v2 / P5: IPC 五級層級（1..5，缺省 3）。決定 IPC 篩選鍵與著色的投影層。
+   */
+  ipcLevel?: IpcLevel
+  /**
+   * PRD v2 / P5: 選定層級的 IPC key 集合（OR；與 sourceFiles 為 AND）。
+   * 空／未給＝不做 IPC 篩選。S6：切換 ipcLevel 時由 UI 清空。
+   */
+  ipcFilter?: string[]
 }
 
 /**
@@ -142,9 +153,9 @@ function capabilityWarning(graph: GraphData): string | undefined {
 }
 
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
-  // PRD v2 / P2: 來源檔篩選 → 由子集重推導概念視圖（不重跑 LLM）。
-  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
-  if (rawSource) return selectConceptViewFiltered(graph, options, sourceFilesOf(graph), rawSource)
+  // PRD v2 / P2 + P5: 來源檔／IPC 篩選 → 由子集重推導概念視圖（不重跑 LLM）。
+  const rawSel = selectedRawIds(graph, options)
+  if (rawSel) return selectConceptViewFiltered(graph, options, sourceFilesOf(graph), rawSel)
   let nodes = graph.nodes.filter((node) => node.type === 'concept')
   const nodeIds = new Set(nodes.map((node) => node.id))
   // PRD v2 / P4 (Q3): 概念視圖的門檻/大小跟「家」隨之。缺省 unit='patent'。
@@ -194,6 +205,8 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
   } else if (options.colorMode === 'source') {
     nodes = applySourceColour(graph, nodes, sourceFilesOf(graph))
+  } else if (options.colorMode === 'ipc') {
+    nodes = applyIpcColour(graph, nodes, options.ipcLevel ?? DEFAULT_IPC_LEVEL)
   }
   return {
     nodes,
@@ -253,20 +266,37 @@ function patentFilesByRawId(graph: GraphData): Map<string, string[]> {
 }
 
 /**
- * 來源檔篩選 → 被納入的 raw patent id 集合。無篩選（未給／空陣列）回 null。
- * 語義：該專利的任一來源檔 ∈ 選定 → 納入（多檔並集取任一份）。
+ * 專利子集（raw patent id）：P2 來源檔（任一命中）∩ P5 IPC（任一命中）。
+ * 兩者皆空／未給＝null（不過濾）。P5 S2：IPC 命中以「目前層級投影」為準。
  */
-function sourceSelectedRawIds(
+function selectedRawIds(
   graph: GraphData,
-  files: string[] | undefined,
+  options: GraphViewOptions,
 ): Set<string> | null {
-  if (!files || files.length === 0) return null
-  const want = new Set(files)
+  const files = options.sourceFiles
+  const ipcKeys = options.ipcFilter
+  if ((!files || files.length === 0) && (!ipcKeys || ipcKeys.length === 0)) return null
+  const wantFiles = new Set(files ?? [])
+  const wantIpc = ipcKeys && ipcKeys.length > 0 ? new Set(ipcKeys) : null
+  const level = options.ipcLevel ?? DEFAULT_IPC_LEVEL
   const raw = new Set<string>()
   for (const node of graph.nodes) {
     if (node.type !== 'patent') continue
-    const fs = node.source_files ?? []
-    if (fs.some((f) => want.has(f))) raw.add(node.id.replace(/^patent:/, ''))
+    const okFile =
+      !files || files.length === 0
+        ? true
+        : (node.source_files ?? []).some((f) => wantFiles.has(f))
+    let okIpc = true
+    if (wantIpc) {
+      okIpc = false
+      for (const key of ipcKeysOfPatents(node.ipc5, level)) {
+        if (wantIpc.has(key)) {
+          okIpc = true
+          break
+        }
+      }
+    }
+    if (okFile && okIpc) raw.add(node.id.replace(/^patent:/, ''))
   }
   return raw
 }
@@ -333,8 +363,8 @@ function buildConceptIndex(graph: GraphData): ConceptIndex {
 }
 
 /**
- * 依來源檔子集重新推導概念視圖（不重跑 LLM，重載圖與新圖皆可用）。
- * `rawSel`＝被保留的 raw patent id 集合（sourceSelectedRawIds 回傳）。
+ * 依來源檔／IPC 子集重新推導概念視圖（不重跑 LLM，重載圖與新圖皆可用）。
+ * `rawSel`＝被保留的 raw patent id 集合（selectedRawIds 回傳）。
  */
 function selectConceptViewFiltered(
   graph: GraphData,
@@ -449,13 +479,15 @@ function selectConceptViewFiltered(
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to),
   )
 
-  // 著色：source／first_year／community 都沿用既有規則（以來源圖為準）。
+  // 著色：source／first_year／community／ipc 都沿用既有規則（以子集為準）。
   if (options.colorMode === 'first_year') {
     nodes = applyTimeColour(nodes, graph.methodology?.time_window)
   } else if (options.colorMode === 'community_applicants') {
     nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
   } else if (options.colorMode === 'source') {
     nodes = applySourceColour(graph, nodes, fileList)
+  } else if (options.colorMode === 'ipc') {
+    nodes = applyIpcColour(graph, nodes, options.ipcLevel ?? DEFAULT_IPC_LEVEL)
   }
 
   const activeCommunityIds = new Set(
@@ -528,11 +560,11 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
   const [yearStart, yearEnd] = options.yearRange
   const isFullRange =
     yearStart === graph.stats.year_range[0] && yearEnd === graph.stats.year_range[1]
-  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
+  const rawSel = selectedRawIds(graph, options)
   const visiblePatents = graph.nodes.filter(
     (node) =>
       node.type === 'patent' &&
-      (!rawSource || rawSource.has(node.id.replace(/^patent:/, ''))) &&
+      (!rawSel || rawSel.has(node.id.replace(/^patent:/, ''))) &&
       (typeof node.year === 'number'
         ? node.year >= yearStart && node.year <= yearEnd
         : isFullRange),
@@ -617,18 +649,18 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
  * identically for freshly-built and reloaded graphs — no extra DB columns.
  */
 function selectInstitutionView(graph: GraphData, options: GraphViewOptions): GraphViewData {
-  const rawSource = sourceSelectedRawIds(graph, options.sourceFiles)
+  const rawSel = selectedRawIds(graph, options)
   const appPatents = new Map<string, Set<string>>()
   const patentConcepts = new Map<string, Set<string>>()
   for (const edge of graph.edges) {
     if (edge.kind !== 'structural') continue
     if (edge.relation === '申請了') {
-      if (rawSource && !rawSource.has(edge.to.replace(/^patent:/, ''))) continue
+      if (rawSel && !rawSel.has(edge.to.replace(/^patent:/, ''))) continue
       const s = appPatents.get(edge.from) ?? new Set()
       s.add(edge.to)
       appPatents.set(edge.from, s)
     } else if (edge.relation === '包含') {
-      if (rawSource && !rawSource.has(edge.from.replace(/^patent:/, ''))) continue
+      if (rawSel && !rawSel.has(edge.from.replace(/^patent:/, ''))) continue
       const s = patentConcepts.get(edge.from) ?? new Set()
       s.add(edge.to)
       patentConcepts.set(edge.from, s)

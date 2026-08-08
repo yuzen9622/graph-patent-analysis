@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { SEQUENTIAL_BLUE } from "@/lib/concept-time";
 import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode, type Unit, SOURCE_FILE_COLORS, SOURCE_OVERLAP_COLOR } from "@/lib/graph-view";
+import type { IpcLevel } from "@/lib/ipc-filter";
 import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
 
 interface Props {
@@ -19,6 +20,10 @@ interface Props {
   capabilityWarning?: string;
   stats: GraphData["stats"];
   paperMode?: boolean;
+  /** PRD v2 / P5: 依 IPC 著色時的層級（配合 ipcLegend 芯片）。 */
+  ipcLevel?: IpcLevel;
+  /** PRD v2 / P5: 依 IPC 著色時的顯例（key/color/count，count 遞过，由 layout 算）。 */
+  ipcLegend?: Array<{ key: string; color: string; count: number }>;
 }
 
 export default function GraphLegend({
@@ -33,6 +38,8 @@ export default function GraphLegend({
   unit = "patent",
   allSourceFiles = [],
   sourceFiles = [],
+  ipcLevel = 3,
+  ipcLegend = [],
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isConceptMode = mode === "concept";
@@ -41,6 +48,14 @@ export default function GraphLegend({
   const window = methodology.time_window ?? null;
   const isGradient = isConceptMode && colorMode === "first_year" && !!window;
   const isSourceColour = isConceptMode && colorMode === "source";
+  const isIpcColour = isConceptMode && colorMode === "ipc";
+  const IPC_LEVEL_NAMES: Record<number, string> = {
+    1: "L1 部",
+    2: "L2 類",
+    3: "L3 次類",
+    4: "L4 主類",
+    5: "L5 次目",
+  };
 
   return (
     <div className="absolute bottom-3 left-3 z-10 w-[min(25rem,calc(100%-1.5rem))]">
@@ -129,6 +144,15 @@ export default function GraphLegend({
                   <LegendItem marker={<TimeBar window={window} />}>
                     顏色＝概念首次出現的申請年份漸層（{window![0]} 早 → {window![1]} 晚）
                   </LegendItem>
+                ) : isIpcColour ? (
+                  <>
+                    <LegendItem marker={<IpcChips legend={ipcLegend} />}>
+                      颜色＝概念優勢 IPC（{IPC_LEVEL_NAMES[ipcLevel] ?? `L${ipcLevel}`}）；無 IPC 專利的概包維持中性灰
+                    </LegendItem>
+                    <LegendItem marker={<span className="size-2.5 rounded-full" style={{ background: "#94a3b8" }} />}>
+                      無 IPC 資料的概念＝中性（不屬任何分類）
+                    </LegendItem>
+                  </>
                 ) : isSourceColour ? (
                   <>
                     <LegendItem marker={<SourceChips files={allSourceFiles} />}>
@@ -276,6 +300,26 @@ function SourceChips({ files }: { files: string[] }) {
       ))}
       {files.length > shown.length && (
         <span className="text-[0.6rem] text-muted-foreground">+{files.length - shown.length}</span>
+      )}
+    </span>
+  );
+}
+
+/** 依 IPC 著色的色块：最多示 6 個分類，超出顯示 +n。 */
+function IpcChips({ legend }: { legend: Array<{ key: string; color: string; count: number }> }) {
+  const shown = legend.slice(0, 6);
+  return (
+    <span className="flex gap-1">
+      {shown.map((item) => (
+        <span
+          key={item.key}
+          className="size-2.5 rounded-full"
+          title={`${item.key}（${item.count} 篇）`}
+          style={{ background: item.color }}
+        />
+      ))}
+      {legend.length > shown.length && (
+        <span className="text-[0.6rem] text-muted-foreground">+{legend.length - shown.length}</span>
       )}
     </span>
   );

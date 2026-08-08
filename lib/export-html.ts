@@ -1,4 +1,5 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
+import { DEFAULT_IPC_LEVEL } from './ipc-filter'
 import type { GraphData, GraphMode } from '../types/graph'
 
 export interface ExportOptions extends GraphViewOptions {
@@ -53,7 +54,9 @@ export function parseExportOptions(
       ? 'community_applicants'
       : params.get('colorMode') === 'source'
         ? 'source'
-        : 'community'
+        : params.get('colorMode') === 'ipc'
+          ? 'ipc'
+          : 'community'
   const unit = params.get('unit') === 'applicant' ? 'applicant' : 'patent'
   const supportOf = unit === 'applicant'
     ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
@@ -74,6 +77,14 @@ export function parseExportOptions(
   let edgeWeight: GraphViewOptions['edgeWeight'] = 'jaccard'
   if (params.get('el') === 'npmi' || params.get('ew') === 'npmi') edgeWeight = 'npmi'
   const sourceFiles = params.getAll('source').filter(Boolean)
+  // PRD v2 / P5: IPC 層級（1..5，缺省 3）與選定 key（多值）。
+  let ipcLevel: GraphViewOptions['ipcLevel'] = DEFAULT_IPC_LEVEL
+  const levelRaw = params.get('ipcLevel')
+  const level = Number(levelRaw)
+  if (levelRaw !== null && Number.isInteger(level) && level >= 1 && level <= 5) {
+    ipcLevel = level as GraphViewOptions['ipcLevel']
+  }
+  const ipcFilter = params.getAll('ipc').filter(Boolean)
   return {
     mode,
     showSemantic: parseBoolean(params.get('llm'), false),
@@ -84,6 +95,8 @@ export function parseExportOptions(
     unit,
     edgeWeight,
     sourceFiles: sourceFiles.length > 0 ? sourceFiles : undefined,
+    ipcLevel,
+    ipcFilter: ipcFilter.length > 0 ? ipcFilter : undefined,
   }
 }
 
@@ -118,7 +131,9 @@ export function buildExportHtml(
       ? '節點＝一家機構；大小＝涉足概念數（家）；邊＝兩家共享 ≥' +
         `${options.minSupport} 個概念；顏色＝機構類型（銀行/保險/大學/…）。`
       : options.mode === 'concept'
-        ? options.unit === 'applicant'
+        ? options.colorMode === 'ipc'
+          ? `節點顏色＝優勢 IPC（L${options.ipcLevel ?? DEFAULT_IPC_LEVEL}）；${options.unit === 'applicant' ? '大小＝機構家數' : '大小＝專利篇數'}；實線粗細＝支持門檻（≥ ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
+          : options.unit === 'applicant'
           ? `節點大小＝涵蓋的機構家數；實線名稱 = 門檻家數（≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
           : `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
         : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
