@@ -1,8 +1,10 @@
 # PRD v2：功能層意圖（不是規格）
 
-**日期**：2026-08-05
+**日期**：2026-08-09
 **用途**：記錄後續期要達成什麼、已定案的設計決策、以及**還沒解決的設計問題**。
 P0 落地後，一次只把下一期展開成規格。
+
+> **2026-08-09 校正（權威決策）**：**預設概念視圖（default concept view）**仍是 community pre-spread + ForceAtlas2 community clustering 的正常 `mode=concept`；**時序衍生視圖（optional temporal derived view）**才是 median-year ordinal Y-band，僅能經明確選擇／URL mode 啟用，且 UI mode 目前未實作。它不得靜默取代預設概念視圖或其凍結匯出。
 
 **這份文件刻意不寫公式、不寫驗收條件、不寫行號。** 三輪審核的教訓：
 把全部期別一次寫成規格，會產生互相拉成環的驗收條件（實測六處循環依賴），
@@ -34,9 +36,19 @@ P0 落地後，一次只把下一期展開成規格。
 | **P3 概念時間** | 概念由其專利的**申請日**推導首次／最後／中位年份與年度分布。最有價值的呈現是**依首次出現年份漸層著色**——一眼看出哪些概念是近幾年才冒出來的。時間窗須由資料算出（本樣本 2004–2021），不可寫死「近三年」。 | P1 |
 | **P4 關聯度與分析單位** | 四個指標（`support_count`／`jaccard`／association strength／NPMI）＋**單位切換（篇／家）**＋機構相似度邊（兩家共同投入 ≥k 個概念就連線，直接回答老師舉的那個例子）。 | P1 |
 | **P5 IPC 分析** | IPC 五級層級 slider（預設 L3 次類 `G06Q`）、樹狀多選篩選、依 IPC 著色。P0 已產出全部五級鍵。**不新增 IPC 節點層**（一篇最多 13 個 IPC，建節點會讓圖爆掉）。 | P0、P4 |
-| **P6 時序先後** | ⚡ 2026-08-09 定案：本圖正式名稱「依中位申請年排序的技術關聯圖」（不稱「演進」）；統計時序為主、引用為補強（僅決定 citation-supported 存在與否、不決定方向）；三圖收斂與最高層 invariant I1–I5 見 `docs/PRD-v2-P6-時序關聯.md`。 | P3、P4 |
-| **P7 PNG 匯出** | 戳記須含全部篩選條件、指標名稱、母體大小、方法宣告——否則老師並排比對多張圖時無法分辨哪張是什麼條件。必須排在 P2/P4/P5 之後（戳記要印它們的值）。 | P2、P4、P5 |
-| **P8 離線 HTML 同步** | 現有 F-13b 的 legend 是硬寫兩份字串，新圖層與新方法宣告都不會出現。 | P6 |
+| **P6 時序先後** | ⚡ 2026-08-09 定案：本圖正式名稱「依中位申請年排序的技術關聯圖」（不稱「演進」）；它是**可選時序衍生視圖**，不是預設。預設概念視圖仍是 community pre-spread + ForceAtlas2 community clustering；temporal UI mode 尚未實作。統計時序／citation evidence／arrow／scope invariant 的資料語意保留，詳見 `docs/PRD-v2-P6-時序關聯.md`。 | P3、P4 |
+| **P7 PNG 匯出** | Q8 出版圖譜匯出 v2.1 規格已存在；A2 spike 與 frozen Offline HTML POST foundation 已完成。publication PNG、label、M1/M2、K、collision、print-scale 與 options page 依使用者指示 **PAUSED**。 | P2、P4、P5 |
+| **P8 離線 HTML 同步** | canonical frozen HTML POST 已完成：已登入 POST 從 active live `getPositions()` 擷取座標，離線 HTML 只呈現 active mode，缺少 snapshot 即顯示錯誤且不 fallback。`GET /api/export/{id}` 固定回 `405`／`Allow: POST` 並指示使用分析頁的「離線 HTML」按鈕；正常概念圖例已移除 temporal prose。 | P6 |
+
+## 目前計畫狀態（2026-08-09）
+
+| 範圍 | 目前狀態 |
+|---|---|
+| P0–P5 | **完成** |
+| P6 | 資料／edge／citation 完成；時序 UI 延後，預設概念視圖已維持／恢復為 community clustering。 |
+| Frozen Offline HTML | **完成**：canonical authenticated POST 使用 active live positions，僅 active mode 凍結座標且 `physics:false`；無 snapshot 時 hard-gate，不做 fallback。 |
+| Q8 出版圖譜功能 | **PAUSED**：publication PNG、labels、M1/M2、K、collision、print-scale、options page 均未實作。 |
+| 已校正 | `GraphLegend` 的正常概念模式已移除 temporal prose；`GET /api/export/{id}` 固定為 `405`／`Allow: POST` 指引；離線 HTML 為 single-mode frozen export，沒有 temporal/stabilized fallback。 |
 
 ---
 
@@ -84,8 +96,8 @@ s_ij = 2m·c_ij / (c_i·c_j)     c_i = Σ_{j≠i} c_ij     m = ½·Σ_i c_i
 
 **5. 百分位與中位數的插值方法必須明訂。** 實測同一組資料，nearest-rank 與
 linear（Excel `PERCENTILE`／numpy 預設）在 `k=3` 時給**相反答案**；
-`median_year` 取 lower／upper／平均也會決定箭頭有無。定案：nearest-rank +
-lower median，並寫入 methodology。
+`median_year` 取 lower／upper／平均也會決定箭頭有無。定案：quartile 採 nearest-rank；
+median 採標準統計中位數（偶數筆取中間兩值平均，允許小數），並寫入 methodology。
 
 **6. 同義詞合併只能在輸入層。** 事後合併會**靜默丟邊**：共現邊 id 是
 概念 label 的 hash，合併後 `(AI, X)` 與 `(人工智慧, X)` 產生同一個 edge id，
@@ -119,7 +131,7 @@ lower median，並寫入 methodology。
 | 5 | **NPMI 的 `w_i` 未定義、`p_ij=1` 處理、clamp。** | `w_i` 跟單位：篇→`support_count_i/N_patents`，家→`applicant_count_i/N_institutions`。`p_ij=1` 定為 `undefined`（不入排序、邊詳細顯示「—」，不記成量尺最大值）。`clamp(-1,1)`。 |
 | 9 | **節點大小公式字串寫死。** | 節點大小純量及圖例/戳記字串**跟單位驅動**：`家`→「該概念出現的機構家數」。 |
 
-（Q1／Q6／Q7 → P6 已於 2026-08-09 定案，見 `docs/PRD-v2-P6-時序關聯.md`；Q8 → P7 仍待該期定案。）
+（Q1／Q6／Q7 → P6 已於 2026-08-09 定案，見 `docs/PRD-v2-P6-時序關聯.md`；Q8 出版圖譜匯出 v2.1 已有規格，除 frozen Offline HTML POST foundation 外的 publication work 依使用者指示 PAUSED。）
 
 ---
 
@@ -127,7 +139,7 @@ lower median，並寫入 methodology。
 
 | # | 問題 | 影響哪期 |
 |---|---|---|
-| 1 | **時間分層 layout 與「距離僅供排版」聲明衝突。** ⚡ 已定案（P6-§2/§5）：新合法值 `time_axes`（Y＝median 序數排序）＋條件式戳記/圖例文字＋年份窗三詞（quality/analysis/layout）；Y 只表示序、不表示因果或等比。 | P6、P7 → ✅ 2026-08-09 |
+| 1 | **時間分層 layout 與「距離僅供排版」聲明衝突。** ⚡ 已定案（P6-§2/§5）：`time_axes` **只**是經明確使用者選擇／URL mode 進入的可選時序衍生視圖合法值（Y＝median 序數排序）；它不是預設 `mode=concept`。預設概念視圖維持 community clustering，不得設定 median-based Y／fixed-Y；條件式戳記／圖例文字與年份窗三詞（quality/analysis/layout）也只在明確 temporal mode 適用。Y 只表示序、不表示因果或等比；temporal UI mode 目前未實作。 | P6、P7 → ✅ 2026-08-09 |
 | 2 | **社群 id 與色盤需要單位命名空間。** 只在 UI 提示「已依機構單位重算」不夠——兩張圖的「社群 0」仍同色不同成員。 | P4 |
 | 3 | **切換單位後線寬／不透明度／支持門檻是否跟著換。** 機構單位下邊的量是「家數」，門檻與不透明度要不要改用 `support_applicants`。 | P4 |
 | 4 | **指標是在支持門檻之前還是之後計算。** 被隱藏的邊是否仍計入總連結強度，會改變 `s_ij` 的值，而該值要進 DB 與 PNG 戳記。 | P4 |

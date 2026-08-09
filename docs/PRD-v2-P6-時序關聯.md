@@ -1,10 +1,19 @@
-# PRD v2 / P6：依中位申請年排序的技術關聯圖（規格 v1.0）
+# PRD v2 / P6：依中位申請年排序的技術關聯圖（規格 v1.1）
 
 **日期**：2026-08-09
 **前置**：P0（資料層）、P3（概念時間）、P4（關聯度與分析單位）、P5（IPC）
 **上位需求**：`docs/PRD-v2-意圖.md` P6（時序先後）＋老師拍板的三圖收斂（2026-08-09）
 **審查**：Codex（gpt-5.6-sol，read-only）嚴審後修正；4 個 blocking 全數接受（R4/R5/R6/R10）
 **名稱**：本圖正式名稱「**依中位申請年排序的技術關聯圖**」（Technology Relationship Graph Ordered by Median Application Year）。**不再**稱「技術演進圖」「前因→後果」——本圖不宣稱因果。
+
+> ## ⚠️ 2026-08-09 修訂／權威狀態
+> **本次校正取代任何將 P6 時序 layout 當成預設概念圖的解讀。**
+>
+> - **預設概念視圖（default concept view）**＝community pre-spread + ForceAtlas2 community clustering；它是正常 `mode=concept` 的 `GraphViewer`，且必須保持預設。
+> - **時序衍生視圖（optional temporal derived view）**＝依 `median_year` 的序數 Y-band layout；只能經明確使用者選擇／URL mode 啟用，現階段尚未實作為 UI mode，絕不得靜默取代預設概念視圖或凍結匯出。
+> - `median_year` 等時序 metadata／statistics、`temporal_directed` 箭頭、opacity 語意、citation evidence/conflict 與 I1–I5 scope invariant 仍保留；Y-band 僅屬時序衍生視圖。
+> - **Canonical Offline HTML UI export**＝已登入的 POST，從 active live `getPositions()` 擷取座標；離線 HTML 只序列化並呈現 active mode，使用凍結 live coordinates + `physics:false`。缺少 frozen snapshot 時 runtime 顯示錯誤並停止，不會計算 temporal/stabilized fallback；`GET /api/export/{id}` 立即回 `405`（`Allow: POST`）並指示使用分析頁的「離線 HTML」按鈕。
+> - `GraphLegend` 已在正常概念模式移除 temporal legend；該 prose 只保留給未來明確時序 mode。
 
 ---
 
@@ -16,28 +25,28 @@
 > 全部皆自同一批資料重算（不得 size=subset、median=全量）。
 
 > **I2 — Temporal semantics**
-> Y 軸與箭頭只表示 active scope 內 `median_year` 的序數關係；不表示因果、演進或等比時間距離。
+> `median_year` 統計與 `temporal_directed` 箭頭只表示 active scope 內的序數先後；不表示因果、演進或等比時間距離。**只有在明確啟用時序衍生視圖時**，Y 軸才表示該序數關係；預設概念視圖不得因此取得 median-based Y 座標或 fixed-Y。
 
 > **I3 — Tie semantics**
-> median 相同或任一端缺值 → 無 temporal direction；任何 hash、label、ID **不得**打破時間 tie
-> （hash 只允許作用於同一 Y band 內的 X/lane 與輸出順序，見 §6）。
+> median 相同或任一端缺值 → 無 temporal direction；任何 hash、label、ID **不得**打破時間 tie。
+> hash 只允許作用於**時序衍生視圖**同一 Y band 內的 X/lane 與輸出順序（見 §6），不參與任何 temporal 判定。
 
 > **I4 — Encoding separation**
-> `width = relation weight`、`opacity = 支持專利計數的視覺強弱`、`citation = 獨立的證據層/badge`，三者一律各不相關，也不與時間編碼互寫。
+> `width = relation weight`、`opacity = 支持專利計數的視覺強弱`、`citation = 獨立的證據層/badge`，三者一律各不相關，也不與時間編碼互寫；此資料／邊／citation invariant 適用於所有視圖，不以 Y-band 為前提。
 
 > **I5 — Canonical comparison**
 > 多資料集比較必須基於 canonical concept/applicant identity 與明確的 A/B comparison universe；**不得以 display label 做集合比較**。
 
 ---
 
-## 1. 目的與三圖收斂
+## 1. 目的與三圖收斂（不取代預設概念視圖）
 
 老師的三件事：**時間**、**關聯與單位**、**先後**。
-2026-08-09 定案：產品收斂成**三張圖**，各自回答不同問題，不做「一張萬能圖」。
+2026-08-09 定案：產品收斂成**三張圖**，各自回答不同問題，不做「一張萬能圖」。**三圖計畫不表示以①取代正常 `mode=concept` 的預設概念視圖。** 預設概念視圖仍是 community pre-spread + ForceAtlas2 的 community clustering；時序圖只能是另行明確選擇的衍生視圖。
 
 | 圖 | 樣態 | 回答 | 階段 |
 |---|---|---|---|
-| **① 技術關聯圖（時間）** | 概念節點；Y=時間、邊=關聯 | 哪些技術先出現／後來發展／彼此高度相關 | **P6＝本規格** |
+| **① 依中位申請年排序的技術關聯圖（時序衍生視圖）** | 概念節點；僅在明確啟用時 Y＝median-year 序數、邊＝關聯 | 哪些技術先出現／後來發展／彼此高度相關 | **P6＝本規格；optional，UI mode 目前未實作** |
 | **② 機構–技術二部圖** | Applicant ↔ Concept | 哪間學校做哪些技術、哪些公司學校做相同技術、哪個技術競爭者最多 | P4 機構網絡進化（另規格） |
 | **③ 多資料集比較圖** | Overlay／Intersection／A-only／B-only／Difference＋指標 | A/B/C Excel 的共同與差異 | 獨立分析模型（另規格） |
 
@@ -45,22 +54,25 @@
 
 ---
 
-## 2. 視覺 encoding（定案，不變更）
+## 2. 時序衍生視圖的視覺 encoding（定案；僅明確啟用時適用）
 
-| 編碼 | 值 |
+**以下 visual encoding 規範只在使用者經明確選擇／URL mode 啟用時序衍生視圖時適用。** `width`、`opacity`、citation 與 scope 的資料語意仍跨視圖保留，但不能因為有 `median_year` 或 `temporal_directed` 邊，就靜默啟用 temporal layout。**預設概念視圖不得呼叫 `computeTemporalLayout`，不得設定 median-based coordinates 或 `fixed: { y: true }`；它維持 community pre-spread + ForceAtlas2 community clustering。**
+
+| 時序衍生視圖的編碼 | 值 |
 |---|---|
 | Y position | 時間先後（active scope 內 `median_year` 的**序數排序**，節點不重疊） |
 | X position | 群聚／排版；**同一或相近時間層內，較相關的概念盡量靠近**（版面偏好，不是距離指標） |
 | edge width | 技術關聯強度（relation_weight；模型見 §9） |
 | edge opacity | 支持專利計數的視覺強弱（§8；不叫 confidence） |
-| arrow | 時間先後（earlier → later；§6） |
+| arrow | `temporal_directed` 的時間先後（earlier → later；§6）；箭頭資料語意可保留，但不會自行啟用 Y-band |
 | node size | 該概念在 **active scope** 內的專利數 |
 | node color | Excel 資料集／IPC 分類／機構類型（沿用 P2／P5／P4 色盤） |
 
-**「線的距離」語意（定案）**：不宣稱「線越短＝越相關」——因為 Y 受時間約束（A 2010、B 2020 即使高度關聯也必須垂直分開）。「相關越近」實作在 **X 軸同層靠近**；正式定量關聯只能看線寬／數值。圖例在時間模式一律印：
+**「線的距離」語意（定案）**：時序衍生視圖不宣稱「線越短＝越相關」——因為 Y 受時間約束（A 2010、B 2020 即使高度關聯也必須垂直分開）。「相關越近」實作在 **X 軸同層靠近**；正式定量關聯只能看線寬／數值。**只有時序衍生視圖啟用時**，圖例才印：
 
 > Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.
 
+預設概念視圖不得印這段 temporal legend。`GraphLegend` 已在正常概念模式移除該 prose；只有未來明確 temporal mode 才可顯示。
 ---
 
 ## 3. 資料與 median 語意（R5 修正）
@@ -72,7 +84,7 @@
 | `[2018, 2019]` → 2018 | `2018.5` |
 | `[2018, 2024]` → 2018 | `2021.0` |
 
-- `median_year` 型別：**REAL**（DB 現為 INTEGER，需 migration）。
+- `median_year` 型別：**DOUBLE PRECISION（REAL）**；migration `007_p6_temporal.sql` 已完成 INTEGER → DOUBLE PRECISION，並新增 q1/q3 與 leave-one-out span 欄位。
 - 概念節點至少保存：
   ```
   first_year, q1_year, median_year, q3_year, last_year, patent_count
@@ -90,9 +102,9 @@
 |---|---|---|
 | `quality_year_bounds` | 資料清理合法範圍（資料品質） | 1990–2026 |
 | `analysis_year_filter` | 老師目前分析選用的資料 cohort | 2015–2025 |
-| `layout_time_band` | 純 UI Y 軸 band／lane | — |
+| `layout_time_band` | 僅限明確時序衍生視圖的純 UI Y 軸 band／lane；預設概念視圖不得建立或套用 | — |
 
-`analysis_year_filter` 才是 cohort：Y／median／所有衍生指標都對它重算（見 §5）。
+`analysis_year_filter` 才是 cohort：`median_year`／所有衍生指標都對它重算；只有明確時序衍生視圖的 Y-band 使用該 median（見 §5）。`layout_time_band` 不是預設概念視圖的 layout 選項。
 
 ---
 
@@ -239,12 +251,12 @@ concept_set_jaccard = |C_A ∩ C_B| / |C_A ∪ C_B|
 
 ---
 
-## 12. 資料與遷移
+## 12. 資料與遷移（已落地狀態）
 
-- `concepts`：`median_year INTEGER → DOUBLE PRECISION (REAL)`；新增 `q1_year / q3_year`（INT）、`median_loo_span`（區間或兩欄）。
-- `edges`：確立兩組：`relation_edges`（既有）與新增 `citation_edges`；relation 邊加 `citation_supported bool`、`citation_direction_conflict bool`。
-- 全部 derived metric 帶 `scope_id`（或 graph metadata），debug assert。
-- 三種年份窗名詞進 `methodology`（與視覺 encoding 一起寫進 PNG/HTML）。
+- migration `007_p6_temporal.sql` 已將 `concepts.median_year` 轉為 DOUBLE PRECISION，並新增 `q1_year / q3_year`、`median_loo_min / median_loo_max`。
+- migration `007_p6_temporal.sql` 已新增 `citation_edges`，並在 relation `edges` 加入 `citation_supported`、`citation_direction_conflict`。
+- migration `008_p6_scope_id.sql` 與現行 graph metadata／DB round-trip 已承接 scope_id；新增篩選維度仍須維持 I1。
+- 三種年份窗名詞與視覺方法聲明由 `lib/temporal.ts` 單源提供；只在明確 temporal mode 顯示 temporal layout 圖說。
 
 ---
 
@@ -255,14 +267,21 @@ concept_set_jaccard = |C_A ∩ C_B| / |C_A ∪ C_B|
 - I4：同 support 跨圖 opacity 相同；citation 不影響 opacity。
 - citation：四態（無證／+Infinity／達標／不達標）＋conflict badge＋warning 皆有 fixture。
 - fallback：餵 legacy 環 fixture → 照字典序選一、可重現、warning 完整（edge_id, old_source/target, support, delta, reason）。
+- **預設概念視圖 hard guard**：正常 `mode=concept` 的 `GraphViewer` 路徑不得呼叫 `computeTemporalLayout`，也不得由 `median_year` 設定座標或 fixed-Y；預設截圖必須呈現 community pre-spread + ForceAtlas2 的社群群聚。
+- **時序衍生視圖 hard guard**：必須有明確使用者選擇／URL mode 才可進入，並以與預設概念視圖分開的截圖驗收；未選擇時不得出現 horizontal median-year bands。
+- **圖例 hard guard**：temporal legend 只可在明確時序 mode 顯示；正常概念模式已移除該常駐 prose。
+- **凍結匯出 hard guard**：canonical POST 匯出的 active mode 相對點擊時 active live `getPositions()` 必須 `max|Δ|=0`，使用 frozen live coordinates + `physics:false`，且不得重算任何 layout；離線 HTML 只呈現 active mode，缺少 frozen snapshot 即 hard-gate 顯示錯誤。`GET /api/export/{id}` 固定回 `405`／`Allow: POST`，無 Legacy GET 或非初始 mode 的 temporal/stabilized fallback。
 - 既存 280 tests 保持綠。
 
 ---
 
-## 14. 誠實記限
+## 14. 誠實記限／目前實作狀態
 
-- Y 序數、非等比；median 是「中心」而非「起點」——分布看 q1/q3/loo 的顯示，v1 不影響箭頭。
+- **預設概念視圖**是正常 `mode=concept` 的 community pre-spread + ForceAtlas2 community clustering，並非 median-year Y-band。
+- **時序衍生視圖**才使用 Y 序數、非等比的 median-year bands；它目前尚未實作為 UI mode，未來也只能由明確使用者選擇／URL mode 進入。median 是「中心」而非「起點」——分布看 q1/q3/loo 的顯示，v1 不影響箭頭。
 - citation 門檻（net≥2 且 ratio≥2）為**設計規則值**，非統計檢驗值；徽章只代表「存在引用支持」。
 - opacity 是視覺 heuristic（tau=5），不是統計 confidence。
-- 機構二部圖與多資料集比較圖另立規格；本檔只交付①技術關聯圖＋方法學骨架。
+- `GraphLegend` 已在正常概念模式移除 temporal legend；它只會隨未來明確 temporal mode 顯示。
+- canonical Offline HTML UI export 是 authenticated POST + active live frozen positions，且只呈現 active mode；缺少 snapshot 即顯示錯誤並停止。`GET /api/export/{id}` 已固定為 `405`／`Allow: POST` 指引，沒有 temporal/stabilized fallback。
+- 機構二部圖與多資料集比較圖另立規格；本檔只定義①時序衍生技術關聯圖與其方法學骨架，不改變預設概念視圖。
 - I1 是實作紀律核心：任何新增篩選維度，都回到 §5 的 Projection contract 重新界定。

@@ -1,8 +1,9 @@
 # PRD v2 / P3：概念時間
 
-**版本**：P3-1.1
-**日期**：2026-08-07
-**狀態**：已審核（APPROVE-AS-AMENDED，8 BLOCKING 全修）→ 實作
+**版本**：P3-1.2
+**日期**：2026-08-09
+**狀態**：已實作；P6 R5 修訂已同步
+**修訂**：P6 v1.1 已將 median 定案為標準統計中位數（偶數筆取中間兩值平均，允許小數），取代 P3-1.1 的 lower median；quartile 仍採 nearest-rank。
 **審核**：fresh claude agent（2026-08-07），8 BLOCKING ＋ 10 non-blocking，
 完整 findings：`docs/archive/PRD-v2-P3-審核-findings.md`
 **基準**：`docs/PRD.md` v1.2、`docs/PRD-v2-P0-資料層.md`、`docs/PRD-v2-意圖.md` §P3
@@ -56,14 +57,14 @@
   B6 的 N3 已納入：抽成共用 `parseFilingYear()`，**不得**在 `lib/concept-time.ts` 再寫一份）。
 - P1 合併後的 `source_patents` 已是聯集——時間統計**直接吃合併後結果**，不得再處理同義詞。
 
-### 1.2 中位數（沿用已定案決策 5，且母體明確）
+### 1.2 中位數（P6 R5 修訂；母體明確）
 
-nearest-rank + lower median，**母體為 1.1 的多重集合**（保留重複）：
+median 採**標準統計中位數**，母體為 1.1 的多重集合（保留重複）；quartile 另採 nearest-rank：
 
 ```
 A = 所有有效年份升冪（長度 n，含重複）
 n 奇數：median = A[(n-1)/2]
-n 偶數：median = A[n/2 - 1]     （lower，不取平均）
+n 偶數：median = (A[n/2 - 1] + A[n/2]) / 2
 ```
 
 ### 1.3 年度分布與中位反例（B3）
@@ -71,8 +72,8 @@ n 偶數：median = A[n/2 - 1]     （lower，不取平均）
 `year_counts`：對每個有效年份累加不同專利數（一個專利一個年，天然去重）。
 
 > **中位數不能用 `year_counts` 的鍵計算**。反例：多重集合 `[2015,2020,2020,2020]`
-> → lower median = **2020**；若誤用 distinct years `[2015,2020]` → **2015**。
-> 決策 5 的理由正是「lower／upper／平均會決定 P6 箭頭有無」，這個錯比 lower/upper 之爭更嚴重。
+> → 標準 median = **2020**；若誤用 distinct years `[2015,2020]` → **2017.5**。
+> P6 R5 已定案採標準 median；母體若錯誤去重，仍會改變 P6 箭頭有無。
 > 驗收 4 用此 fixture 鎖死。
 
 ---
@@ -202,8 +203,7 @@ Sidebar，狀態走 `GraphViewOptions.colorMode`（`lib/graph-view.ts`），由 
 
 - `GraphLayout.tsx:70-71` 的 URL 慣例：`colorMode` **進 URL**（純加參數，`mode/showSemantic/…`
   本來就進 URL）；它是視圖狀態，**不落庫**，但進 URL 讓分享連結看到漸層（N6）。
-- 已知限制（寫進此處，日後不得當 bug）：`app/api/export/[id]/route.ts` 的 `parseExportOptions`
-  **不吃** `colorMode`，故離線 HTML／PNG 在 P7/P8 前不會反映漸層——現在明記。
+- `app/api/export/[id]/route.ts` 的 `parseExportOptions` 已解析 `colorMode`；canonical Offline HTML POST 會沿用 active view 的著色選項與凍結座標。Publication PNG 仍屬 Q8 PAUSED 範圍，不在本期宣稱已完成。
 
 ### 4.2 圖例與 tooltip
 
@@ -258,8 +258,8 @@ Sidebar，狀態走 `GraphViewOptions.colorMode`（`lib/graph-view.ts`），由 
 
 1. `pnpm test` 與 `next build` 全綠。
 2. **概念時間元資料 fixture**（純函式，不依賴 DB／DOM）：`tests/concept-time.test.ts`
-   - 偶數 lower median：`[2015,2016,2018,2020] → 2016`（**不是** 2017）；
-   - 多重集反例：`[2015,2020,2020,2020] → 2020`（B3 鎖死，誤用 distinct years 會綠→紅）；
+   - 偶數標準 median：`[2015,2016,2018,2020] → 2017`；
+   - 多重集反例：`[2015,2020,2020,2020] → 2020`（B3 鎖死；誤用 distinct years 會得到 2017.5）；
    - P1 合併後 source_patents 聯集時間；
    - 有效年份過濾：`1990` 與 `今年+1` 之**外**的年份不參與（B5）；全無有效年份 → `null`。
 3. **窗與映射純函式**（`lib/concept-time.ts`，可測、不靠 DOM）：
@@ -281,7 +281,7 @@ Sidebar，狀態走 `GraphViewOptions.colorMode`（`lib/graph-view.ts`），由 
 7. 全部既有 `data/*.json`（v2）仍可開、顏色不缺（未加 `colorMode` 的舊圖社社群色）。
 8. **手動 QA 清單**（明示在 `pnpm test` 之外，不混入自動驗收）：
    切換不觸發網路請求；圖例文字像分模式且正確；tooltip 顯示時間；分享 URL 帶 `colorMode`，
-   新開分頁看到漸層；離線 HTML 不反映漸層（已知限制，非 bug）。
+   新開分頁看到漸層；canonical Offline HTML POST 亦沿用 active `colorMode`。
 
 ---
 
