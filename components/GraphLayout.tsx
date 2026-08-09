@@ -11,6 +11,7 @@ import GraphLegend from "./GraphLegend";
 import { selectGraphView, sourceFilesOf, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
 import { ipcLegendItems, ipcTreeOf, DEFAULT_IPC_LEVEL, type IpcLevel } from "@/lib/ipc-filter";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
+import type { PositionSnapshotProvider } from "@/lib/export-positions";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -19,6 +20,30 @@ const GraphViewer = dynamic(() => import("./GraphViewer"), { ssr: false });
 interface Props {
   graph: GraphData;
   jobId: string;
+}
+
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+
+  const clean = (value: string): string | null => {
+    const unquoted = value.trim().replace(/^"|"$/g, "");
+    const filename = unquoted.replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_");
+    return filename || null;
+  };
+  const extended = /(?:^|;)\s*filename\*\s*=\s*([^;]+)/i.exec(header)?.[1];
+  if (extended) {
+    const raw = extended.trim().replace(/^"|"$/g, "");
+    const separator = raw.indexOf("''");
+    try {
+      const filename = clean(decodeURIComponent(separator >= 0 ? raw.slice(separator + 2) : raw));
+      if (filename) return filename;
+    } catch {
+      // Fall through to the ordinary filename parameter.
+    }
+  }
+
+  const basic = /(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]*))/i.exec(header);
+  return basic ? clean(basic[1] ?? basic[2]) : null;
 }
 
 export default function GraphLayout({ graph, jobId }: Props) {
@@ -48,6 +73,49 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const positionSnapshotProviderRef = useRef<PositionSnapshotProvider | null>(null);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const [hasPositionSnapshotProvider, setHasPositionSnapshotProvider] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handlePositionSnapshotProvider = useCallback((provider: PositionSnapshotProvider | null) => {
+    positionSnapshotProviderRef.current = provider;
+    setReadyKey(provider?.key ?? null);
+    setHasPositionSnapshotProvider(provider !== null);
+    setExportError(null);
+  }, []);
+
+  const layoutSnapshotKey = useMemo(
+    () => JSON.stringify({
+      mode,
+      showSemantic,
+      minSupport,
+      yearRange,
+      colorMode,
+      edgeWeight,
+      unit,
+      sourceFiles,
+      ipcLevel,
+      ipcFilter,
+      temporalReference,
+      showCitations,
+    }),
+    [
+      mode,
+      showSemantic,
+      minSupport,
+      yearRange,
+      colorMode,
+      edgeWeight,
+      unit,
+      sourceFiles,
+      ipcLevel,
+      ipcFilter,
+      temporalReference,
+      showCitations,
+    ],
+  );
 
   // PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
   const allSourceFiles = useMemo(() => sourceFilesOf(graph), [graph]);
@@ -128,6 +196,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
     setSelectedEdge(null);
   }, []);
 
+  const exportReady =
+    hasPositionSnapshotProvider && readyKey === layoutSnapshotKey;
+
   const exportQuery = new URLSearchParams({
     mode,
     llm: showSemantic ? "1" : "0",
@@ -144,6 +215,55 @@ export default function GraphLayout({ graph, jobId }: Props) {
   if (showCitations) exportQuery.set('citations', '1');
   if (ipcLevel !== DEFAULT_IPC_LEVEL) exportQuery.set("ipcLevel", String(ipcLevel));
   for (const key of ipcFilter) exportQuery.append("ipc", key);
+  const exportQueryString = exportQuery.toString();
+
+  const handleOfflineExport = useCallback(async () => {
+    const provider = positionSnapshotProviderRef.current;
+    if (
+      !provider ||
+      readyKey !== layoutSnapshotKey ||
+      provider.key !== layoutSnapshotKey ||
+      exporting
+    ) return;
+
+    const positions = provider.getPositions();
+    if (!positions) return;
+
+    setExporting(true);
+    setExportError(null);
+    try {
+      const response = await fetch(
+        `/api/export/${encodeURIComponent(jobId)}?${exportQueryString}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ positions }),
+        },
+      );
+      if (!response.ok) throw new Error(`Export failed (${response.status})`);
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filenameFromContentDisposition(
+          response.headers.get("Content-Disposition"),
+        ) ?? "patent-graph.html";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+      }
+    } catch {
+      setExportError("匯出失敗，請重試。");
+    } finally {
+      setExporting(false);
+    }
+  }, [exportQueryString, exporting, jobId, layoutSnapshotKey, readyKey]);
 
   const handleCopy = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -263,14 +383,26 @@ export default function GraphLayout({ graph, jobId }: Props) {
               )}
             </button>
           )}
-          <a
-            href={`/api/export/${jobId}?${exportQuery}`}
-            className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+          <button
+            type="button"
+            onClick={() => void handleOfflineExport()}
+            disabled={!exportReady || exporting}
+            title={exportError ?? (exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成")}
+            className={`inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground transition-colors duration-150 ${
+              !exportReady || exporting
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer hover:bg-accent hover:text-accent-foreground"
+            }`}
             aria-label="下載離線 HTML 圖譜"
           >
             <Download size={12} />
-            離線 HTML
-          </a>
+            {exporting ? "匯出中…" : "離線 HTML"}
+          </button>
+          {exportError && (
+            <span role="status" title={exportError} className="max-w-28 truncate text-xs text-destructive">
+              {exportError}
+            </span>
+          )}
         </div>
       </header>
 
@@ -293,6 +425,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
             analysis={mode === "concept" ? graph.analysis : undefined}
             onNodeSelect={setSelectedNode}
             onEdgeSelect={setSelectedEdge}
+            positionSnapshotKey={layoutSnapshotKey}
+            onPositionSnapshotProvider={handlePositionSnapshotProvider}
             yearRange={yearRange}
             edgeWeight={edgeWeight}
             unit={unit}

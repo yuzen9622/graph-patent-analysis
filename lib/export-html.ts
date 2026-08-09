@@ -1,6 +1,7 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
 import { computeTemporalLayout, TEMPORAL_LEGEND_SENTENCE, TEMPORAL_OPACITY_LINE, TEMPORAL_YEAR_TERMS_LINE } from './temporal'
 import { DEFAULT_IPC_LEVEL } from './ipc-filter'
+import type { FrozenPositions } from './export-positions'
 import type { GraphData, GraphMode } from '../types/graph'
 
 export interface ExportOptions extends GraphViewOptions {
@@ -105,19 +106,25 @@ export function parseExportOptions(
   }
 }
 
+// Always project citation evidence into the offline payload; its visibility is
+// controlled by the same toggle as the online viewer. The POST route uses this
+// same projection to validate the live position ID set before exporting.
+export function buildExportViews(graph: GraphData, options: ExportOptions) {
+  return {
+    concept: selectGraphView(graph, { ...options, mode: 'concept', showCitations: true }),
+    context: selectGraphView(graph, { ...options, mode: 'context', showCitations: true }),
+    institution: selectGraphView(graph, { ...options, mode: 'institution', showCitations: true }),
+  }
+}
+
 export function buildExportHtml(
   jobId: string,
   graph: GraphData,
   options: ExportOptions,
   visNetworkSource: string,
+  frozenPositions?: FrozenPositions,
 ): string {
-  // Always project citation evidence into the offline payload; its visibility is
-  // controlled by the same toggle as the online viewer.
-  const views = {
-    concept: selectGraphView(graph, { ...options, mode: 'concept', showCitations: true }),
-    context: selectGraphView(graph, { ...options, mode: 'context', showCitations: true }),
-    institution: selectGraphView(graph, { ...options, mode: 'institution', showCitations: true }),
-  }
+  const views = buildExportViews(graph, options)
   const view = views[options.mode]
   const temporalLayouts = Object.fromEntries(
     Object.entries(views).map(([mode, current]) => [mode, Object.fromEntries(computeTemporalLayout(current.nodes))]),
@@ -125,6 +132,7 @@ export function buildExportHtml(
   const payload = safeSerializeForInlineScript({
     views,
     temporalLayouts,
+    frozenLayouts: frozenPositions ? { [options.mode]: frozenPositions } : {},
     methodology: graph.methodology,
     options,
   })
@@ -236,58 +244,74 @@ export function buildExportHtml(
         var nodesById = new Map(view.nodes.map(function (node) { return [node.id, node]; }));
         var edgesById = new Map(view.edges.map(function (edge) { return [edge.id, edge]; }));
         var layout = payload.temporalLayouts[mode] || {};
+        var frozenLayout = payload.frozenLayouts && payload.frozenLayouts[mode];
+        var useFrozenLayout = Boolean(frozenLayout);
         var nodes = view.nodes.map(function (node) {
-        var position = layout[node.id];
-        return {
-          id: node.id,
-          x: position ? position.x : undefined,
-          y: position ? position.y : undefined,
-          fixed: position && node.type === 'concept' && node.median_year !== undefined ? { y: true } : undefined,
-          label: node.type === 'patent' ? '' : node.label,
-          shape: node.type === 'applicant' ? 'star' : 'dot',
-          size: node.size,
-          color: node.color,
-          font: { size: node.type === 'applicant' ? 14 : 11, color: ${options.paper ? "'#172033'" : "'#f8fafc'"} }
-        };
-      });
+          var position = useFrozenLayout ? frozenLayout[node.id] : layout[node.id];
+          return {
+            id: node.id,
+            x: position ? position.x : undefined,
+            y: position ? position.y : undefined,
+            fixed: useFrozenLayout
+              ? { x: true, y: true }
+              : position && node.type === 'concept' && node.median_year !== undefined
+                ? { y: true }
+                : undefined,
+            label: node.type === 'patent' ? '' : node.label,
+            shape: node.type === 'applicant' ? 'star' : 'dot',
+            size: node.size,
+            color: node.color,
+            font: { size: node.type === 'applicant' ? 14 : 11, color: ${options.paper ? "'#172033'" : "'#f8fafc'"} }
+          };
+        });
         var relationEdges = view.edges.map(function (edge) {
-        var co = edge.kind === 'cooccurrence';
-        var semantic = edge.kind === 'semantic';
-        return {
-          id: edge.id,
-          from: edge.from,
-          to: edge.to,
-          label: semantic ? edge.relation : '',
-          width: co ? edgeWidth(edge, ew, unit) : (semantic ? 1.5 : 1),
-          dashes: semantic ? [6, 4] : false,
-          physics: !semantic,
-          arrows: { to: { enabled: semantic || edge.temporal_directed || edge.kind === 'structural', scaleFactor: .4 } },
-          color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: edge.opacity == null ? 1 : edge.opacity }
-        };
-      });
+          var co = edge.kind === 'cooccurrence';
+          var semantic = edge.kind === 'semantic';
+          return {
+            id: edge.id,
+            from: edge.from,
+            to: edge.to,
+            label: semantic ? edge.relation : '',
+            width: co ? edgeWidth(edge, ew, unit) : (semantic ? 1.5 : 1),
+            dashes: semantic ? [6, 4] : false,
+            physics: !semantic,
+            arrows: { to: { enabled: semantic || edge.temporal_directed || edge.kind === 'structural', scaleFactor: .4 } },
+            color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: edge.opacity == null ? 1 : edge.opacity }
+          };
+        });
         var citationEdges = showCitations ? (view.citationEdges || []).map(function (edge) {
           return { id: 'citation:' + edge.id, from: edge.from, to: edge.to, dashes: [4, 5], width: 1.5,
             physics: false, arrows: { to: { enabled: true, scaleFactor: .35 } },
             color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 } };
         }) : [];
         var edges = relationEdges.concat(citationEdges);
-      function edgeWidth(edge, ew, unit) {
-        if (ew === 'npmi') {
-          var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
-          return Math.min(8, 1 + v * 7);
+        function edgeWidth(edge, ew, unit) {
+          if (ew === 'npmi') {
+            var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
+            return Math.min(8, 1 + v * 7);
+          }
+          var j = unit === 'applicant' ? (edge.jaccard_applicants || 0) : (edge.jaccard || 0);
+          return Math.min(8, 1 + j * 7);
         }
-        var j = unit === 'applicant' ? (edge.jaccard_applicants || 0) : (edge.jaccard || 0);
-        return Math.min(8, 1 + j * 7);
-      }
         if (network) network.destroy();
+        var networkOptions = useFrozenLayout
+          ? {
+              layout: { improvedLayout: false },
+              physics: { enabled: false },
+              interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
+            }
+          : {
+              layout: { randomSeed: 42, improvedLayout: true },
+              physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -80, springLength: 150, avoidOverlap: 1 }, stabilization: { iterations: 180 } },
+              interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
+            };
         network = new vis.Network(document.getElementById('graph'), {
-        nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)
-      }, {
-        layout: { randomSeed: 42, improvedLayout: true },
-        physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -80, springLength: 150, avoidOverlap: 1 }, stabilization: { iterations: 180 } },
-        interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
-      });
-        network.once('stabilizationIterationsDone', function () { network.setOptions({ physics: { enabled: false } }); });
+          nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)
+        }, networkOptions);
+        if (!useFrozenLayout) {
+          network.once('stabilizationIterationsDone', function () { network.setOptions({ physics: { enabled: false } }); });
+        }
+        network.fit({ animation: false });
         function showText(lines) { tooltip.textContent = lines.filter(Boolean).join('\\n'); tooltip.style.display = 'block'; }
         network.on('hoverNode', function (params) {
         var node = nodesById.get(params.node); if (!node) return;

@@ -16,7 +16,10 @@ import {
   type GraphViewport,
 } from "@/lib/graph-viewport";
 import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
-import { computeTemporalLayout } from "@/lib/temporal";
+import type {
+  FrozenPositions,
+  PositionSnapshotProvider,
+} from "@/lib/export-positions";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -122,7 +125,6 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
       face: "Atkinson Hyperlegible, sans-serif",
     },
     ...(pos ?? {}),
-    fixed: n.type === 'concept' && n.median_year !== undefined ? { y: true } : undefined,
   };
 }
 
@@ -233,12 +235,6 @@ function buildInitialPositions(
   edges: GraphEdge[],
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
-
-  // P6: Y is ordinal median rank. Hashes choose only X within a shared band.
-  const conceptNodes = nodes.filter((node) => node.type === 'concept');
-  if (conceptNodes.length === nodes.length && conceptNodes.some((node) => node.median_year !== undefined)) {
-    return computeTemporalLayout(conceptNodes);
-  }
 
   // 1. Group nodes by community if they have one (supports both community_id and community)
   const byComm = new Map<number, string[]>();
@@ -426,6 +422,8 @@ interface Props {
   hiddenCommunities?: Set<number>;
   focusNodeId?: string;
   onEdgeSelect?: (edge: GraphEdge | null) => void;
+  positionSnapshotKey: string;
+  onPositionSnapshotProvider?: (provider: PositionSnapshotProvider | null) => void;
 }
 
 export default function GraphViewer({
@@ -441,6 +439,8 @@ export default function GraphViewer({
   hiddenCommunities,
   focusNodeId,
   onEdgeSelect,
+  positionSnapshotKey,
+  onPositionSnapshotProvider,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
@@ -458,6 +458,8 @@ export default function GraphViewer({
 
   // ── Build / rebuild network when nodes or edges change ──
   useEffect(() => {
+    // A parent must not export a completed layout while this instance rebuilds.
+    onPositionSnapshotProvider?.(null);
     if (!containerRef.current) return;
     let cancelled = false;
 
@@ -517,8 +519,21 @@ export default function GraphViewer({
       });
 
       network.once("stabilizationIterationsDone", () => {
-        if (!cancelled) {
+        if (!cancelled && networkRef.current === network) {
           network.setOptions({ physics: { enabled: false } });
+          onPositionSnapshotProvider?.({
+            key: positionSnapshotKey,
+            getPositions: () => {
+              if (cancelled || networkRef.current !== network) return null;
+              const positions: FrozenPositions = Object.fromEntries(
+                Object.entries(network.getPositions()).map(([id, position]) => [
+                  id,
+                  { x: position.x, y: position.y },
+                ]),
+              );
+              return positions;
+            },
+          });
           setStabilized(true);
           setStabProgress(100);
         }
@@ -669,7 +684,15 @@ export default function GraphViewer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, citationEdges, edgeWeight, unit]);
+  }, [
+    nodes,
+    edges,
+    citationEdges,
+    edgeWeight,
+    unit,
+    positionSnapshotKey,
+    onPositionSnapshotProvider,
+  ]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
   useEffect(() => {

@@ -4,9 +4,34 @@ import { join } from 'node:path'
 import { getJob } from '@/lib/store'
 import { loadGraph } from '@/lib/db/analyses'
 import { requireUser, UnauthorizedError } from '@/lib/db/sessions'
-import { buildExportHtml, parseExportOptions } from '@/lib/export-html'
+import {
+  buildExportHtml,
+  buildExportViews,
+  parseExportOptions,
+  type ExportOptions,
+} from '@/lib/export-html'
+import {
+  ExportBodyTooLargeError,
+  ExportPositionsError,
+  parseExportPositions,
+  readExportJsonBody,
+  type FrozenPositions,
+} from '@/lib/export-positions'
+import type { GraphData } from '@/types/graph'
 
 export const dynamic = 'force-dynamic'
+
+type ExportRouteContext = { params: Promise<{ id: string }> }
+
+interface ExportContext {
+  id: string
+  graph: GraphData
+  options: ExportOptions
+}
+
+type ExportLoadResult =
+  | { context: ExportContext }
+  | { response: NextResponse }
 
 function loadVisNetworkSource(): string {
   return readFileSync(
@@ -22,15 +47,15 @@ function loadVisNetworkSource(): string {
   )
 }
 
-export async function GET(
+async function loadExportContext(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+  { params }: ExportRouteContext,
+): Promise<ExportLoadResult> {
   try {
     await requireUser()
   } catch (err) {
     if (err instanceof UnauthorizedError) {
-      return NextResponse.json({ error: err.message }, { status: 401 })
+      return { response: NextResponse.json({ error: err.message }, { status: 401 }) }
     }
     throw err
   }
@@ -39,19 +64,41 @@ export async function GET(
   const job = getJob(id)
 
   if (job && job.status !== 'done') {
-    return NextResponse.json(
-      { error: 'Analysis not yet complete' },
-      { status: 409 },
-    )
+    return {
+      response: NextResponse.json(
+        { error: 'Analysis not yet complete' },
+        { status: 409 },
+      ),
+    }
   }
 
   const graph = await loadGraph(id)
   if (!graph) {
-    return NextResponse.json({ error: 'Graph data not found' }, { status: 404 })
+    return {
+      response: NextResponse.json({ error: 'Graph data not found' }, { status: 404 }),
+    }
   }
 
-  const options = parseExportOptions(request.nextUrl.searchParams, graph)
-  const html = buildExportHtml(id, graph, options, loadVisNetworkSource())
+  return {
+    context: {
+      id,
+      graph,
+      options: parseExportOptions(request.nextUrl.searchParams, graph),
+    },
+  }
+}
+
+function exportAttachment(
+  { id, graph, options }: ExportContext,
+  frozenPositions?: FrozenPositions,
+): NextResponse {
+  const html = buildExportHtml(
+    id,
+    graph,
+    options,
+    loadVisNetworkSource(),
+    frozenPositions,
+  )
   const now = new Date()
   const date = [
     now.getFullYear(),
@@ -66,4 +113,50 @@ export async function GET(
       'Content-Disposition': `attachment; filename="patent-graph-${date}.html"`,
     },
   })
+}
+
+export async function GET(
+  request: NextRequest,
+  context: ExportRouteContext,
+): Promise<NextResponse> {
+  const loaded = await loadExportContext(request, context)
+  if ('response' in loaded) return loaded.response
+  return exportAttachment(loaded.context)
+}
+
+export async function POST(
+  request: NextRequest,
+  context: ExportRouteContext,
+): Promise<NextResponse> {
+  const loaded = await loadExportContext(request, context)
+  if ('response' in loaded) return loaded.response
+
+  let body: unknown
+  try {
+    body = await readExportJsonBody(request)
+  } catch (err) {
+    if (err instanceof ExportBodyTooLargeError) {
+      return NextResponse.json({ error: err.message }, { status: 413 })
+    }
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+    throw err
+  }
+
+  try {
+    const view = buildExportViews(loaded.context.graph, loaded.context.options)[
+      loaded.context.options.mode
+    ]
+    const frozenPositions = parseExportPositions(
+      body,
+      view.nodes.map((node) => node.id),
+    )
+    return exportAttachment(loaded.context, frozenPositions)
+  } catch (err) {
+    if (err instanceof ExportPositionsError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
+    throw err
+  }
 }

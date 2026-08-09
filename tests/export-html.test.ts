@@ -5,6 +5,13 @@ import {
   parseExportOptions,
   safeSerializeForInlineScript,
 } from "../lib/export-html";
+import {
+  ExportBodyTooLargeError,
+  ExportPositionsError,
+  MAX_FROZEN_POSITION_ENTRIES,
+  parseExportPositions,
+  readExportJsonBody,
+} from "../lib/export-positions";
 import type { GraphData } from "../types/graph";
 
 const graph: GraphData = {
@@ -35,6 +42,119 @@ const graph: GraphData = {
     semantic_provenance: "complete",
   },
 };
+
+describe("frozen export position validation", () => {
+  const expectedIds = ["alpha", "beta"];
+
+  it("accepts a complete exact position set", () => {
+    expect(
+      parseExportPositions(
+        {
+          positions: {
+            alpha: { x: 12.5, y: -4 },
+            beta: { x: 0, y: 99.25 },
+          },
+        },
+        expectedIds,
+      ),
+    ).toEqual({
+      alpha: { x: 12.5, y: -4 },
+      beta: { x: 0, y: 99.25 },
+    });
+  });
+
+  it("rejects malformed bodies", () => {
+    expect(() => parseExportPositions(null, expectedIds)).toThrow(ExportPositionsError);
+    expect(() => parseExportPositions({ positions: [] }, expectedIds)).toThrow(ExportPositionsError);
+    expect(() => parseExportPositions({ positions: {}, extra: true }, expectedIds)).toThrow(ExportPositionsError);
+  });
+
+  it("rejects partial or extra node ID sets", () => {
+    expect(() => parseExportPositions({ positions: { alpha: { x: 1, y: 2 } } }, expectedIds)).toThrow(ExportPositionsError);
+    expect(() => parseExportPositions({ positions: {
+      alpha: { x: 1, y: 2 },
+      beta: { x: 3, y: 4 },
+      extra: { x: 5, y: 6 },
+    } }, expectedIds)).toThrow(ExportPositionsError);
+  });
+
+  it("rejects non-finite or non-strict coordinates", () => {
+    expect(() => parseExportPositions({ positions: {
+      alpha: { x: Infinity, y: 2 },
+      beta: { x: 3, y: 4 },
+    } }, expectedIds)).toThrow(ExportPositionsError);
+    expect(() => parseExportPositions({ positions: {
+      alpha: { x: 1, y: 2, z: 3 },
+      beta: { x: 3, y: 4 },
+    } }, expectedIds)).toThrow(ExportPositionsError);
+  });
+
+  it("caps position entries at 50,000", () => {
+    const positions = Object.fromEntries(
+      Array.from({ length: MAX_FROZEN_POSITION_ENTRIES + 1 }, (_, index) => [
+        `node-${index}`,
+        { x: index, y: -index },
+      ]),
+    );
+    expect(() => parseExportPositions({ positions }, [])).toThrow(ExportPositionsError);
+  });
+});
+
+describe("export request body reader", () => {
+  it("parses valid JSON from a real Request", async () => {
+    const body = { positions: { alpha: { x: 1, y: -2 } } };
+    const request = new Request("http://localhost/api/export/job-id", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    await expect(readExportJsonBody(request)).resolves.toEqual(body);
+  });
+
+  it("surfaces malformed JSON as a SyntaxError", async () => {
+    const request = new Request("http://localhost/api/export/job-id", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: '{"positions":',
+    });
+
+    await expect(readExportJsonBody(request)).rejects.toBeInstanceOf(SyntaxError);
+  });
+
+  it("rejects an oversized valid Content-Length before consuming the body", async () => {
+    const request = new Request("http://localhost/api/export/job-id", {
+      method: "POST",
+      headers: { "Content-Length": "9" },
+      body: "{}",
+    });
+
+    await expect(readExportJsonBody(request, 8)).rejects.toBeInstanceOf(ExportBodyTooLargeError);
+    await expect(request.text()).resolves.toBe("{}");
+  });
+
+  it("rejects an oversized streamed body with the supplied byte limit", async () => {
+    const encoder = new TextEncoder();
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"value":'));
+        controller.enqueue(encoder.encode("true}"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const request = new Request("http://localhost/api/export/job-id", {
+      method: "POST",
+      body,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readExportJsonBody(request, 10)).rejects.toBeInstanceOf(ExportBodyTooLargeError);
+    expect(cancelled).toBe(true);
+  });
+});
 
 describe("offline export security and parity", () => {
   it("安全序列化內嵌 JSON 並跳脫 HTML 屬性文字", () => {
@@ -93,6 +213,53 @@ describe("offline export security and parity", () => {
       paper: true,
       minSupport: 1,
     });
+  });
+
+  it("embeds exact frozen positions for the active mode and keeps fallback layout behavior", () => {
+    const frozenPositions = { "concept:<X>": { x: 123.5, y: -456.75 } };
+    const html = buildExportHtml(
+      "job-id",
+      graph,
+      {
+        mode: "concept",
+        showSemantic: false,
+        paper: true,
+        minSupport: 1,
+        yearRange: [2020, 2022],
+      },
+      "window.vis = {};",
+      frozenPositions,
+    );
+    const data = html.match(/<script id="graph-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+    expect(data).toBeTruthy();
+    expect(JSON.parse(data!)).toMatchObject({
+      frozenLayouts: { concept: frozenPositions },
+    });
+
+    const runtimeScript = html.match(/<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/)?.[1];
+    expect(runtimeScript).toBeTruthy();
+    expect(runtimeScript).toContain("var useFrozenLayout = Boolean(frozenLayout);");
+    expect(runtimeScript).toContain("physics: { enabled: false }");
+    expect(runtimeScript).toContain("if (!useFrozenLayout) {");
+    expect(runtimeScript).toContain("stabilization: { iterations: 180 }");
+    expect(runtimeScript).toContain("network.fit({ animation: false });");
+    expect(() => new Function(runtimeScript!)).not.toThrow();
+
+    const legacyHtml = buildExportHtml(
+      "job-id",
+      graph,
+      {
+        mode: "concept",
+        showSemantic: false,
+        paper: true,
+        minSupport: 1,
+        yearRange: [2020, 2022],
+      },
+      "window.vis = {};",
+    );
+    const legacyData = legacyHtml.match(/<script id="graph-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+    expect(JSON.parse(legacyData!).frozenLayouts).toEqual({});
+    expect(legacyHtml).toContain("temporalLayouts");
   });
 
   it("匯出頁使用共用檢視邏輯且動態提示只寫入 textContent", () => {
