@@ -11,6 +11,9 @@ import {
   quartiles,
   supportStrengthOpacity,
   timeRankOf,
+  TEMPORAL_LEGEND_SENTENCE,
+  TEMPORAL_OPACITY_LINE,
+  TEMPORAL_YEAR_TERMS_LINE,
 } from '../lib/temporal'
 
 describe('P6 temporal pure rules', () => {
@@ -84,5 +87,24 @@ describe('P6 temporal pure rules', () => {
   it('normalises analysis scope tuples before making a scope key', () => {
     expect(analysisScopeKeyOf({ dataset: ['B', 'A'], source: ['z', 'a'], ipc: ['H04', 'G06'], unit: 'patent', year: [2015, 2025] }))
       .toBe(analysisScopeKeyOf({ dataset: ['A', 'B'], source: ['a', 'z'], ipc: ['G06', 'H04'], unit: 'patent', year: [2015, 2025] }))
+  })
+})
+
+describe('P6 圖說文字（§2/§4/§8 單一來源）', () => {
+  it('TEMPORAL_LEGEND_SENTENCE 符合規格 §2 原文（附因果否認）', () => {
+    expect(TEMPORAL_LEGEND_SENTENCE).toBe(
+      'Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.',
+    )
+  })
+
+  it('三窗一詞描述包含 quality_year_bounds / analysis_year_filter / layout_time_band', () => {
+    expect(TEMPORAL_YEAR_TERMS_LINE).toContain('quality_year_bounds')
+    expect(TEMPORAL_YEAR_TERMS_LINE).toContain('analysis_year_filter')
+    expect(TEMPORAL_YEAR_TERMS_LINE).toContain('layout_time_band')
+  })
+
+  it('opacity 聲明是 visual heuristic（τ=5），不含 confidence', () => {
+    expect(TEMPORAL_OPACITY_LINE).toContain('τ=5 is a visualization heuristic')
+    expect(TEMPORAL_OPACITY_LINE).not.toMatch(/confidenc/i)
   })
 })

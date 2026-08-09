@@ -222,6 +222,21 @@ export interface AnalysisScopeInput {
 }
 
 /** Stable, explicit analysis-scope material: each set is sorted before serialisation. */
+/**
+ * PRD v2 / P6 §2/§4/§8 — 時間模式圖說與方法學聲明文字。
+ * 螢幕圖例（GraphLegend）與離線匯出（export-html）共用同一來源，避免雙份漂移。
+ */
+export const TEMPORAL_LEGEND_SENTENCE =
+  'Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.'
+
+/** §4 三窗名詞；`layout_time_band` 一詞與欄位命名一致。 */
+export const TEMPORAL_YEAR_TERMS_LINE =
+  'quality_year_bounds＝資料清理合法年份；analysis_year_filter＝目前分析 cohort；layout_time_band＝純 UI 序數 band。'
+
+/** §8 opacity 是視覺 heuristic（τ=5），不是統計 confidence。 */
+export const TEMPORAL_OPACITY_LINE =
+  'Edge opacity increases monotonically with supporting patent count; τ=5 is a visualization heuristic.'
+
 export function analysisScopeKeyOf(input: AnalysisScopeInput): string {
   const sorted = (values: readonly string[] | undefined) => [...(values ?? [])].sort().join(',')
   const year = input.year ? `${input.year[0]}-${input.year[1]}` : ''

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { SEQUENTIAL_BLUE } from "@/lib/concept-time";
+import { TEMPORAL_LEGEND_SENTENCE, TEMPORAL_OPACITY_LINE, TEMPORAL_YEAR_TERMS_LINE } from "@/lib/temporal";
 import { INSTITUTION_TYPE_COLORS, type InstitutionType, type ColorMode, type Unit, SOURCE_FILE_COLORS, SOURCE_OVERLAP_COLOR } from "@/lib/graph-view";
 import type { IpcLevel } from "@/lib/ipc-filter";
 import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
@@ -170,6 +171,15 @@ export default function GraphLegend({
                 <LegendItem marker={<DashedLineMarker />}>
                   虛線＝LLM 語意關係（{showSemantic ? "目前顯示" : "目前關閉"}）
                 </LegendItem>
+                <li className="pt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
+                  {TEMPORAL_LEGEND_SENTENCE}
+                </li>
+                <li className="text-[0.7rem] leading-relaxed text-muted-foreground">
+                  {TEMPORAL_YEAR_TERMS_LINE}
+                </li>
+                <li className="text-[0.7rem] leading-relaxed text-muted-foreground">
+                  {TEMPORAL_OPACITY_LINE}
+                </li>
               </>
             ) : (
               <>

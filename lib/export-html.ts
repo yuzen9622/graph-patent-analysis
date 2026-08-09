@@ -1,5 +1,5 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
-import { computeTemporalLayout } from './temporal'
+import { computeTemporalLayout, TEMPORAL_LEGEND_SENTENCE, TEMPORAL_OPACITY_LINE, TEMPORAL_YEAR_TERMS_LINE } from './temporal'
 import { DEFAULT_IPC_LEVEL } from './ipc-filter'
 import type { GraphData, GraphMode } from '../types/graph'
 
@@ -190,9 +190,9 @@ export function buildExportHtml(
     <strong id="legend-title">${escapeHtml(title)}圖例</strong>
     <p id="mode-explanation">${escapeHtml(modeExplanation)}</p>
     <p id="semantic-explanation">${options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。'}</p>
-    <p class="distance">Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.</p>
-    <p>quality_year_bounds＝資料清理合法年份；analysis_year_filter＝目前分析 cohort；layout_time_band＝純 UI 序數 lane。</p>
-    <p>Edge opacity increases monotonically with supporting patent count; τ=5 is a visualization heuristic.</p>
+    <p class="distance">${TEMPORAL_LEGEND_SENTENCE}</p>
+    <p>${TEMPORAL_YEAR_TERMS_LINE}</p>
+    <p>${TEMPORAL_OPACITY_LINE}</p>
     <p id="capability-warning" class="warning"${view.capabilityWarning ? '' : ' hidden'}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ''}</p>
   </aside>
   <div id="tooltip" role="status"></div>
