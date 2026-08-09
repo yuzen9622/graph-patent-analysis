@@ -61,6 +61,8 @@ describe("offline export security and parity", () => {
       unit: "patent",
       edgeWeight: "jaccard",
       ipcLevel: 3,
+      temporalReference: "active",
+      showCitations: false,
     });
   });
 
@@ -110,13 +112,18 @@ describe("offline export security and parity", () => {
     expect(html).not.toContain("</script><img");
     expect(html).toContain("tooltip.textContent");
     expect(html).not.toContain("tooltip.innerHTML");
-    expect(html).toContain("座標僅供排版，不代表定量距離");
+    expect(html).toContain("Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.");
+    expect(html).toContain("quality_year_bounds");
+    expect(html).toContain("τ=5 is a visualization heuristic");
     expect(html).toContain("\\u003c/script>");
     expect(html).toContain("data:text/javascript;base64,");
     expect(html).not.toContain("cdn.jsdelivr.net");
     expect(html).not.toContain("</footer><script>alert('resolution')</script>");
     expect(html).toContain("data-mode=\"concept\"");
     expect(html).toContain("data-mode=\"context\"");
+    expect(html).toContain("temporalLayouts");
+    expect(html).toContain("citation-toggle");
+    expect(html).toContain("view.citationEdges");
     const runtimeScript = html.match(/<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/)?.[1];
     expect(runtimeScript).toBeTruthy();
     expect(() => new Function(runtimeScript!)).not.toThrow();

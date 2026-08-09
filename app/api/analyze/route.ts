@@ -132,6 +132,7 @@ async function runAnalysis(
         model_provider: provider,
         model_id: PROVIDER_MODELS[provider],
       },
+      parserContext.citations,
     )
 
     const aiReport = await generateTrendReport(extractions, provider, apiKey)

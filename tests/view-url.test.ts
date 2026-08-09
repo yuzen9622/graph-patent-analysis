@@ -120,6 +120,20 @@ describe('P2 來源檔（source= 多值）', () => {
     expect(none).not.toContain('source=')
   })
 })
+describe('P6 temporal reference / citation layer', () => {
+  it('full-history reference and visible citation layer round-trip', () => {
+    const q = toViewQueryString({ ...fullDefaults(), temporalReference: 'full', showCitations: true })
+    expect(q).toContain('temporal_ref=full')
+    expect(q).toContain('citations=1')
+    expect(parseViewQuery(`?${q}`)).toMatchObject({ temporalReference: 'full', showCitations: true })
+  })
+  it('active reference and hidden citations remain URL defaults', () => {
+    const q = toViewQueryString({ ...fullDefaults(), temporalReference: 'active', showCitations: false })
+    expect(q).not.toContain('temporal_ref=')
+    expect(q).not.toContain('citations=')
+  })
+})
+
 describe('P5 IPC（ipcLevel / ipc= 多值）', () => {
   it('層級與篩選 round-trip；缺省層級不掛 URL', () => {
     const q = toViewQueryString({

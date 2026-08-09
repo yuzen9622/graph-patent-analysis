@@ -12,6 +12,7 @@
 //  - GraphNode.color / concepts.color 永遠是社群色，漸層只活在 view 層（B1）。
 
 import type { ConceptNetworkResult } from './concept-network'
+import { leaveOneOutMedianSpan, medianStandard, quartiles } from './temporal'
 
 /** sequential_blue：9 個錨色（常數，方法圖例要印名稱）。 */
 export const SEQUENTIAL_BLUE = [
@@ -29,8 +30,8 @@ export const SEQUENTIAL_BLUE = [
 /** 年份未知概念 / 社群模式缺省的灰色。 */
 export const UNKNOWN_YEAR_COLOR = '#BAB0AC'
 
-const VALID_YEAR_MIN = 1990
-const VALID_YEAR_MAX = () => new Date().getFullYear() + 1
+export const VALID_YEAR_MIN = 1990
+export const VALID_YEAR_MAX = () => new Date().getFullYear() + 1
 
 /**
  * 申請年解析：取 filing_date 前 4 碼為整數年。純解析，不做值域過濾
@@ -54,18 +55,16 @@ export interface ConceptYearStats {
   first_year?: number
   /** 最近有效申請年。 */
   last_year?: number
-  /** 中位有效申請年（nearest-rank + lower，多重集合）。 */
+  /** 第一／第三四分位數（nearest-rank，多重集合）。 */
+  q1_year?: number
+  q3_year?: number
+  /** 中位有效申請年（標準 median，偶數篇取中間兩值平均）。 */
   median_year?: number
+  /** leave-one-out median 的可能範圍；v1 僅保存、不改箭頭。 */
+  median_loo_min?: number
+  median_loo_max?: number
   /** 年度分布 {year: count}；count = 該年不同專利數。 */
   year_counts?: Record<string, number>
-}
-
-/** 多重集合 lower median。 */
-function lowerMedian(years: number[]): number {
-  const sorted = [...years].sort((a, b) => a - b)
-  const n = sorted.length
-  const idx = n % 2 === 1 ? (n - 1) / 2 : n / 2 - 1
-  return sorted[idx]!
 }
 
 /**
@@ -92,10 +91,16 @@ export function computeConceptStats(
     }
     const yearCounts: Record<string, number> = {}
     for (const [y, c] of counts) yearCounts[String(y)] = c
+    const qs = quartiles(years)
+    const loo = leaveOneOutMedianSpan(years)
     out.set(label, {
       first_year: Math.min(...years),
+      q1_year: qs.q1,
+      median_year: medianStandard(years),
+      q3_year: qs.q3,
       last_year: Math.max(...years),
-      median_year: lowerMedian(years),
+      median_loo_min: loo?.min,
+      median_loo_max: loo?.max,
       year_counts: yearCounts,
     })
   }

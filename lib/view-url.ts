@@ -28,6 +28,10 @@ export interface ViewState {
   ipcLevel?: IpcLevel
   /** PRD v2 / P5: 選定層級的 IPC key（多值；空＝不篩）。 */
   ipcFilter?: string[]
+  /** P6 temporal median reference (active analysis scope is the default). */
+  temporalReference?: 'active' | 'full'
+  /** P6 citation-only evidence layer. */
+  showCitations?: boolean
 }
 
 const isMode = (value: string | null): value is GraphMode =>
@@ -80,6 +84,12 @@ export function parseViewQuery(search: string): Partial<ViewState> {
   const ipcKeys = p.getAll('ipc').filter(Boolean)
   if (ipcKeys.length > 0) out.ipcFilter = ipcKeys
 
+  const temporalReference = p.get('temporal_ref')
+  if (temporalReference === 'active' || temporalReference === 'full') out.temporalReference = temporalReference
+  const citations = p.get('citations')
+  if (citations === '1') out.showCitations = true
+  else if (citations === '0') out.showCitations = false
+
   const llm = p.get('llm')
   if (llm === '1') out.showSemantic = true
   else if (llm === '0') out.showSemantic = false
@@ -121,6 +131,8 @@ export function toViewQueryString(state: ViewState): string {
   if (state.unit && state.unit !== 'patent') {
     params['unit'] = state.unit
   }
+  if (state.temporalReference === 'full') params['temporal_ref'] = 'full'
+  if (state.showCitations) params['citations'] = '1'
   if (state.ipcLevel && state.ipcLevel !== DEFAULT_IPC_LEVEL) {
     params['ipcLevel'] = String(state.ipcLevel)
   }

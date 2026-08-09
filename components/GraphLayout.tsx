@@ -33,6 +33,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [ipcLevel, setIpcLevel] = useState<IpcLevel>(DEFAULT_IPC_LEVEL);
   const [ipcFilter, setIpcFilter] = useState<string[]>([]);
+  const [temporalReference, setTemporalReference] = useState<'active' | 'full'>('active');
+  const [showCitations, setShowCitations] = useState(false);
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
@@ -64,6 +66,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const parsed = parseViewQuery(window.location.search);
+    // This one-time URL hydration intentionally initializes local view state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (parsed.mode) setMode(parsed.mode);
     if (parsed.colorMode) setColorMode(parsed.colorMode);
     if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
@@ -71,13 +75,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
     if (parsed.ipcLevel) setIpcLevel(parsed.ipcLevel);
     if (parsed.ipcFilter) setIpcFilter(parsed.ipcFilter);
+    if (parsed.temporalReference) setTemporalReference(parsed.temporalReference);
+    if (parsed.showCitations !== undefined) setShowCitations(parsed.showCitations);
     if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
     if (parsed.yearRange) setYearRange(parsed.yearRange);
     hydratedRef.current = true;
     // Intentional: run once with the initial URL, not on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -88,9 +93,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
       syncedOnceRef.current = true;
       return;
     }
-    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter });
+    const query = toViewQueryString({ mode, showSemantic, paperMode, colorMode, minSupport, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter, temporalReference, showCitations });
     window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
-  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter]);
+  }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter, temporalReference, showCitations]);
 
   const view = useMemo(
     () =>
@@ -105,8 +110,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
         sourceFiles,
         ipcLevel,
         ipcFilter,
+        temporalReference,
+        showCitations,
       }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter],
+    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter, temporalReference, showCitations],
   );
   const selectedViewNode = selectedNode
     ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
@@ -133,6 +140,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
   if (unit && unit !== "patent") exportQuery.set("unit", unit);
   for (const source of sourceFiles) exportQuery.append("source", source);
+  if (temporalReference === 'full') exportQuery.set('temporal_ref', 'full');
+  if (showCitations) exportQuery.set('citations', '1');
   if (ipcLevel !== DEFAULT_IPC_LEVEL) exportQuery.set("ipcLevel", String(ipcLevel));
   for (const key of ipcFilter) exportQuery.append("ipc", key);
 
@@ -204,6 +213,24 @@ export default function GraphLayout({ graph, jobId }: Props) {
               </button>
             ))}
           </div>
+          <div className="inline-flex rounded-md border border-border bg-background p-0.5" aria-label="時間與引用圖層">
+            <button
+              type="button"
+              onClick={() => setTemporalReference((value) => value === 'active' ? 'full' : 'active')}
+              aria-pressed={temporalReference === 'full'}
+              className={`rounded px-2 py-1 text-xs transition-colors ${temporalReference === 'full' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {temporalReference === 'full' ? '全史中位年' : '分析範圍中位年'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCitations((value) => !value)}
+              aria-pressed={showCitations}
+              className={`rounded px-2 py-1 text-xs transition-colors ${showCitations ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              引用虛線
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setPaperMode((value) => !value)}
@@ -262,6 +289,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
           <GraphViewer
             nodes={view.nodes}
             edges={view.edges}
+            citationEdges={view.citationEdges}
             analysis={mode === "concept" ? graph.analysis : undefined}
             onNodeSelect={setSelectedNode}
             onEdgeSelect={setSelectedEdge}

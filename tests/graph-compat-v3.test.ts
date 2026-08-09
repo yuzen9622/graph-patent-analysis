@@ -230,18 +230,18 @@ describe("normalizeGraphData 的 v2 回歸與 pre-v2 legacy 路徑", () => {
     expect(graph?.analysis).toBeDefined();
   });
 
-  it("未知的 schema_version（例如 4）保守走 legacy，不被當成 v3", () => {
-    const graph = normalizeGraphData({ ...v3Graph(), schema_version: 4 });
+  it("未知的 schema_version（例如 5）保守走 legacy，不被當成已知版本", () => {
+    const graph = normalizeGraphData({ ...v3Graph(), schema_version: 5 });
     expect(graph?.schema_version).toBe(2);
     expect(graph?.methodology.cooccurrence_data).toBe("reconstructed");
   });
 });
 
 /**
- * `buildGraph()` now writes `schema_version: 3` on every freshly generated
+ * `buildGraph()` now writes `schema_version: 4` on every freshly generated
  * graph. This guards the write side (the literal in lib/graph-builder.ts)
  * together with the read side already covered above: a real `buildGraph()`
- * output must round-trip through `normalizeGraphData()` on the v3 pass-through
+ * output must round-trip through `normalizeGraphData()` on the v4 pass-through
  * path, not fall through to the legacy rebuild.
  */
 describe("buildGraph() 產生的圖：schema_version 升版與 normalizeGraphData 分派", () => {
@@ -266,17 +266,17 @@ describe("buildGraph() 產生的圖：schema_version 升版與 normalizeGraphDat
     );
   }
 
-  it("buildGraph() 回傳的 schema_version 是 3", () => {
+  it("buildGraph() 回傳的 schema_version 是 4", () => {
     const graph = freshGraph();
-    expect(graph.schema_version).toBe(3);
+    expect(graph.schema_version).toBe(4);
   });
 
-  it("經 normalizeGraphData() 後仍是 3，且沒有被誤判成需要 legacy 重建", () => {
+  it("經 normalizeGraphData() 後仍是 4，且沒有被誤判成需要 legacy 重建", () => {
     const graph = freshGraph();
     const normalized = normalizeGraphData(graph);
 
     expect(normalized).not.toBeNull();
-    expect(normalized?.schema_version).toBe(3);
+    expect(normalized?.schema_version).toBe(4);
     // These two fields are what the legacy rebuild path overwrites with
     // 'reconstructed' / 'legacy-unknown' defaults — if dispatch were wrong
     // they would no longer match what buildGraph() actually produced.

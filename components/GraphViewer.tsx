@@ -5,6 +5,7 @@ import type { Network } from "vis-network";
 import type {
   GraphNode,
   GraphEdge,
+  CitationEdge,
   NodeType,
   GraphAnalysis,
   GodNode,
@@ -15,6 +16,7 @@ import {
   type GraphViewport,
 } from "@/lib/graph-viewport";
 import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
+import { computeTemporalLayout } from "@/lib/temporal";
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -120,6 +122,7 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
       face: "Atkinson Hyperlegible, sans-serif",
     },
     ...(pos ?? {}),
+    fixed: n.type === 'concept' && n.median_year !== undefined ? { y: true } : undefined,
   };
 }
 
@@ -141,13 +144,16 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: 
     ? `共享概念：${e.support_count ?? 0} 個\n${(e.shared_concepts ?? []).slice(0, 6).join("、")}${(e.shared_concepts?.length ?? 0) > 6 ? ` …共 ${e.shared_concepts!.length} 個` : ""}`
     : "";
   const surprisingLine = surprising ? "\n跨社群罕見橋接" : "";
-  const title = `${supportLine}${semanticLine}${institutionLine}${surprisingLine}` || e.relation;
+  const citationLine = e.citation_direction_conflict
+    ? "\n⚠ 引用方向與中位年排序衝突"
+    : e.citation_supported ? "\n引用支持" : "";
+  const title = `${supportLine}${semanticLine}${institutionLine}${surprisingLine}${citationLine}` || e.relation;
 
   return {
     id: e.id,
     from: e.from,
     to: e.to,
-    label: isSemantic ? e.relation : "",
+    label: isSemantic ? e.relation : e.citation_direction_conflict ? "⚠" : e.citation_supported ? "引用" : "",
     title,
     dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
     width: isCooccurrence
@@ -158,17 +164,17 @@ function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: 
           ? 1.5
           : 1,
     color: surprising
-      ? { color: "#FF6B35" }
+      ? { color: "#FF6B35", opacity: e.opacity ?? 1 }
       : isSemantic
-        ? { color: "#8B5CF6", opacity: 0.8 }
+        ? { color: "#8B5CF6", opacity: e.opacity ?? 1 }
         : isInstitution
-          ? { color: "#0f766e", opacity: 0.75 }
+          ? { color: "#0f766e", opacity: e.opacity ?? 1 }
           : isCooccurrence
-            ? { color: "#64748B", opacity: 0.7 }
-            : { color: "#94A3B8", opacity: 0.35 },
+            ? { color: "#64748B", opacity: e.opacity ?? 1 }
+            : { color: "#94A3B8", opacity: e.opacity ?? 1 },
     arrows: {
       to: {
-        enabled: isSemantic || isCooccurrence || e.kind === "structural",
+        enabled: isSemantic || e.temporal_directed || e.kind === "structural",
         scaleFactor: 0.4,
       },
     },
@@ -194,6 +200,20 @@ function cooccurrenceWidth(e: GraphEdge, metric: EdgeWeightMetric, unit: Unit = 
   return Math.min(8, 1 + j * 7)
 }
 
+function toVisCitationEdge(edge: CitationEdge) {
+  return {
+    id: `citation:${edge.id}`,
+    from: edge.from,
+    to: edge.to,
+    title: `引用證據：順向 ${edge.forward_count} ／反向 ${edge.reverse_count}${edge.direction_conflict ? '\n與中位年排序方向衝突' : ''}`,
+    dashes: [4, 5] as [number, number],
+    width: 1.5,
+    color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 },
+    arrows: { to: { enabled: true, scaleFactor: 0.35 } },
+    physics: false,
+  }
+}
+
 function stableUnit(value: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < value.length; i += 1) {
@@ -213,6 +233,12 @@ function buildInitialPositions(
   edges: GraphEdge[],
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
+
+  // P6: Y is ordinal median rank. Hashes choose only X within a shared band.
+  const conceptNodes = nodes.filter((node) => node.type === 'concept');
+  if (conceptNodes.length === nodes.length && conceptNodes.some((node) => node.median_year !== undefined)) {
+    return computeTemporalLayout(conceptNodes);
+  }
 
   // 1. Group nodes by community if they have one (supports both community_id and community)
   const byComm = new Map<number, string[]>();
@@ -390,6 +416,7 @@ function buildOptions(nodeCount: number) {
 interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  citationEdges?: CitationEdge[];
   analysis?: GraphAnalysis;
   onNodeSelect?: (node: GraphNode | null) => void;
   yearRange?: [number, number];
@@ -404,6 +431,7 @@ interface Props {
 export default function GraphViewer({
   nodes,
   edges,
+  citationEdges = [],
   analysis,
   onNodeSelect,
   yearRange,
@@ -447,7 +475,10 @@ export default function GraphViewer({
         nodes.map((n) => toVisNode(n, initPos.get(n.id), godNodeMap.get(n.id))),
       );
       const edgeDataSet = new DataSet(
-        edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit)),
+        [
+          ...edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit)),
+          ...citationEdges.map(toVisCitationEdge),
+        ],
       );
       nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
       edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
@@ -638,7 +669,7 @@ export default function GraphViewer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, edgeWeight, unit]);
+  }, [nodes, edges, citationEdges, edgeWeight, unit]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
   useEffect(() => {
@@ -668,13 +699,19 @@ export default function GraphViewer({
 
     // Sync edge visibility: hide any edge whose from OR to node is hidden.
     if (edgeDataSetRef.current) {
-      const edgeUpdates = edges.map((e) => ({
-        id: e.id,
-        hidden: hiddenIds.has(e.from) || hiddenIds.has(e.to),
-      }));
+      const edgeUpdates = [
+        ...edges.map((e) => ({
+          id: e.id,
+          hidden: hiddenIds.has(e.from) || hiddenIds.has(e.to),
+        })),
+        ...citationEdges.map((edge) => ({
+          id: `citation:${edge.id}`,
+          hidden: hiddenIds.has(edge.from) || hiddenIds.has(edge.to),
+        })),
+      ];
       edgeDataSetRef.current.update(edgeUpdates);
     }
-  }, [nodes, edges, yearRange, visibleLayers, hiddenCommunities]);
+  }, [nodes, edges, citationEdges, yearRange, visibleLayers, hiddenCommunities]);
 
   // ── Focus a node (from SearchBox) ──
   useEffect(() => {

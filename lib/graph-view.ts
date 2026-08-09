@@ -1,6 +1,7 @@
 import { applicantSize, conceptSize, PATENT_NODE_SIZE, stableEdgeId } from './concept-network'
 import { computeUnitMetrics, pairApplicantSupport } from './concept-metrics'
-import { gradientColor } from './concept-time'
+import { gradientColor, isValidYear } from './concept-time'
+import { analysisScopeKeyOf, breakTemporalCycles, citationAdjudication, leaveOneOutMedianSpan, medianStandard, orientPair, quartiles, supportStrengthOpacity, type TemporalCycleWarning } from './temporal'
 import { applyIpcColour, DEFAULT_IPC_LEVEL, ipcKeysOfPatents, type IpcLevel } from './ipc-filter'
 import { classifyOrgType } from './applicant-classify'
 import type {
@@ -49,6 +50,12 @@ export interface GraphViewOptions {
    * 空／未給＝不做 IPC 篩選。S6：切換 ipcLevel 時由 UI 清空。
    */
   ipcFilter?: string[]
+  /** P6 temporal reference is explicit; active-scope is the default (I1). */
+  temporalReference?: 'active' | 'full'
+  /** P6 independent citation-only evidence layer; hidden by default. */
+  showCitations?: boolean
+  /** Optional dataset identity when the caller has one; this app currently uses sourceFiles. */
+  dataset?: string[]
 }
 
 /**
@@ -123,6 +130,30 @@ export interface GraphViewData {
   stats: GraphData['stats']
   maxSupport: number
   capabilityWarning?: string
+  /** P6 active-scope identity shared by all derived concept metrics. */
+  scopeId?: string
+  citationEdges: import('../types/graph').CitationEdge[]
+  warnings?: GraphData['warnings']
+}
+
+function scopeIdOf(graph: GraphData, options: GraphViewOptions): string {
+  // A full view still needs its owning dataset identity. This application has
+  // no separate dataset-id field, so the complete patent source-file set is
+  // the existing stable identity; a source filter narrows that identity.
+  const selectedSources = options.sourceFiles?.filter(Boolean)
+  const datasetIdentity = options.dataset?.length
+    ? options.dataset
+    : selectedSources?.length
+      ? selectedSources
+      : sourceFilesOf(graph)
+  return analysisScopeKeyOf({
+    dataset: datasetIdentity,
+    source: selectedSources,
+    ipc: options.ipcFilter,
+    unit: options.unit ?? 'patent',
+    // Full-range carries its explicit [min,max] tuple, not an omitted value.
+    year: options.yearRange,
+  })
 }
 
 function viewStats(
@@ -150,6 +181,38 @@ function capabilityWarning(graph: GraphData): string | undefined {
     warnings.push('舊資料只保留部分 LLM 關係來源；目前顯示的是可觀測來源，不代表完整支持篇數。')
   }
   return warnings.length > 0 ? warnings.join(' ') : undefined
+}
+
+function legacyCycleInfo(edges: GraphEdge[], nodes: GraphNode[]) {
+  const medianById = new Map(nodes.map((node) => [node.id, node.median_year] as const))
+  return breakTemporalCycles(
+    edges
+      .filter((edge) => edge.kind === 'cooccurrence' && edge.temporal_directed)
+      .map((edge) => ({
+        edge_id: edge.id,
+        source: edge.from,
+        target: edge.to,
+        support: edge.support_count ?? 0,
+        delta_median: (medianById.get(edge.to) ?? 0) - (medianById.get(edge.from) ?? 0),
+      })),
+  )
+}
+
+function legacyIndeterminateCount(nodes: GraphNode[]): number {
+  return nodes.filter((node) => node.type === 'concept' && node.temporal_legacy_unverified).length
+}
+
+function temporalWarnings(
+  cycleWarnings: readonly TemporalCycleWarning[],
+  indeterminate: number,
+  conflicts?: Array<{ edge_id: string; forward: number; reverse: number }>,
+): GraphData['warnings'] | undefined {
+  if (!cycleWarnings?.length && indeterminate === 0 && !conflicts?.length) return undefined
+  return {
+    ...(cycleWarnings?.length ? { temporal_cycles_broken: [...cycleWarnings] } : {}),
+    ...(indeterminate > 0 ? { legacy_temporal_indeterminate: indeterminate } : {}),
+    ...(conflicts?.length ? { temporal_direction_conflict: conflicts } : {}),
+  }
 }
 
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
@@ -208,9 +271,49 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
   } else if (options.colorMode === 'ipc') {
     nodes = applyIpcColour(graph, nodes, options.ipcLevel ?? DEFAULT_IPC_LEVEL)
   }
+  // Never reuse build-time graph.scope_id here: a view scope is defined by
+  // current options, including a unit switch (I1).
+  const scopeId = scopeIdOf(graph, options)
+  const cycleInfo = legacyCycleInfo(edges, nodes)
+  const indeterminate = legacyIndeterminateCount(nodes)
+  nodes = nodes.map((node) => ({ ...node, scope_id: scopeId }))
+  const medianById = new Map(nodes.map((node) => [node.id, node.temporal_legacy_unverified ? undefined : node.median_year] as const))
+  const scopedEdges = edges.map((edge) => {
+    if (edge.kind !== 'cooccurrence') return edge
+    const orientation = cycleInfo.demotedEdgeIds.has(edge.id)
+      ? undefined
+      : orientPair(medianById.get(edge.from), medianById.get(edge.to))
+    const projected = {
+      ...edge,
+      temporal_directed: orientation !== undefined,
+      opacity: edge.opacity ?? supportStrengthOpacity(edge.support_count ?? 0),
+      scope_id: scopeId,
+    }
+    if (orientation?.from === 'b') [projected.from, projected.to] = [projected.to, projected.from]
+    return projected
+  })
+  const allRaw = new Set(
+    graph.nodes.filter((node) => node.type === 'patent').map((node) => node.id.replace(/^patent:/, '')),
+  )
+  const citationProjection = graph.patent_citations
+    ? projectCitationEvidence(graph, allRaw, nodes, scopedEdges.filter((edge) => edge.kind === 'cooccurrence'), scopeId)
+    : undefined
+  if (citationProjection) {
+    for (const edge of scopedEdges) {
+      if (edge.kind !== 'cooccurrence' || !edge.temporal_directed) continue
+      const evidence = citationProjection.byPair.get(`${edge.from}\u0000${edge.to}`)
+      edge.citation_supported = evidence?.supported ?? false
+      edge.citation_direction_conflict = evidence?.direction_conflict ?? false
+    }
+  }
   return {
     nodes,
-    edges,
+    edges: scopedEdges,
+    citationEdges: options.showCitations
+      ? citationProjection?.citationEdges ?? (graph.citation_edges ?? []).map((edge) => ({ ...edge, scope_id: scopeId }))
+      : [],
+    scopeId,
+    warnings: temporalWarnings(cycleInfo.warnings, indeterminate, citationProjection?.conflicts) ?? graph.warnings,
     communities,
     stats: {
       ...graph.stats,
@@ -275,7 +378,11 @@ function selectedRawIds(
 ): Set<string> | null {
   const files = options.sourceFiles
   const ipcKeys = options.ipcFilter
-  if ((!files || files.length === 0) && (!ipcKeys || ipcKeys.length === 0)) return null
+  const [yearStart, yearEnd] = options.yearRange
+  // Full range is intentionally a no-projection short circuit; any active
+  // year window participates in the same raw-patent cohort as source/IPC.
+  const isFullRange = yearStart === graph.stats.year_range[0] && yearEnd === graph.stats.year_range[1]
+  if ((!files || files.length === 0) && (!ipcKeys || ipcKeys.length === 0) && isFullRange) return null
   const wantFiles = new Set(files ?? [])
   const wantIpc = ipcKeys && ipcKeys.length > 0 ? new Set(ipcKeys) : null
   const level = options.ipcLevel ?? DEFAULT_IPC_LEVEL
@@ -296,7 +403,9 @@ function selectedRawIds(
         }
       }
     }
-    if (okFile && okIpc) raw.add(node.id.replace(/^patent:/, ''))
+    const year = node.year
+    const okYear = isFullRange || (typeof year === 'number' && year >= yearStart && year <= yearEnd)
+    if (okFile && okIpc && okYear) raw.add(node.id.replace(/^patent:/, ''))
   }
   return raw
 }
@@ -410,6 +519,33 @@ function selectConceptViewFiltered(
     })
     .filter((node) => (node.source_patents?.length ?? 0) > 0)
 
+  // I1: every temporal value shown in an active window is recomputed from the
+  // exact selected patent cohort. Full-history is an explicit reference mode.
+  if (options.temporalReference !== 'full') {
+    const yearByRaw = new Map(
+      graph.nodes
+        .filter((node) => node.type === 'patent' && typeof node.year === 'number')
+        .map((node) => [node.id.replace(/^patent:/, ''), node.year!] as const),
+    )
+    nodes = nodes.map((node) => {
+      const years = (node.source_patents ?? [])
+        .map((raw) => yearByRaw.get(raw))
+        .filter((year): year is number => year !== undefined && isValidYear(year))
+      const qs = quartiles(years)
+      const loo = leaveOneOutMedianSpan(years)
+      return {
+        ...node,
+        first_year: years.length ? Math.min(...years) : undefined,
+        q1_year: qs.q1,
+        median_year: medianStandard(years),
+        q3_year: qs.q3,
+        last_year: years.length ? Math.max(...years) : undefined,
+        median_loo_min: loo?.min,
+        median_loo_max: loo?.max,
+      }
+    })
+  }
+
   // 依子集重算 co-occurrence 與各單位指標（全量→門檻顯示過濾，承 Q4）。
   const conceptPatentCount = new Map(
     Array.from(conceptPatents.entries()).map(([l, s]) => [l, s.size] as const),
@@ -475,9 +611,34 @@ function selectConceptViewFiltered(
   const maxSupport = Math.max(1, ...co.map((e) => Math.max(supportOf(e), 0)))
   const cooEdges = edges.filter((e) => supportOf(e) >= options.minSupport)
   const nodeIds = new Set(nodes.map((n) => n.id))
-  const allEdges = [...cooEdges, ...semantic].filter(
-    (e) => nodeIds.has(e.from) && nodeIds.has(e.to),
+  const scopeId = scopeIdOf(graph, options)
+  const cycleInfo = legacyCycleInfo(co as GraphEdge[], nodes)
+  const indeterminate = legacyIndeterminateCount(nodes)
+  const medianById = new Map(nodes.map((node) => [node.id, node.temporal_legacy_unverified ? undefined : node.median_year] as const))
+  const allEdges = [...cooEdges, ...semantic]
+    .filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to))
+    .map((edge) => {
+      if (edge.kind !== 'cooccurrence') return edge
+      const orientation = cycleInfo.demotedEdgeIds.has(edge.id)
+        ? undefined
+        : orientPair(medianById.get(edge.from), medianById.get(edge.to))
+      const oriented = { ...edge, temporal_directed: orientation !== undefined, opacity: supportStrengthOpacity(edge.support_count ?? 0), scope_id: scopeId }
+      if (orientation?.from === 'b') [oriented.from, oriented.to] = [oriented.to, oriented.from]
+      return oriented
+    })
+  const citationProjection = projectCitationEvidence(
+    graph,
+    rawSel,
+    nodes,
+    allEdges.filter((edge) => edge.kind === 'cooccurrence'),
+    scopeId,
   )
+  for (const edge of allEdges) {
+    if (edge.kind !== 'cooccurrence' || !edge.temporal_directed) continue
+    const evidence = citationProjection.byPair.get(`${edge.from}\u0000${edge.to}`)
+    edge.citation_supported = evidence?.supported ?? false
+    edge.citation_direction_conflict = evidence?.direction_conflict ?? false
+  }
 
   // 著色：source／first_year／community／ipc 都沿用既有規則（以子集為準）。
   if (options.colorMode === 'first_year') {
@@ -500,9 +661,13 @@ function selectConceptViewFiltered(
     : graph.communities
   ).filter((community) => activeCommunityIds.has(community.id))
 
+  nodes = nodes.map((node) => ({ ...node, scope_id: scopeId }))
   return {
     nodes,
     edges: allEdges,
+    citationEdges: options.showCitations ? citationProjection.citationEdges : [],
+    scopeId,
+    warnings: temporalWarnings(cycleInfo.warnings, indeterminate, citationProjection.conflicts),
     communities,
     stats: {
       ...graph.stats,
@@ -515,6 +680,85 @@ function selectConceptViewFiltered(
     capabilityWarning: capabilityWarning(graph),
   }
 }
+function projectCitationEvidence(
+  graph: GraphData,
+  rawSel: Set<string>,
+  nodes: GraphNode[],
+  relationEdges: GraphEdge[],
+  scopeId: string,
+): {
+  byPair: Map<string, { supported: boolean; direction_conflict: boolean }>
+  citationEdges: import('../types/graph').CitationEdge[]
+  conflicts: Array<{ edge_id: string; forward: number; reverse: number }>
+} {
+  const labelsByRaw = new Map<string, string[]>()
+  for (const node of nodes) {
+    if (node.type !== 'concept') continue
+    for (const raw of node.source_patents ?? []) {
+      const labels = labelsByRaw.get(raw) ?? []
+      labels.push(node.label)
+      labelsByRaw.set(raw, labels)
+    }
+  }
+  const counts = new Map<string, number>()
+  const seen = new Set<string>()
+  for (const citation of graph.patent_citations ?? []) {
+    if (!rawSel.has(citation.from) || !rawSel.has(citation.to)) continue
+    const link = `${citation.from}\u0000${citation.to}`
+    if (seen.has(link)) continue
+    seen.add(link)
+    for (const from of labelsByRaw.get(citation.from) ?? []) for (const to of labelsByRaw.get(citation.to) ?? []) {
+      if (from === to) continue
+      const key = `${from}\u0000${to}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+  }
+  const byPair = new Map<string, { supported: boolean; direction_conflict: boolean }>()
+  const conflicts: Array<{ edge_id: string; forward: number; reverse: number }> = []
+  const relationPairs = new Set<string>()
+  for (const edge of relationEdges) {
+    const from = edge.from.replace(/^concept:/, '')
+    const to = edge.to.replace(/^concept:/, '')
+    relationPairs.add([from, to].sort().join('\u0000'))
+    if (!edge.temporal_directed) continue
+    const forward = counts.get(`${from}\u0000${to}`) ?? 0
+    const reverse = counts.get(`${to}\u0000${from}`) ?? 0
+    const state = citationAdjudication(forward, reverse).state
+    const supported = state === 'aligned' || state === 'conflicting'
+    const direction_conflict = state === 'conflicting'
+    byPair.set(`${edge.from}\u0000${edge.to}`, { supported, direction_conflict })
+    if (direction_conflict) conflicts.push({ edge_id: edge.id, forward, reverse })
+  }
+  const medianByLabel = new Map(nodes.filter((node) => node.type === 'concept').map((node) => [node.label, node.median_year] as const))
+  const citationEdges: import('../types/graph').CitationEdge[] = []
+  const seenPairs = new Set<string>()
+  for (const key of counts.keys()) {
+    const [a, b] = key.split('\u0000')
+    const pair = [a!, b!].sort().join('\u0000')
+    if (seenPairs.has(pair) || relationPairs.has(pair)) continue
+    seenPairs.add(pair)
+    const orientation = orientPair(medianByLabel.get(a!), medianByLabel.get(b!))
+    if (!orientation) continue
+    const from = orientation.from === 'a' ? a! : b!
+    const to = orientation.to === 'b' ? b! : a!
+    const forward = counts.get(`${from}\u0000${to}`) ?? 0
+    const reverse = counts.get(`${to}\u0000${from}`) ?? 0
+    const state = citationAdjudication(forward, reverse).state
+    if (state !== 'aligned' && state !== 'conflicting') continue
+    citationEdges.push({
+      id: stableEdgeId('citation', [from, to]),
+      from: `concept:${from}`,
+      to: `concept:${to}`,
+      forward_count: forward,
+      reverse_count: reverse,
+      supported: true,
+      direction_conflict: state === 'conflicting',
+      scope_id: scopeId,
+    })
+  }
+  return { byPair, citationEdges, conflicts }
+}
+
 function intersectSize(a: Set<string>, b: Set<string>): number {
   const [small, big] = a.size <= b.size ? [a, b] : [b, a]
   let n = 0
@@ -635,6 +879,7 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
   return {
     nodes,
     edges,
+    citationEdges: [],
     communities,
     stats: viewStats(nodes, communities, options.yearRange),
     maxSupport: 1,
@@ -756,6 +1001,7 @@ function selectInstitutionView(graph: GraphData, options: GraphViewOptions): Gra
   return {
     nodes: activeNodes,
     edges: activeEdges,
+    citationEdges: [],
     communities,
     stats: {
       applicant_count: activeNodes.length,

@@ -2,6 +2,7 @@ import { buildConceptNetwork, applicantSize, conceptSize, PATENT_NODE_SIZE } fro
 import { detectCommunities } from './community'
 import { computeGodNodes, computeSurprisingConnections } from './graph-analysis'
 import type {
+  CitationEdge,
   Community,
   ExtractionResult,
   GraphData,
@@ -71,8 +72,19 @@ function normalizeNode(value: unknown): GraphNode | null {
     // through unchecked — a string / null / 1e309 first_year would compute a
     // NaN colour, violating the no-NaN guard (§B7). Invalid -> undefined.
     first_year: asNonNegativeInteger(value.first_year),
+    q1_year: asNonNegativeInteger(value.q1_year),
+    // P6 true median / LOO values may be half-years, not only integers.
+    median_year: asFiniteNumber(value.median_year),
+    q3_year: asNonNegativeInteger(value.q3_year),
     last_year: asNonNegativeInteger(value.last_year),
-    median_year: asNonNegativeInteger(value.median_year),
+    median_loo_min: asFiniteNumber(value.median_loo_min),
+    median_loo_max: asFiniteNumber(value.median_loo_max),
+    scope_id: typeof value.scope_id === 'string' ? value.scope_id : undefined,
+    temporal_legacy_unverified:
+      typeof value.median_year === 'number' &&
+      (!Number.isInteger(value.q1_year) || !Number.isInteger(value.q3_year))
+        ? true
+        : undefined,
     year_counts: asYearCounts(value.year_counts),
   }
 }
@@ -109,6 +121,11 @@ function normalizeEdge(value: unknown, validNodes: Set<string>): GraphEdge | nul
     confidence,
     support_count: asFiniteNumber(value.support_count),
     jaccard: asFiniteNumber(value.jaccard),
+    temporal_directed: typeof value.temporal_directed === 'boolean' ? value.temporal_directed : undefined,
+    opacity: asFiniteNumber(value.opacity),
+    citation_supported: typeof value.citation_supported === 'boolean' ? value.citation_supported : undefined,
+    citation_direction_conflict: typeof value.citation_direction_conflict === 'boolean' ? value.citation_direction_conflict : undefined,
+    scope_id: typeof value.scope_id === 'string' ? value.scope_id : undefined,
     source_patents: asStringArray(value.source_patents),
     evidence: Array.isArray(value.evidence)
       ? value.evidence
@@ -198,6 +215,7 @@ function normalizeMethodology(
     // time_window becomes null; an ABSENT field stays omitted (undefined), never
     // a faked default — the methodology-level "0 impostor" guard.
     ...normalizeTimeMethodology(raw),
+    ...normalizeTemporalMethodology(raw),
   }
 }
 
@@ -225,6 +243,38 @@ function normalizeTimeMethodology(
   return out
 }
 
+function normalizeTemporalMethodology(raw: Record<string, unknown>): Partial<GraphMethodology> {
+  const out: Partial<GraphMethodology> = {}
+  if (raw.temporal_median_method === 'standard_median') out.temporal_median_method = 'standard_median'
+  if (raw.temporal_quartile_method === 'nearest_rank') out.temporal_quartile_method = 'nearest_rank'
+  if (raw.support_strength_visual === '0.30 + 0.70 * (1 - exp(-support/5))') out.support_strength_visual = raw.support_strength_visual
+  const tau = asFiniteNumber(raw.support_strength_tau)
+  if (tau !== undefined) out.support_strength_tau = tau
+  if (raw.time_axis === 'ordinal_rank') out.time_axis = 'ordinal_rank'
+  if (raw.layout_time_band === 'ordinal_rank') out.layout_time_band = 'ordinal_rank'
+  if (raw.citation_threshold === 'net>=2 && ratio>=2') out.citation_threshold = raw.citation_threshold
+  for (const key of ['quality_year_bounds', 'analysis_year_filter'] as const) {
+    const value = raw[key]
+    if (Array.isArray(value) && value.length === 2 && value.every((x) => typeof x === 'number' && Number.isFinite(x))) {
+      out[key] = [value[0]!, value[1]!]
+    }
+  }
+  return out
+}
+
+function normalizeCitationEdges(value: unknown, validNodes: Set<string>): CitationEdge[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.filter(isRecord).flatMap((item) => {
+    const id = asString(item.id)
+    const from = asString(item.from)
+    const to = asString(item.to)
+    const forward = asNonNegativeInteger(item.forward_count)
+    const reverse = asNonNegativeInteger(item.reverse_count)
+    if (!id || !from || !to || !validNodes.has(from) || !validNodes.has(to) || forward === undefined || reverse === undefined || typeof item.supported !== 'boolean' || typeof item.direction_conflict !== 'boolean') return []
+    return [{ id, from, to, forward_count: forward, reverse_count: reverse, supported: item.supported, direction_conflict: item.direction_conflict, scope_id: typeof item.scope_id === 'string' ? item.scope_id : undefined }]
+  })
+}
+
 /**
  * Resolve the schema version to echo back on the normalised output.
  *
@@ -234,8 +284,8 @@ function normalizeTimeMethodology(
  * neither (pre-v2 files carry no `schema_version` at all) is *upgraded* to 2,
  * because `normalizeLegacy()` genuinely rebuilds it into the v2 shape.
  */
-function resolveSchemaVersion(input: Record<string, unknown>): 2 | 3 {
-  return input.schema_version === 3 ? 3 : 2
+function resolveSchemaVersion(input: Record<string, unknown>): 2 | 3 | 4 {
+  return input.schema_version === 4 ? 4 : input.schema_version === 3 ? 3 : 2
 }
 
 function computeStats(nodes: GraphNode[], communities: Community[]): GraphData['stats'] {
@@ -268,11 +318,22 @@ function normalizeV2(raw: Record<string, unknown>, nodes: GraphNode[], edges: Gr
     semantic_provenance: 'complete',
   })
   const methodology = normalizeMethodology(raw.methodology, defaults)
+  const validNodes = new Set(nodes.map((node) => node.id))
   return {
     schema_version: resolveSchemaVersion(raw),
     nodes,
     edges,
     communities,
+    citation_edges: normalizeCitationEdges(raw.citation_edges, validNodes),
+    patent_citations: Array.isArray(raw.patent_citations)
+      ? raw.patent_citations.filter(isRecord).flatMap((item) => {
+          const from = asString(item.from)
+          const to = asString(item.to)
+          return from && to ? [{ from, to }] : []
+        })
+      : undefined,
+    scope_id: typeof raw.scope_id === 'string' ? raw.scope_id : undefined,
+    warnings: isRecord(raw.warnings) ? raw.warnings as GraphData['warnings'] : undefined,
     stats: computeStats(nodes, communities),
     analysis: isRecord(raw.analysis) ? (raw.analysis as unknown as GraphData['analysis']) : undefined,
     ai_report: asString(raw.ai_report),
@@ -403,7 +464,7 @@ export function normalizeGraphData(input: unknown): GraphData | null {
     .filter((edge): edge is GraphEdge => edge !== null)
   // Dispatch on the *declared* schema version, allow-listing every version that
   // already stores its own concept network.  This must stay an explicit
-  // `2 | 3` allow-list rather than `=== 2 ? v2 : legacy` (PRD v2 P0 §6.3 #5):
+  // `2 | 3 | 4` allow-list rather than `=== 2 ? v2 : legacy` (PRD v2 P0 §6.3 #5):
   // under the old form a v3 graph fell through to `normalizeLegacy()`, which
   // rebuilds the concept network from scratch — discarding every cooccurrence
   // edge and overwriting `frequency` / `community_id` / `color` / `methodology`
@@ -412,6 +473,6 @@ export function normalizeGraphData(input: unknown): GraphData | null {
   // Only genuinely pre-v2 payloads (no `schema_version`) may take the legacy
   // reconstruction path.
   const declared = input.schema_version
-  if (declared === 2 || declared === 3) return normalizeV2(input, nodes, edges)
+  if (declared === 2 || declared === 3 || declared === 4) return normalizeV2(input, nodes, edges)
   return normalizeLegacy(input, nodes, edges)
 }

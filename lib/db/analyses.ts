@@ -8,6 +8,7 @@
 
 import type { PoolClient } from 'pg'
 import type {
+  CitationEdge,
   Community,
   GodNode,
   GraphData,
@@ -215,6 +216,7 @@ export async function saveGraph(
 
   await withTransaction(async (client) => {
     // Re-saving an analysis replaces its contents wholesale.
+    await client.query('DELETE FROM citation_edges WHERE analysis_id = $1', [analysisId])
     await client.query('DELETE FROM edges WHERE analysis_id = $1', [analysisId])
     await client.query('DELETE FROM communities WHERE analysis_id = $1', [analysisId])
     await client.query('DELETE FROM concepts WHERE analysis_id = $1', [analysisId])
@@ -248,6 +250,7 @@ export async function saveGraph(
          generated_at = $16,
          data_quality_warnings = COALESCE($17, data_quality_warnings),
          synonym_snapshot = COALESCE($18, synonym_snapshot),
+         scope_id = $19,
          completed_at = now()
        WHERE id = $1`,
       [
@@ -275,6 +278,7 @@ export async function saveGraph(
         context.synonymSnapshot === undefined
           ? null
           : JSON.stringify(context.synonymSnapshot),
+        graph.scope_id ?? null,
       ],
     )
 
@@ -384,8 +388,12 @@ export async function saveGraph(
         'source_patents',
         // --- PRD v2 / P3: concept time metadata (§2.3) ---
         'first_year',
-        'last_year',
+        'q1_year',
         'median_year',
+        'q3_year',
+        'last_year',
+        'median_loo_min',
+        'median_loo_max',
         'year_counts',
         // --- PRD v2 / P4: applicant-unit metric ---
         'applicant_count',
@@ -402,8 +410,12 @@ export async function saveGraph(
         node.community_id ?? null,
         node.source_patents ?? null,
         node.first_year ?? null,
-        node.last_year ?? null,
+        node.q1_year ?? null,
         node.median_year ?? null,
+        node.q3_year ?? null,
+        node.last_year ?? null,
+        node.median_loo_min ?? null,
+        node.median_loo_max ?? null,
         node.year_counts ? JSON.stringify(node.year_counts) : null,
         node.applicant_count ?? null,
         node.community_id_applicants ?? null,
@@ -483,6 +495,8 @@ export async function saveGraph(
         'npmi_applicants',
         'association_strength',
         'association_strength_applicants',
+        'citation_supported',
+        'citation_direction_conflict',
         'reason',
         'confidence',
         'source_patent',
@@ -505,11 +519,26 @@ export async function saveGraph(
         edge.npmi_applicants ?? null,
         edge.association_strength ?? null,
         edge.association_strength_applicants ?? null,
+        edge.citation_supported ?? null,
+        edge.citation_direction_conflict ?? null,
         edge.reason ?? null,
         edge.confidence ?? null,
         edge.source_patent ?? null,
         edge.source_patents ?? null,
         edge.evidence ? JSON.stringify(edge.evidence) : null,
+      ]),
+    )
+
+    await insertRows(
+      client,
+      'citation_edges',
+      [
+        'analysis_id', 'edge_id', 'from_node', 'to_node', 'forward_count',
+        'reverse_count', 'supported', 'direction_conflict',
+      ],
+      (graph.citation_edges ?? []).map((edge) => [
+        analysisId, edge.id, edge.from, edge.to, edge.forward_count,
+        edge.reverse_count, edge.supported, edge.direction_conflict,
       ]),
     )
 
@@ -610,8 +639,12 @@ interface ConceptRow {
   source_patents: string[] | null
   // PRD v2 / P3: concept time metadata columns.
   first_year: number | null
-  last_year: number | null
+  q1_year: number | null
   median_year: number | null
+  q3_year: number | null
+  last_year: number | null
+  median_loo_min: number | null
+  median_loo_max: number | null
   year_counts: Record<string, number> | null
   // PRD v2 / P4: applicant-unit metric column.
   applicant_count: number | null
@@ -643,12 +676,17 @@ interface EdgeRow {
   npmi_applicants: number | null
   association_strength: number | null
   association_strength_applicants: number | null
+  citation_supported: boolean | null
+  citation_direction_conflict: boolean | null
   reason: string | null
   confidence: RelationConfidence | null
   source_patent: string | null
   source_patents: string[] | null
   evidence: RelationEvidence[] | null
 }
+
+type CitationEdgeRow = CitationEdge
+interface PatentCitationRow { from: string; to: string }
 
 interface AnalysisRow {
   schema_version: number
@@ -664,11 +702,12 @@ interface AnalysisRow {
   year_min: number | null
   year_max: number | null
   status: AnalysisStatus
+  scope_id: string | null
 }
 
 export async function loadGraph(analysisId: string): Promise<GraphData | null> {
   const meta = await queryOne<AnalysisRow>(
-    `SELECT schema_version, methodology, god_nodes, surprising, ai_report, generated_at,
+    `SELECT schema_version, methodology, god_nodes, surprising, ai_report, generated_at, scope_id,
             applicant_count, patent_count, concept_count, community_count,
             year_min, year_max, status
      FROM analyses WHERE id = $1`,
@@ -676,7 +715,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
   )
   if (!meta || meta.status !== 'done') return null
 
-  const [applicants, patents, concepts, communityRows, conceptCommunityRows, edgeRows] = await Promise.all([
+  const [applicants, patents, concepts, communityRows, conceptCommunityRows, edgeRows, citationEdges, patentCitations] = await Promise.all([
     query<ApplicantRow>(
       `SELECT node_id, name, patent_count, applicant_key, color, size
        FROM applicants WHERE analysis_id = $1 ORDER BY id`,
@@ -690,7 +729,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     ),
     query<ConceptRow>(
       `SELECT node_id, label, frequency, community_id, source_patents, color, size,
-              first_year, last_year, median_year, year_counts,
+              first_year, q1_year, median_year, q3_year, last_year, median_loo_min, median_loo_max, year_counts,
               applicant_count
        FROM concepts WHERE analysis_id = $1 ORDER BY id`,
       [analysisId],
@@ -709,8 +748,20 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       `SELECT edge_id, kind, from_node, to_node, relation, weight, support_count, jaccard,
               support_applicants, jaccard_applicants, npmi, npmi_applicants,
               association_strength, association_strength_applicants,
+              citation_supported, citation_direction_conflict,
               reason, confidence, source_patent, source_patents, evidence
        FROM edges WHERE analysis_id = $1 ORDER BY id`,
+      [analysisId],
+    ),
+    query<CitationEdgeRow>(
+      `SELECT edge_id AS id, from_node AS "from", to_node AS "to", forward_count,
+              reverse_count, supported, direction_conflict
+       FROM citation_edges WHERE analysis_id = $1 ORDER BY edge_id`,
+      [analysisId],
+    ),
+    query<PatentCitationRow>(
+      `SELECT from_patent AS "from", to_patent AS "to"
+       FROM citations WHERE analysis_id = $1 ORDER BY from_patent, to_patent`,
       [analysisId],
     ),
   ])
@@ -760,8 +811,16 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       source_patents: row.source_patents ?? undefined,
       // --- PRD v2 / P3: DB null -> TS undefined; year_counts keys are strings. ---
       first_year: row.first_year ?? undefined,
-      last_year: row.last_year ?? undefined,
+      q1_year: row.q1_year ?? undefined,
       median_year: row.median_year ?? undefined,
+      q3_year: row.q3_year ?? undefined,
+      last_year: row.last_year ?? undefined,
+      median_loo_min: row.median_loo_min ?? undefined,
+      median_loo_max: row.median_loo_max ?? undefined,
+      temporal_legacy_unverified:
+        row.median_year !== null && (row.q1_year === null || row.q3_year === null)
+          ? true
+          : undefined,
       year_counts: row.year_counts ?? undefined,
       // --- PRD v2 / P4 ---
       applicant_count: row.applicant_count ?? undefined,
@@ -790,6 +849,10 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     if (row.association_strength !== null) edge.association_strength = row.association_strength
     if (row.association_strength_applicants !== null) {
       edge.association_strength_applicants = row.association_strength_applicants
+    }
+    if (row.citation_supported !== null) edge.citation_supported = row.citation_supported
+    if (row.citation_direction_conflict !== null) {
+      edge.citation_direction_conflict = row.citation_direction_conflict
     }
     if (row.reason !== null) edge.reason = row.reason
     if (row.confidence !== null) edge.confidence = row.confidence
@@ -823,11 +886,14 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
     // Report the version actually stored, not a hardcoded 2 — otherwise a v3
     // graph read back from the database claims to be v2 and normalizeGraphData()
     // is told the wrong thing about what the payload already contains.
-    schema_version: meta.schema_version === 3 ? 3 : 2,
+    schema_version: meta.schema_version === 4 ? 4 : meta.schema_version === 3 ? 3 : 2,
     nodes,
     edges,
     communities,
     communities_applicants: communitiesApplicants,
+    citation_edges: citationEdges,
+    patent_citations: patentCitations,
+    scope_id: meta.scope_id ?? undefined,
     stats: {
       applicant_count: meta.applicant_count,
       patent_count: meta.patent_count,

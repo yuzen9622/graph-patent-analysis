@@ -40,7 +40,7 @@ describe('parseFilingYear / isValidYear', () => {
 })
 
 describe('computeConceptStats', () => {
-  it('偶數篇 lower median（[2015,2016,2018,2020] → 2016，非 2017）', () => {
+  it('偶數篇標準 median（[2015,2016,2018,2020] → 2017）', () => {
     const stats = computeConceptStats(
       network({ A: ['P1', 'P2', 'P3', 'P4'] }),
       years([['P1', 2015], ['P2', 2016], ['P3', 2018], ['P4', 2020]]),
@@ -48,12 +48,16 @@ describe('computeConceptStats', () => {
     expect(stats.get('A')).toMatchObject({
       first_year: 2015,
       last_year: 2020,
-      median_year: 2016,
+      q1_year: 2015,
+      median_year: 2017,
+      q3_year: 2018,
+      median_loo_min: 2016,
+      median_loo_max: 2018,
       year_counts: { '2015': 1, '2016': 1, '2018': 1, '2020': 1 },
     })
   })
 
-  it('多重集合 lower median：重複年份保留（[2015,2020,2020,2020] → 2020，非 2015）', () => {
+  it('多重集合標準 median：重複年份保留（[2015,2020,2020,2020] → 2020，非 2015）', () => {
     const stats = computeConceptStats(
       network({ A: ['P1', 'P2', 'P3', 'P4'] }),
       years([['P1', 2015], ['P2', 2020], ['P3', 2020], ['P4', 2020]]),
@@ -68,7 +72,7 @@ describe('computeConceptStats', () => {
       network({ A: ['P1', 'P2'] }),
       years([['P1', 2019], ['P2', 2021]]),
     )
-    expect(stats.get('A')).toMatchObject({ first_year: 2019, last_year: 2021, median_year: 2019 })
+    expect(stats.get('A')).toMatchObject({ first_year: 2019, last_year: 2021, median_year: 2020 })
   })
 
   it('有效年份之外不參與；全部無效 → 空統計', () => {

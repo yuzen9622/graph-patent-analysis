@@ -1,4 +1,5 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
+import { computeTemporalLayout } from './temporal'
 import { DEFAULT_IPC_LEVEL } from './ipc-filter'
 import type { GraphData, GraphMode } from '../types/graph'
 
@@ -85,6 +86,8 @@ export function parseExportOptions(
     ipcLevel = level as GraphViewOptions['ipcLevel']
   }
   const ipcFilter = params.getAll('ipc').filter(Boolean)
+  const temporalReference = params.get('temporal_ref') === 'full' ? 'full' as const : 'active' as const
+  const showCitations = parseBoolean(params.get('citations'), false)
   return {
     mode,
     showSemantic: parseBoolean(params.get('llm'), false),
@@ -97,6 +100,8 @@ export function parseExportOptions(
     sourceFiles: sourceFiles.length > 0 ? sourceFiles : undefined,
     ipcLevel,
     ipcFilter: ipcFilter.length > 0 ? ipcFilter : undefined,
+    temporalReference,
+    showCitations,
   }
 }
 
@@ -106,14 +111,20 @@ export function buildExportHtml(
   options: ExportOptions,
   visNetworkSource: string,
 ): string {
+  // Always project citation evidence into the offline payload; its visibility is
+  // controlled by the same toggle as the online viewer.
   const views = {
-    concept: selectGraphView(graph, { ...options, mode: 'concept' }),
-    context: selectGraphView(graph, { ...options, mode: 'context' }),
-    institution: selectGraphView(graph, { ...options, mode: 'institution' }),
+    concept: selectGraphView(graph, { ...options, mode: 'concept', showCitations: true }),
+    context: selectGraphView(graph, { ...options, mode: 'context', showCitations: true }),
+    institution: selectGraphView(graph, { ...options, mode: 'institution', showCitations: true }),
   }
   const view = views[options.mode]
+  const temporalLayouts = Object.fromEntries(
+    Object.entries(views).map(([mode, current]) => [mode, Object.fromEntries(computeTemporalLayout(current.nodes))]),
+  )
   const payload = safeSerializeForInlineScript({
     views,
+    temporalLayouts,
     methodology: graph.methodology,
     options,
   })
@@ -170,6 +181,7 @@ export function buildExportHtml(
         <button type="button" data-mode="context" aria-pressed="${options.mode === 'context'}">專利脈絡圖</button>
         <button type="button" data-mode="institution" aria-pressed="${options.mode === 'institution'}">機構網絡</button>
       </div>
+      <button id="citation-toggle" type="button" aria-pressed="${options.showCitations}">引用虛線</button>
     </div>
     <span id="graph-meta" class="meta">Job ${escapedJobId} · ${view.stats.patent_count} 篇專利</span>
   </header>
@@ -178,7 +190,9 @@ export function buildExportHtml(
     <strong id="legend-title">${escapeHtml(title)}圖例</strong>
     <p id="mode-explanation">${escapeHtml(modeExplanation)}</p>
     <p id="semantic-explanation">${options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。'}</p>
-    <p class="distance">座標僅供排版，不代表定量距離。</p>
+    <p class="distance">Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.</p>
+    <p>quality_year_bounds＝資料清理合法年份；analysis_year_filter＝目前分析 cohort；layout_time_band＝純 UI 序數 lane。</p>
+    <p>Edge opacity increases monotonically with supporting patent count; τ=5 is a visualization heuristic.</p>
     <p id="capability-warning" class="warning"${view.capabilityWarning ? '' : ' hidden'}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ''}</p>
   </aside>
   <div id="tooltip" role="status"></div>
@@ -191,7 +205,10 @@ export function buildExportHtml(
       var network = null;
       var tooltip = document.getElementById('tooltip');
       var jobLabel = ${jobLabelScript};
+      var activeMode = payload.options.mode;
+      var showCitations = Boolean(payload.options.showCitations);
       function renderMode(mode) {
+        activeMode = mode;
         var view = payload.views[mode];
         var unit = payload.options.unit || 'patent';
         var ew = payload.options.edgeWeight || 'jaccard';
@@ -218,9 +235,14 @@ export function buildExportHtml(
         });
         var nodesById = new Map(view.nodes.map(function (node) { return [node.id, node]; }));
         var edgesById = new Map(view.edges.map(function (edge) { return [edge.id, edge]; }));
+        var layout = payload.temporalLayouts[mode] || {};
         var nodes = view.nodes.map(function (node) {
+        var position = layout[node.id];
         return {
           id: node.id,
+          x: position ? position.x : undefined,
+          y: position ? position.y : undefined,
+          fixed: position && node.type === 'concept' && node.median_year !== undefined ? { y: true } : undefined,
           label: node.type === 'patent' ? '' : node.label,
           shape: node.type === 'applicant' ? 'star' : 'dot',
           size: node.size,
@@ -228,7 +250,7 @@ export function buildExportHtml(
           font: { size: node.type === 'applicant' ? 14 : 11, color: ${options.paper ? "'#172033'" : "'#f8fafc'"} }
         };
       });
-        var edges = view.edges.map(function (edge) {
+        var relationEdges = view.edges.map(function (edge) {
         var co = edge.kind === 'cooccurrence';
         var semantic = edge.kind === 'semantic';
         return {
@@ -239,10 +261,16 @@ export function buildExportHtml(
           width: co ? edgeWidth(edge, ew, unit) : (semantic ? 1.5 : 1),
           dashes: semantic ? [6, 4] : false,
           physics: !semantic,
-          arrows: { to: { enabled: semantic || edge.kind === 'structural', scaleFactor: .4 } },
-          color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: semantic ? .8 : (co ? .7 : .35) }
+          arrows: { to: { enabled: semantic || edge.temporal_directed || edge.kind === 'structural', scaleFactor: .4 } },
+          color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: edge.opacity == null ? 1 : edge.opacity }
         };
       });
+        var citationEdges = showCitations ? (view.citationEdges || []).map(function (edge) {
+          return { id: 'citation:' + edge.id, from: edge.from, to: edge.to, dashes: [4, 5], width: 1.5,
+            physics: false, arrows: { to: { enabled: true, scaleFactor: .35 } },
+            color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 } };
+        }) : [];
+        var edges = relationEdges.concat(citationEdges);
       function edgeWidth(edge, ew, unit) {
         if (ew === 'npmi') {
           var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
@@ -289,6 +317,13 @@ export function buildExportHtml(
       }
       document.querySelectorAll('[data-mode]').forEach(function (button) {
         button.addEventListener('click', function () { renderMode(button.getAttribute('data-mode')); });
+      });
+      var citationToggle = document.getElementById('citation-toggle');
+      citationToggle.setAttribute('aria-pressed', String(showCitations));
+      citationToggle.addEventListener('click', function () {
+        showCitations = !showCitations;
+        citationToggle.setAttribute('aria-pressed', String(showCitations));
+        renderMode(activeMode);
       });
       document.addEventListener('mousemove', function (event) { tooltip.style.left = (event.clientX + 12) + 'px'; tooltip.style.top = (event.clientY + 12) + 'px'; });
       renderMode(payload.options.mode);

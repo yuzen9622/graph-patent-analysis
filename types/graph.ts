@@ -84,11 +84,19 @@ export interface GraphNode {
   concept_count?: number     // 涉足的概念數（家）
   org_type?: string          // 機構類型（bank / insurance / university / …）
   shared_concepts?: string[] // 與相鄰機構共享的概念
-  // --- PRD v2 / P3 additions: concept time metadata ------------------
+  // --- PRD v2 / P3/P6 additions: concept time metadata ----------------
   first_year?: number       // 首次有效申請年
+  q1_year?: number          // nearest-rank 第一四分位年
+  median_year?: number      // 標準中位有效申請年（可為 .5）
+  q3_year?: number          // nearest-rank 第三四分位年
   last_year?: number        // 最近有效申請年
-  median_year?: number      // 中位有效申請年（nearest-rank + lower）
+  median_loo_min?: number   // leave-one-out median 下界（只供顯示）
+  median_loo_max?: number   // leave-one-out median 上界（只供顯示）
   year_counts?: Record<string, number>  // 年度分布 {year: count}
+  /** Derived metrics on a view must all originate from this same scope (I1). */
+  scope_id?: string
+  /** P6: pre-007 lower median has no verified quartile provenance. */
+  temporal_legacy_unverified?: boolean
   // --- PRD v2 P0 §6.1 additions -------------------------------------------
   // Patent nodes: carried on the node (not only on the transient PatentRow) so
   // that IPC / provenance filters can be recomputed after a reload.
@@ -138,6 +146,26 @@ export interface GraphEdge {
   evidence?: RelationEvidence[]
   /** PRD v2 / P4: institution-edge (機構節點圖) shared-concept labels. */
   shared_concepts?: string[]
+  /** P6 temporal direction: only present when both median ranks are distinct. */
+  temporal_directed?: boolean
+  /** Fixed support-count visual encoding; independent of width/citation (I4). */
+  opacity?: number
+  citation_supported?: boolean
+  citation_direction_conflict?: boolean
+  /** Derived metrics on a view must all originate from this same scope (I1). */
+  scope_id?: string
+}
+
+/** Independent citation-only layer; it is never a zero-weight relation edge. */
+export interface CitationEdge {
+  id: string
+  from: string
+  to: string
+  forward_count: number
+  reverse_count: number
+  supported: boolean
+  direction_conflict: boolean
+  scope_id?: string
 }
 
 export type CommunityUnit = 'patent' | 'applicant'
@@ -190,6 +218,16 @@ export interface GraphMethodology {
   // --- PRD v2 / P3 additions (optional, absent on pre-v3 graphs) ---
   time_window?: [number, number] | null      // 漸層窗 = [min first_year, max first_year]
   time_color_scale?: 'sequential_blue'       // 漸層色盤名稱
+  /** P6: true median, nearest-rank quartiles, and fixed visual heuristic. */
+  temporal_median_method?: 'standard_median'
+  temporal_quartile_method?: 'nearest_rank'
+  support_strength_visual?: '0.30 + 0.70 * (1 - exp(-support/5))'
+  support_strength_tau?: number
+  time_axis?: 'ordinal_rank'
+  quality_year_bounds?: [number, number]
+  analysis_year_filter?: [number, number]
+  layout_time_band?: 'ordinal_rank'
+  citation_threshold?: 'net>=2 && ratio>=2'
   prompt_version: string
   model_provider: string
   model_id: string
@@ -198,13 +236,31 @@ export interface GraphMethodology {
 }
 
 export interface GraphData {
-  // 2 = PRD v1.2 graphs (incl. every existing data/*.json); 3 = PRD v2 P0 and later.
-  schema_version: 2 | 3
+  // 2 = PRD v1.2; 3 = P0–P5; 4 = P6 verified temporal semantics.
+  schema_version: 2 | 3 | 4
   nodes: GraphNode[]
   edges: GraphEdge[]
   communities: Community[]
   /** PRD v2 / P4 (Q2): 「家」單位的社群分區（缺省=舊圖只有 patent 單位）。 */
   communities_applicants?: Community[]
+  /** P6 independent citation-only evidence layer (optional for old graphs). */
+  citation_edges?: CitationEdge[]
+  /** Patent-level citation links retained for active-scope projection (I1). */
+  patent_citations?: Array<{ from: string; to: string }>
+  /** P6 projection identity; optional so saved legacy JSON remains loadable. */
+  scope_id?: string
+  warnings?: {
+    temporal_direction_conflict?: Array<{ edge_id: string; forward: number; reverse: number }>
+    legacy_temporal_indeterminate?: number
+    temporal_cycles_broken?: Array<{
+      edge_id: string
+      old_source: string
+      target: string
+      support: number
+      delta_median: number
+      reason: 'legacy_or_corrupt_graph'
+    }>
+  }
   stats: {
     applicant_count: number
     patent_count: number

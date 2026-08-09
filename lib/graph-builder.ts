@@ -10,6 +10,7 @@ import type {
   Community,
   GraphAnalysis,
   GraphMethodology,
+  CitationEdge,
 } from "@/types/graph";
 import { computeGodNodes, computeSurprisingConnections } from "@/lib/graph-analysis";
 import { normalizeApplicantName } from "@/lib/excel-parser";
@@ -25,7 +26,16 @@ import {
   computeTimeWindow,
   parseFilingYear,
   SEQUENTIAL_BLUE,
+  VALID_YEAR_MAX,
+  VALID_YEAR_MIN,
 } from "@/lib/concept-time";
+import {
+  analysisScopeKeyOf,
+  breakTemporalCycles,
+  citationAdjudication,
+  orientPair,
+  supportStrengthOpacity,
+} from "@/lib/temporal";
 import {
   computeUnitMetrics,
   detectUnitCommunities,
@@ -91,6 +101,7 @@ export function buildGraph(
   communityColors: Map<number, string>, // community_id → hex color
   communityNames: Map<number, string>, // community_id → display name
   methodologyMeta: Pick<GraphMethodology, 'prompt_version' | 'model_provider' | 'model_id'>,
+  citations?: Array<{ from: string; to: string }>,
 ): GraphData {
   const conceptsByPatent = new Map<string, string[]>();
   for (const concept of conceptNetwork.concepts.values()) {
@@ -168,8 +179,12 @@ export function buildGraph(
       // PRD v2 / P3: concept time metadata (undefined when the concept has no
       // valid filing year).
       first_year: conceptTime.get(label)?.first_year,
-      last_year: conceptTime.get(label)?.last_year,
+      q1_year: conceptTime.get(label)?.q1_year,
       median_year: conceptTime.get(label)?.median_year,
+      q3_year: conceptTime.get(label)?.q3_year,
+      last_year: conceptTime.get(label)?.last_year,
+      median_loo_min: conceptTime.get(label)?.median_loo_min,
+      median_loo_max: conceptTime.get(label)?.median_loo_max,
       year_counts: conceptTime.get(label)?.year_counts,
       color: communityColor,
       size: conceptSize(aggregate?.frequency ?? 0),
@@ -304,8 +319,39 @@ export function buildGraph(
     const metrics = unitMetrics.get(edge.id);
     if (metrics) Object.assign(edge, metrics);
   }
-  for (const edge of conceptNetwork.cooccurrenceEdges) addEdge(edge);
+  // P6: orient relation edges strictly by their distinct median ranks. Labels
+  // only identify endpoints; orientPair itself never reads them (I3).
+  const medianByConcept = new Map(
+    Array.from(conceptTime.entries()).map(([label, stat]) => [label, stat.median_year] as const),
+  )
+  for (const edge of conceptNetwork.cooccurrenceEdges) {
+    const fromLabel = edge.from.replace(/^concept:/, '')
+    const toLabel = edge.to.replace(/^concept:/, '')
+    const orientation = orientPair(medianByConcept.get(fromLabel), medianByConcept.get(toLabel))
+    if (orientation?.from === 'b') [edge.from, edge.to] = [edge.to, edge.from]
+    edge.temporal_directed = orientation !== undefined
+    edge.opacity = supportStrengthOpacity(edge.support_count ?? 0)
+    addEdge(edge)
+  }
   for (const edge of conceptNetwork.semanticEdges) addEdge(edge);
+  // Defensive production hook for corrupt caller-supplied co-occurrence edges.
+  // Normal rank construction is already a DAG, so this remains empty normally.
+  const temporalCycleInfo = breakTemporalCycles(
+    conceptNetwork.cooccurrenceEdges
+      .filter((edge) => edge.temporal_directed)
+      .map((edge) => ({
+        edge_id: edge.id,
+        source: edge.from,
+        target: edge.to,
+        support: edge.support_count ?? 0,
+        delta_median:
+          (medianByConcept.get(edge.to.replace(/^concept:/, '')) ?? 0) -
+          (medianByConcept.get(edge.from.replace(/^concept:/, '')) ?? 0),
+      })),
+  )
+  for (const edge of conceptNetwork.cooccurrenceEdges) {
+    if (temporalCycleInfo.demotedEdgeIds.has(edge.id)) edge.temporal_directed = false
+  }
 
   // PRD v2 / P4 (Q2): 「家」單位 Louvain 分區（獨立於「篇」單位，各自持久化）。
   const applicantAssignments = detectUnitCommunities(
@@ -417,6 +463,72 @@ export function buildGraph(
     surprising_connections: computeSurprisingConnections(cooccurrenceEdges, conceptNodes),
   };
 
+  // Project patent-level citations to distinct concept pairs. Duplicate patent
+  // links are ignored; same-concept projections are deliberately excluded.
+  const citationCounts = new Map<string, number>()
+  const seenCitations = new Set<string>()
+  for (const citation of citations ?? []) {
+    const citationKey = `${citation.from}\u0000${citation.to}`
+    if (!citation.from || !citation.to || seenCitations.has(citationKey)) continue
+    seenCitations.add(citationKey)
+    const fromConcepts = conceptsByPatent.get(citation.from) ?? []
+    const toConcepts = conceptsByPatent.get(citation.to) ?? []
+    for (const fromLabel of fromConcepts) for (const toLabel of toConcepts) {
+      if (fromLabel === toLabel) continue
+      const key = `${fromLabel}\u0000${toLabel}`
+      citationCounts.set(key, (citationCounts.get(key) ?? 0) + 1)
+    }
+  }
+  const citationEdges: CitationEdge[] = []
+  const conflicts: Array<{ edge_id: string; forward: number; reverse: number }> = []
+  const relationPairs = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind !== 'cooccurrence') continue
+    const fromLabel = edge.from.replace(/^concept:/, '')
+    const toLabel = edge.to.replace(/^concept:/, '')
+    relationPairs.add([fromLabel, toLabel].sort().join('\u0000'))
+    if (!edge.temporal_directed) continue
+    const forward = citationCounts.get(`${fromLabel}\u0000${toLabel}`) ?? 0
+    const reverse = citationCounts.get(`${toLabel}\u0000${fromLabel}`) ?? 0
+    const adjudication = citationAdjudication(forward, reverse)
+    edge.citation_supported = adjudication.state === 'aligned' || adjudication.state === 'conflicting'
+    edge.citation_direction_conflict = adjudication.state === 'conflicting'
+    if (edge.citation_direction_conflict) conflicts.push({ edge_id: edge.id, forward, reverse })
+  }
+  const seenPairs = new Set<string>()
+  for (const key of citationCounts.keys()) {
+    const [a, b] = key.split('\u0000')
+    const pairKey = [a!, b!].sort().join('\u0000')
+    if (seenPairs.has(pairKey) || relationPairs.has(pairKey)) continue
+    seenPairs.add(pairKey)
+    const orientation = orientPair(medianByConcept.get(a!), medianByConcept.get(b!))
+    if (!orientation) continue
+    const fromLabel = orientation.from === 'a' ? a! : b!
+    const toLabel = orientation.to === 'b' ? b! : a!
+    const forward = citationCounts.get(`${fromLabel}\u0000${toLabel}`) ?? 0
+    const reverse = citationCounts.get(`${toLabel}\u0000${fromLabel}`) ?? 0
+    const adjudication = citationAdjudication(forward, reverse)
+    if (adjudication.state !== 'aligned' && adjudication.state !== 'conflicting') continue
+    citationEdges.push({
+      id: stableEdgeId('citation', [fromLabel, toLabel]),
+      from: `concept:${fromLabel}`,
+      to: `concept:${toLabel}`,
+      forward_count: forward,
+      reverse_count: reverse,
+      supported: true,
+      direction_conflict: adjudication.state === 'conflicting',
+    })
+  }
+
+  const scopeId = analysisScopeKeyOf({
+    source: Array.from(new Set(patents.flatMap((patent) => patent.source_files ?? []))),
+    unit: 'patent',
+    year: yearRange,
+  })
+  for (const node of conceptNodes) node.scope_id = scopeId
+  for (const edge of edges) if (edge.kind === 'cooccurrence') edge.scope_id = scopeId
+  for (const edge of citationEdges) edge.scope_id = scopeId
+
   const methodology: GraphMethodology = {
     concept_frequency_metric: 'unique_patent_count',
     cooccurrence_metric: 'unique_patent_support',
@@ -432,17 +544,36 @@ export function buildGraph(
     // color_mode here — that is a view-layer option (see lib/graph-view.ts).
     time_window: timeWindow,
     time_color_scale: 'sequential_blue',
+    temporal_median_method: 'standard_median',
+    temporal_quartile_method: 'nearest_rank',
+    support_strength_visual: '0.30 + 0.70 * (1 - exp(-support/5))',
+    support_strength_tau: 5,
+    time_axis: 'ordinal_rank',
+    quality_year_bounds: [VALID_YEAR_MIN, VALID_YEAR_MAX()],
+    analysis_year_filter: yearRange,
+    layout_time_band: 'ordinal_rank',
+    citation_threshold: 'net>=2 && ratio>=2',
     cooccurrence_data: 'native',
     semantic_provenance: 'complete',
     ...methodologyMeta,
   };
 
   return {
-    schema_version: 3,
+    schema_version: 4,
     nodes: allNodes,
     edges,
     communities: communitiesList,
     communities_applicants: communitiesApplicants,
+    citation_edges: citationEdges,
+    patent_citations: citations,
+    scope_id: scopeId,
+    warnings:
+      conflicts.length > 0 || temporalCycleInfo.warnings.length > 0
+        ? {
+            ...(conflicts.length > 0 ? { temporal_direction_conflict: conflicts } : {}),
+            ...(temporalCycleInfo.warnings.length > 0 ? { temporal_cycles_broken: temporalCycleInfo.warnings } : {}),
+          }
+        : undefined,
     stats,
     analysis,
     ai_report: "", // Filled in by the LLM report step (F-07)
