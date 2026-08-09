@@ -1,5 +1,4 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
-import { computeTemporalLayout, TEMPORAL_LEGEND_SENTENCE, TEMPORAL_OPACITY_LINE, TEMPORAL_YEAR_TERMS_LINE } from './temporal'
 import { DEFAULT_IPC_LEVEL } from './ipc-filter'
 import type { FrozenPositions } from './export-positions'
 import type { GraphData, GraphMode } from '../types/graph'
@@ -124,20 +123,13 @@ export function buildExportHtml(
   visNetworkSource: string,
   frozenPositions?: FrozenPositions,
 ): string {
-  const views = buildExportViews(graph, options)
-  const view = views[options.mode]
-  const temporalLayouts = Object.fromEntries(
-    Object.entries(views).map(([mode, current]) => [mode, Object.fromEntries(computeTemporalLayout(current.nodes))]),
-  )
+  const view = selectGraphView(graph, { ...options, showCitations: true })
   const payload = safeSerializeForInlineScript({
-    views,
-    temporalLayouts,
+    view,
     frozenLayouts: frozenPositions ? { [options.mode]: frozenPositions } : {},
-    methodology: graph.methodology,
     options,
   })
   const escapedJobId = escapeHtml(jobId)
-  const jobLabelScript = safeSerializeForInlineScript(`Job ${jobId}`)
   const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString('base64')}`
   const title =
     options.mode === 'institution'
@@ -169,13 +161,10 @@ export function buildExportHtml(
     header { padding: 12px 18px; border-bottom: 1px solid #cbd5e1; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
     h1 { margin: 0; font-size: 18px; } .meta { color: #64748b; font-size: 12px; }
     .title-group { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .mode-control { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid #cbd5e1; border-radius: 7px; background: #f8fafc; }
-    .mode-control button { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; }
-    .mode-control button[aria-pressed="true"] { background: #2563eb; color: #fff; }
     #graph { flex: 1; min-height: 0; }
     #legend { position: fixed; left: 16px; bottom: 40px; z-index: 5; width: min(390px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgba(255,255,255,.94); color: #172033; font-size: 12px; line-height: 1.55; }
     #legend strong { display: block; margin-bottom: 4px; } #legend p { margin: 3px 0; }
-    .warning { color: #b45309; } .distance { font-weight: 650; }
+    .warning { color: #b45309; }
     #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: #172033; color: #fff; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
     footer { padding: 7px 18px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 11px; }
   </style>
@@ -184,11 +173,6 @@ export function buildExportHtml(
   <header>
     <div class="title-group">
       <h1 id="graph-title">${escapeHtml(title)}</h1>
-      <div class="mode-control" aria-label="圖譜模式">
-        <button type="button" data-mode="concept" aria-pressed="${options.mode === 'concept'}">技術概念網路</button>
-        <button type="button" data-mode="context" aria-pressed="${options.mode === 'context'}">專利脈絡圖</button>
-        <button type="button" data-mode="institution" aria-pressed="${options.mode === 'institution'}">機構網絡</button>
-      </div>
       <button id="citation-toggle" type="button" aria-pressed="${options.showCitations}">引用虛線</button>
     </div>
     <span id="graph-meta" class="meta">Job ${escapedJobId} · ${view.stats.patent_count} 篇專利</span>
@@ -197,10 +181,7 @@ export function buildExportHtml(
   <aside id="legend" aria-label="圖譜圖例">
     <strong id="legend-title">${escapeHtml(title)}圖例</strong>
     <p id="mode-explanation">${escapeHtml(modeExplanation)}</p>
-    <p id="semantic-explanation">${options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。'}</p>
-    <p class="distance">${TEMPORAL_LEGEND_SENTENCE}</p>
-    <p>${TEMPORAL_YEAR_TERMS_LINE}</p>
-    <p>${TEMPORAL_OPACITY_LINE}</p>
+    <p id="semantic-explanation">${options.mode === 'concept' ? (options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。') : '本模式只顯示申請人、專利與概念的來源結構線。'}</p>
     <p id="capability-warning" class="warning"${view.capabilityWarning ? '' : ' hidden'}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ''}</p>
   </aside>
   <div id="tooltip" role="status"></div>
@@ -212,51 +193,27 @@ export function buildExportHtml(
       var payload = JSON.parse(document.getElementById('graph-data').textContent || '{}');
       var network = null;
       var tooltip = document.getElementById('tooltip');
-      var jobLabel = ${jobLabelScript};
+      var graph = document.getElementById('graph');
       var activeMode = payload.options.mode;
+      var view = payload.view;
+      var frozenLayout = payload.frozenLayouts && payload.frozenLayouts[activeMode];
+      if (!frozenLayout) {
+        graph.textContent = '缺少凍結座標，請回到分析頁使用「離線 HTML」按鈕重新匯出。';
+        return;
+      }
       var showCitations = Boolean(payload.options.showCitations);
-      function renderMode(mode) {
-        activeMode = mode;
-        var view = payload.views[mode];
-        var unit = payload.options.unit || 'patent';
-        var ew = payload.options.edgeWeight || 'jaccard';
-        var title = mode === 'institution' ? '機構網絡'
-          : mode === 'concept' ? '技術概念網路' : '專利脈絡圖';
-        document.getElementById('graph-title').textContent = title;
-        document.getElementById('legend-title').textContent = title + '圖例';
-        document.getElementById('graph-meta').textContent = jobLabel + ' · ' + view.stats.patent_count + ' 篇專利';
-        document.getElementById('mode-explanation').textContent = mode === 'institution'
-          ? '節點＝一家機構；牠＝兩家共享 ≥ ' + payload.options.minSupport + ' 個概念；顏色＝機構類型。'
-          : mode === 'concept'
-            ? (unit === 'applicant'
-              ? '節點大小＝機構家數；實線家數門檻 ≥ ' + payload.options.minSupport + '；線寬用 ' + (ew === 'npmi' ? 'NPMI' : 'Jaccard')
-              : '節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ' + payload.options.minSupport + '）；線寬用 ' + (ew === 'npmi' ? 'NPMI' : 'Jaccard'))
-            : '申請人大小＝所附年份專利篇數；概念大小＝所附年份涵蓋篇數；結構線不表示強度。';
-        document.getElementById('semantic-explanation').textContent = mode === 'concept'
-          ? (payload.options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。')
-          : '本模式只顯示申請人、專利與概念的來源結構線。';
-        var warning = document.getElementById('capability-warning');
-        warning.textContent = view.capabilityWarning || '';
-        warning.hidden = !view.capabilityWarning;
-        document.querySelectorAll('[data-mode]').forEach(function (button) {
-          button.setAttribute('aria-pressed', String(button.getAttribute('data-mode') === mode));
-        });
-        var nodesById = new Map(view.nodes.map(function (node) { return [node.id, node]; }));
-        var edgesById = new Map(view.edges.map(function (edge) { return [edge.id, edge]; }));
-        var layout = payload.temporalLayouts[mode] || {};
-        var frozenLayout = payload.frozenLayouts && payload.frozenLayouts[mode];
-        var useFrozenLayout = Boolean(frozenLayout);
+      var unit = payload.options.unit || 'patent';
+      var ew = payload.options.edgeWeight || 'jaccard';
+      var nodesById = new Map(view.nodes.map(function (node) { return [node.id, node]; }));
+      var edgesById = new Map(view.edges.map(function (edge) { return [edge.id, edge]; }));
+      function render() {
         var nodes = view.nodes.map(function (node) {
-          var position = useFrozenLayout ? frozenLayout[node.id] : layout[node.id];
+          var position = frozenLayout[node.id];
           return {
             id: node.id,
-            x: position ? position.x : undefined,
-            y: position ? position.y : undefined,
-            fixed: useFrozenLayout
-              ? { x: true, y: true }
-              : position && node.type === 'concept' && node.median_year !== undefined
-                ? { y: true }
-                : undefined,
+            x: position.x,
+            y: position.y,
+            fixed: { x: true, y: true },
             label: node.type === 'patent' ? '' : node.label,
             shape: node.type === 'applicant' ? 'star' : 'dot',
             size: node.size,
@@ -285,72 +242,59 @@ export function buildExportHtml(
             color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 } };
         }) : [];
         var edges = relationEdges.concat(citationEdges);
-        function edgeWidth(edge, ew, unit) {
-          if (ew === 'npmi') {
-            var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
-            return Math.min(8, 1 + v * 7);
-          }
-          var j = unit === 'applicant' ? (edge.jaccard_applicants || 0) : (edge.jaccard || 0);
-          return Math.min(8, 1 + j * 7);
-        }
         if (network) network.destroy();
-        var networkOptions = useFrozenLayout
-          ? {
-              layout: { improvedLayout: false },
-              physics: { enabled: false },
-              interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
-            }
-          : {
-              layout: { randomSeed: 42, improvedLayout: true },
-              physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -80, springLength: 150, avoidOverlap: 1 }, stabilization: { iterations: 180 } },
-              interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
-            };
-        network = new vis.Network(document.getElementById('graph'), {
+        network = new vis.Network(graph, {
           nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)
-        }, networkOptions);
-        if (!useFrozenLayout) {
-          network.once('stabilizationIterationsDone', function () { network.setOptions({ physics: { enabled: false } }); });
-        }
+        }, {
+          layout: { improvedLayout: false },
+          physics: { enabled: false },
+          interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true }
+        });
         network.fit({ animation: false });
         function showText(lines) { tooltip.textContent = lines.filter(Boolean).join('\\n'); tooltip.style.display = 'block'; }
         network.on('hoverNode', function (params) {
-        var node = nodesById.get(params.node); if (!node) return;
-        var lines = [node.label];
-        if (node.type === 'applicant') lines.push('所選範圍專利：' + (node.patent_count || 0) + ' 篇');
-        if (node.type === 'concept') lines.push((payload.options.unit === 'applicant'
-          ? '機構涵蓋：' + (node.applicant_count || node.frequency || 0) + ' 家'
-          : '專利涵蓋：' + (node.frequency || 0) + ' 篇'));
-        if (node.type === 'patent') { lines.push(node.applicant || ''); lines.push(node.filing_date || ''); }
-        showText(lines);
-      });
+          var node = nodesById.get(params.node); if (!node) return;
+          var lines = [node.label];
+          if (node.type === 'applicant') lines.push('所選範圍專利：' + (node.patent_count || 0) + ' 篇');
+          if (node.type === 'concept') lines.push((payload.options.unit === 'applicant'
+            ? '機構涵蓋：' + (node.applicant_count || node.frequency || 0) + ' 家'
+            : '專利涵蓋：' + (node.frequency || 0) + ' 篇'));
+          if (node.type === 'patent') { lines.push(node.applicant || ''); lines.push(node.filing_date || ''); }
+          showText(lines);
+        });
         network.on('hoverEdge', function (params) {
-        var edge = edgesById.get(params.edge); if (!edge) return;
-        var lines = [edge.relation];
-        if (edge.kind === 'cooccurrence') {
-          lines.push('共同出現（篇）：' + (edge.support_count || 0) + ' 篇 ｜（家）：' + (edge.support_applicants || 0) + ' 家');
-          lines.push('Jaccard：篇 ' + fmt(edge.jaccard) + ' ｜ 家 ' + fmt(edge.jaccard_applicants));
-          lines.push('NPMI：篇 ' + fmt(edge.npmi) + ' ｜ 家 ' + fmt(edge.npmi_applicants));
-        }
-        if (edge.kind === 'semantic') { lines.push('目前保存來源：' + ((edge.source_patents || []).length) + ' 篇'); if (edge.reason) lines.push(edge.reason); }
-        if (edge.kind === 'institution') { lines.push('共享概念：' + (edge.support_count || 0) + ' 個——' + ((edge.shared_concepts || []).join('、'))); }
-        showText(lines);
-      });
-        function fmt(v) { return (v === undefined || v === null) ? '—' : Number(v).toFixed(3); }
+          var edge = edgesById.get(params.edge); if (!edge) return;
+          var lines = [edge.relation];
+          if (edge.kind === 'cooccurrence') {
+            lines.push('共同出現（篇）：' + (edge.support_count || 0) + ' 篇 ｜（家）：' + (edge.support_applicants || 0) + ' 家');
+            lines.push('Jaccard：篇 ' + fmt(edge.jaccard) + ' ｜ 家 ' + fmt(edge.jaccard_applicants));
+            lines.push('NPMI：篇 ' + fmt(edge.npmi) + ' ｜ 家 ' + fmt(edge.npmi_applicants));
+          }
+          if (edge.kind === 'semantic') { lines.push('目前保存來源：' + ((edge.source_patents || []).length) + ' 篇'); if (edge.reason) lines.push(edge.reason); }
+          if (edge.kind === 'institution') { lines.push('共享概念：' + (edge.support_count || 0) + ' 個——' + ((edge.shared_concepts || []).join('、'))); }
+          showText(lines);
+        });
         network.on('blurNode', function () { tooltip.style.display = 'none'; });
         network.on('blurEdge', function () { tooltip.style.display = 'none'; });
       }
-      document.querySelectorAll('[data-mode]').forEach(function (button) {
-        button.addEventListener('click', function () { renderMode(button.getAttribute('data-mode')); });
-      });
+      function edgeWidth(edge, ew, unit) {
+        if (ew === 'npmi') {
+          var v = Math.max(0, unit === 'applicant' ? (edge.npmi_applicants || 0) : (edge.npmi || 0));
+          return Math.min(8, 1 + v * 7);
+        }
+        var j = unit === 'applicant' ? (edge.jaccard_applicants || 0) : (edge.jaccard || 0);
+        return Math.min(8, 1 + j * 7);
+      }
+      function fmt(v) { return (v === undefined || v === null) ? '—' : Number(v).toFixed(3); }
       var citationToggle = document.getElementById('citation-toggle');
       citationToggle.setAttribute('aria-pressed', String(showCitations));
       citationToggle.addEventListener('click', function () {
         showCitations = !showCitations;
         citationToggle.setAttribute('aria-pressed', String(showCitations));
-        renderMode(activeMode);
+        render();
       });
       document.addEventListener('mousemove', function (event) { tooltip.style.left = (event.clientX + 12) + 'px'; tooltip.style.top = (event.clientY + 12) + 'px'; });
-      renderMode(payload.options.mode);
+      render();
     })();
   </script>
 </body>

@@ -115,13 +115,11 @@ function exportAttachment(
   })
 }
 
-export async function GET(
-  request: NextRequest,
-  context: ExportRouteContext,
-): Promise<NextResponse> {
-  const loaded = await loadExportContext(request, context)
-  if ('response' in loaded) return loaded.response
-  return exportAttachment(loaded.context)
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json(
+    { error: '請使用分析頁面的「離線 HTML」按鈕；此端點僅支援 POST。' },
+    { status: 405, headers: { Allow: 'POST' } },
+  )
 }
 
 export async function POST(

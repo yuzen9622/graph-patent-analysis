@@ -215,7 +215,7 @@ describe("offline export security and parity", () => {
     });
   });
 
-  it("embeds exact frozen positions for the active mode and keeps fallback layout behavior", () => {
+  it("serializes only the active view and renders its exact frozen positions", () => {
     const frozenPositions = { "concept:<X>": { x: 123.5, y: -456.75 } };
     const html = buildExportHtml(
       "job-id",
@@ -232,20 +232,29 @@ describe("offline export security and parity", () => {
     );
     const data = html.match(/<script id="graph-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
     expect(data).toBeTruthy();
-    expect(JSON.parse(data!)).toMatchObject({
+    const payload = JSON.parse(data!);
+    expect(payload).toMatchObject({
+      view: { nodes: [{ id: "concept:<X>" }] },
       frozenLayouts: { concept: frozenPositions },
     });
+    expect(payload).not.toHaveProperty("views");
+    expect(payload).not.toHaveProperty("temporalLayouts");
 
     const runtimeScript = html.match(/<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/)?.[1];
     expect(runtimeScript).toBeTruthy();
-    expect(runtimeScript).toContain("var useFrozenLayout = Boolean(frozenLayout);");
+    expect(runtimeScript).toContain("var frozenLayout = payload.frozenLayouts && payload.frozenLayouts[activeMode];");
+    expect(runtimeScript).toContain("x: position.x");
+    expect(runtimeScript).toContain("y: position.y");
+    expect(runtimeScript).toContain("fixed: { x: true, y: true }");
     expect(runtimeScript).toContain("physics: { enabled: false }");
-    expect(runtimeScript).toContain("if (!useFrozenLayout) {");
-    expect(runtimeScript).toContain("stabilization: { iterations: 180 }");
     expect(runtimeScript).toContain("network.fit({ animation: false });");
+    expect(runtimeScript).not.toContain("stabilization");
+    expect(runtimeScript).not.toContain("temporalLayouts");
     expect(() => new Function(runtimeScript!)).not.toThrow();
+  });
 
-    const legacyHtml = buildExportHtml(
+  it("hard-gates a missing active-mode snapshot before constructing the network", () => {
+    const html = buildExportHtml(
       "job-id",
       graph,
       {
@@ -257,9 +266,31 @@ describe("offline export security and parity", () => {
       },
       "window.vis = {};",
     );
-    const legacyData = legacyHtml.match(/<script id="graph-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
-    expect(JSON.parse(legacyData!).frozenLayouts).toEqual({});
-    expect(legacyHtml).toContain("temporalLayouts");
+    const runtimeScript = html.match(/<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/)?.[1];
+    expect(runtimeScript).toBeTruthy();
+    expect(runtimeScript).toContain("graph.textContent = '缺少凍結座標，請回到分析頁使用「離線 HTML」按鈕重新匯出。';");
+    expect(runtimeScript!.indexOf("if (!frozenLayout)")).toBeLessThan(
+      runtimeScript!.indexOf("new vis.Network"),
+    );
+    expect(() => new Function(runtimeScript!)).not.toThrow();
+
+    const data = html.match(/<script id="graph-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+    const graphElement = { textContent: "" };
+    let networkConstructed = false;
+    new Function("document", "vis", runtimeScript!)(
+      {
+        getElementById(id: string) {
+          return id === "graph-data" ? { textContent: data } : graphElement;
+        },
+      },
+      {
+        Network() {
+          networkConstructed = true;
+        },
+      },
+    );
+    expect(graphElement.textContent).toBe("缺少凍結座標，請回到分析頁使用「離線 HTML」按鈕重新匯出。");
+    expect(networkConstructed).toBe(false);
   });
 
   it("匯出頁使用共用檢視邏輯且動態提示只寫入 textContent", () => {
@@ -274,21 +305,21 @@ describe("offline export security and parity", () => {
         yearRange: [2020, 2022],
       },
       "window.vis = {};",
+      { "concept:<X>": { x: 1, y: 2 } },
     );
     expect(html).not.toContain("job</title>");
     expect(html).not.toContain("</script><img");
     expect(html).toContain("tooltip.textContent");
     expect(html).not.toContain("tooltip.innerHTML");
-    expect(html).toContain("Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.");
-    expect(html).toContain("quality_year_bounds");
-    expect(html).toContain("τ=5 is a visualization heuristic");
+    expect(html).not.toContain("Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.");
+    expect(html).not.toContain("temporalLayouts");
+    expect(html).not.toContain("data-mode");
+    expect(html).not.toContain("stabilization");
     expect(html).toContain("\\u003c/script>");
     expect(html).toContain("data:text/javascript;base64,");
     expect(html).not.toContain("cdn.jsdelivr.net");
     expect(html).not.toContain("</footer><script>alert('resolution')</script>");
-    expect(html).toContain("data-mode=\"concept\"");
-    expect(html).toContain("data-mode=\"context\"");
-    expect(html).toContain("temporalLayouts");
+    expect(html).toContain('<h1 id="graph-title">技術概念網路</h1>');
     expect(html).toContain("citation-toggle");
     expect(html).toContain("view.citationEdges");
     const runtimeScript = html.match(/<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/)?.[1];
