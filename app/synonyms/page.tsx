@@ -5,7 +5,7 @@ import SynonymEditor from "@/components/SynonymEditor";
 import { requireAdmin, UnauthorizedError } from "@/lib/db/sessions";
 
 export default async function SynonymsPage() {
-  const user = await requireAdmin().catch((error: unknown) => {
+  await requireAdmin().catch((error: unknown) => {
     if (error instanceof UnauthorizedError) redirect("/login?next=/synonyms");
     redirect("/");
   });

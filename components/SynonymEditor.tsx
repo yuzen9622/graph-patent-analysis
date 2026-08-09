@@ -52,6 +52,16 @@ function parseAliases(raw: string): string[] {
     .filter(Boolean);
 }
 
+async function loadGroups(signal?: AbortSignal): Promise<ApiResult> {
+  const res = await fetch("/api/synonyms", { cache: "no-store", signal });
+  if (!res.ok) throw new Error((await res.json()).error ?? "讀取失敗");
+  return (await res.json()) as ApiResult;
+}
+
+function readError(error: unknown): string {
+  return error instanceof Error ? error.message : "讀取失敗";
+}
+
 export default function SynonymEditor() {
   const [rows, setRows] = useState<EditorRow[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -67,19 +77,25 @@ export default function SynonymEditor() {
   }, []);
 
   const fetchAll = useCallback(async () => {
-    setError("");
     try {
-      const res = await fetch("/api/synonyms", { cache: "no-store" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "讀取失敗");
-      replaceRows((await res.json()) as ApiResult);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "讀取失敗");
+      replaceRows(await loadGroups());
+    } catch (error) {
+      setError(readError(error));
     }
   }, [replaceRows]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void loadGroups(controller.signal).then(replaceRows).catch((error: unknown) => {
+      if (!controller.signal.aborted) setError(readError(error));
+    });
+    return () => controller.abort();
+  }, [replaceRows]);
+
+  function refresh() {
+    setError("");
     void fetchAll();
-  }, [fetchAll]);
+  }
 
   async function saveRow(key: number) {
     setError("");
@@ -144,7 +160,7 @@ export default function SynonymEditor() {
           每次分析落庫當下的快照，所以日後編輯不會改寫舊分析。
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={fetchAll} type="button">
+          <Button variant="outline" size="sm" onClick={refresh} type="button">
             <RefreshCw size={14} className="mr-1.5" aria-hidden />
             重新整理
           </Button>
