@@ -883,7 +883,7 @@ describe('applicant legacy-string regression (T2, extracted real-file fixture)',
     expect(cases).toHaveLength(3)
 
     for (const c of cases) {
-      const rows: PatentRow[] = c.applicants.map((name, i) => ({
+      const rows: PatentRow[] = c.applicants.map((name) => ({
         id: '',
         title: c.title,
         abstract: '',

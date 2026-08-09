@@ -25,7 +25,6 @@ import {
   computeConceptStats,
   computeTimeWindow,
   parseFilingYear,
-  SEQUENTIAL_BLUE,
   VALID_YEAR_MAX,
   VALID_YEAR_MIN,
 } from "@/lib/concept-time";

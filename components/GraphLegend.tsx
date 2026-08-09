@@ -37,7 +37,6 @@ export default function GraphLegend({
   colorMode = "community",
   unit = "patent",
   allSourceFiles = [],
-  sourceFiles = [],
   ipcLevel = 3,
   ipcLegend = [],
 }: Props) {
@@ -242,7 +241,6 @@ function LegendItem({
 }
 
 function TimeBar({ window }: { window: [number, number] }) {
-  const span = Math.max(1, window[1] - window[0]);
   // 用階梯色塊逼近 sRGB 逐通道 lerp，視覺等價且與節點取色一致。
   const stops = SEQUENTIAL_BLUE.map((hex, i) => `#${hex} ${Math.round((i / (SEQUENTIAL_BLUE.length - 1)) * 100)}%`)
   const css = `linear-gradient(to right, ${stops.join(", ")})`;
