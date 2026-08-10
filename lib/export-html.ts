@@ -1,6 +1,7 @@
 import { selectGraphView, type GraphViewOptions } from './graph-view'
 import { DEFAULT_IPC_LEVEL } from './ipc-filter'
 import type { FrozenPositions } from './export-positions'
+import { nodeTooltipLines } from './node-tooltip'
 import type { GraphData, GraphMode } from '../types/graph'
 
 export interface ExportOptions extends GraphViewOptions {
@@ -124,8 +125,13 @@ export function buildExportHtml(
   frozenPositions?: FrozenPositions,
 ): string {
   const view = selectGraphView(graph, { ...options, showCitations: true })
+  // tooltip 文字在伺服器端就算好，離線端只負責渲染，避免線上與離線兩份文字漂移。
+  const viewWithTips = {
+    ...view,
+    nodes: view.nodes.map((node) => ({ ...node, tip: nodeTooltipLines(node, options.unit) })),
+  }
   const payload = safeSerializeForInlineScript({
-    view,
+    view: viewWithTips,
     frozenLayouts: frozenPositions ? { [options.mode]: frozenPositions } : {},
     options,
   })
@@ -139,14 +145,14 @@ export function buildExportHtml(
         : '專利脈絡圖'
   const modeExplanation =
     options.mode === 'institution'
-      ? '節點＝一家機構；大小＝涉足概念數（家）；邊＝兩家共享 ≥' +
+      ? '節點＝一家機構；大小＝該機構涉足的技術概念數（非專利篇數）；邊＝兩家共享 ≥' +
         `${options.minSupport} 個概念；顏色＝機構類型（銀行/保險/大學/…）。`
       : options.mode === 'concept'
         ? options.colorMode === 'ipc'
           ? `節點顏色＝優勢 IPC（L${options.ipcLevel ?? DEFAULT_IPC_LEVEL}）；${options.unit === 'applicant' ? '大小＝機構家數' : '大小＝專利篇數'}；實線粗細＝支持門檻（≥ ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
           : options.unit === 'applicant'
-          ? `節點大小＝涵蓋的機構家數；實線名稱 = 門檻家數（≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
-          : `節點大小＝不同專利涵蓋篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
+          ? `節點大小＝涵蓋該概念的機構家數（非專利篇數）；實線粗細＝共同投入的機構家數（門檻 ≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
+          : `節點大小＝包含該概念的專利篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
         : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -254,12 +260,8 @@ export function buildExportHtml(
         function showText(lines) { tooltip.textContent = lines.filter(Boolean).join('\\n'); tooltip.style.display = 'block'; }
         network.on('hoverNode', function (params) {
           var node = nodesById.get(params.node); if (!node) return;
-          var lines = [node.label];
-          if (node.type === 'applicant') lines.push('所選範圍專利：' + (node.patent_count || 0) + ' 篇');
-          if (node.type === 'concept') lines.push((payload.options.unit === 'applicant'
-            ? '機構涵蓋：' + (node.applicant_count || node.frequency || 0) + ' 家'
-            : '專利涵蓋：' + (node.frequency || 0) + ' 篇'));
-          if (node.type === 'patent') { lines.push(node.applicant || ''); lines.push(node.filing_date || ''); }
+          var lines = (node.tip && node.tip.length) ? node.tip.slice() : [node.label];
+          if (node.type === 'patent' && node.applicant) lines.push(node.applicant);
           showText(lines);
         });
         network.on('hoverEdge', function (params) {

@@ -16,6 +16,7 @@ import {
   type GraphViewport,
 } from "@/lib/graph-viewport";
 import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
+import { nodeTooltipLines } from "@/lib/node-tooltip";
 import type {
   FrozenPositions,
   PositionSnapshotProvider,
@@ -43,27 +44,12 @@ type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
 
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
-function buildTitle(n: GraphNode, godInfo?: GodNode): string {
-  const base = n.type === "applicant"
-    ? `申請人：${n.label}（${n.patent_count ?? 0} 件專利）`
-    : n.type === "patent"
-    ? `${n.title ?? n.label}${n.filing_date ? `\n申請日：${n.filing_date}` : ""}`
-    : n.type === "concept"
-    ? `概念：${n.label}（涵蓋 ${n.frequency ?? 0} 篇專利）${timeLines(n)}`
-    : n.title ?? n.label;
+function buildTitle(n: GraphNode, unit: Unit, godInfo?: GodNode): string {
+  const base = nodeTooltipLines(n, unit).join("\n");
   return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
 }
 
-/** 概念時間統計的 tooltip 行（只顯示有資料的欄位）。 */
-function timeLines(n: GraphNode): string {
-  const lines: string[] = [];
-  if (n.first_year !== undefined) lines.push(`首次出現：${n.first_year} 年`);
-  if (n.median_year !== undefined) lines.push(`中位年：${n.median_year} 年`);
-  if (n.last_year !== undefined) lines.push(`最近出現：${n.last_year} 年`);
-  return lines.length ? `\n${lines.join("\n")}` : "";
-}
-
-function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNode) {
+function toVisNode(n: GraphNode, unit: Unit, pos?: { x: number; y: number }, godInfo?: GodNode) {
   const isApplicant = n.type === "applicant";
   const isPatent = n.type === "patent";
 
@@ -109,7 +95,7 @@ function toVisNode(n: GraphNode, pos?: { x: number; y: number }, godInfo?: GodNo
   return {
     id: n.id,
     label: isApplicant ? n.label : isPatent ? "" : n.label,
-    title: buildTitle(n, godInfo),
+    title: buildTitle(n, unit, godInfo),
     shape: shape,
     size: n.size,
     borderWidth: godInfo ? 4 : undefined,
@@ -474,7 +460,7 @@ export default function GraphViewer({
         (analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
       );
       const nodeDataSet = new DataSet(
-        nodes.map((n) => toVisNode(n, initPos.get(n.id), godNodeMap.get(n.id))),
+        nodes.map((n) => toVisNode(n, unit, initPos.get(n.id), godNodeMap.get(n.id))),
       );
       const edgeDataSet = new DataSet(
         [
@@ -573,7 +559,7 @@ export default function GraphViewer({
 
         nodeDataSet.update(
           nodes.map((n) => {
-            const original = toVisNode(n);
+            const original = toVisNode(n, unit);
             if (degree1.has(n.id)) {
               // 1st degree & selected: Original color, Original label, Fully opaque
               return {
@@ -616,7 +602,7 @@ export default function GraphViewer({
         if (!highlightActive) return;
         nodeDataSet.update(
           nodes.map((n) => {
-            const original = toVisNode(n);
+            const original = toVisNode(n, unit);
             return {
               id: n.id,
               color: original.color,
