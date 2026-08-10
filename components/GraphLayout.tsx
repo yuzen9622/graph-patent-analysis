@@ -5,7 +5,6 @@ import { BarChart2, Copy, Check, Download, FileText } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Sidebar from "./Sidebar";
-import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
 import { selectGraphView, sourceFilesOf, applicantAvailability, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
@@ -50,7 +49,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
   const [mode, setMode] = useState<GraphMode>("concept");
-  const [showSemantic, setShowSemantic] = useState(false);
+  // LLM 語意虛線已停用（幾乎不會被勾選，且在論文中難以說明）；固定關閉。
+  const showSemantic = false;
   const [minSupport, setMinSupport] = useState(1);
   const [colorMode, setColorMode] = useState<ColorMode>("community");
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
@@ -58,7 +58,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [ipcLevel, setIpcLevel] = useState<IpcLevel>(DEFAULT_IPC_LEVEL);
   const [ipcFilter, setIpcFilter] = useState<string[]>([]);
-  const [temporalReference, setTemporalReference] = useState<'active' | 'full'>('active');
+  // 分析範圍中位年／全史中位年切換已移除（PRD：時序 UI mode 未實作，畫面幾乎無變化）；固定用分析範圍。
+  const temporalReference = 'active' as const;
   const [showCitations, setShowCitations] = useState(false);
   const [paperMode, setPaperMode] = useState(false);
   const [yearRange, setYearRange] = useState<[number, number]>(
@@ -151,9 +152,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
     if (parsed.ipcLevel) setIpcLevel(parsed.ipcLevel);
     if (parsed.ipcFilter) setIpcFilter(parsed.ipcFilter);
-    if (parsed.temporalReference) setTemporalReference(parsed.temporalReference);
     if (parsed.showCitations !== undefined) setShowCitations(parsed.showCitations);
-    if (parsed.showSemantic !== undefined) setShowSemantic(parsed.showSemantic);
     if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
     if (parsed.paperMode) setPaperMode(parsed.paperMode);
     if (parsed.yearRange) setYearRange(parsed.yearRange);
@@ -210,7 +209,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   const exportQuery = new URLSearchParams({
     mode,
-    llm: showSemantic ? "1" : "0",
+    llm: "0",
     paper: paperMode ? "1" : "0",
     colorMode,
     minSupport: String(minSupport),
@@ -220,7 +219,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
   if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
   if (unit && unit !== "patent") exportQuery.set("unit", unit);
   for (const source of sourceFiles) exportQuery.append("source", source);
-  if (temporalReference === 'full') exportQuery.set('temporal_ref', 'full');
   if (showCitations) exportQuery.set('citations', '1');
   if (ipcLevel !== DEFAULT_IPC_LEVEL) exportQuery.set("ipcLevel", String(ipcLevel));
   for (const key of ipcFilter) exportQuery.append("ipc", key);
@@ -342,24 +340,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
               </button>
             ))}
           </div>
-          <div className="inline-flex rounded-md border border-border bg-background p-0.5" aria-label="時間與引用圖層">
-            <button
-              type="button"
-              onClick={() => setTemporalReference((value) => value === 'active' ? 'full' : 'active')}
-              aria-pressed={temporalReference === 'full'}
-              className={`rounded px-2 py-1 text-xs transition-colors ${temporalReference === 'full' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              {temporalReference === 'full' ? '全史中位年' : '分析範圍中位年'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCitations((value) => !value)}
-              aria-pressed={showCitations}
-              className={`rounded px-2 py-1 text-xs transition-colors ${showCitations ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              引用虛線
-            </button>
-          </div>
           <button
             type="button"
             onClick={() => setPaperMode((value) => !value)}
@@ -455,7 +435,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
           />
           <GraphLegend
             mode={mode}
-            showSemantic={showSemantic}
             minSupport={minSupport}
             colorMode={colorMode}
             unit={unit}
@@ -486,8 +465,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
             mode={mode}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
-            edgeWeight={edgeWeight}
-            onEdgeWeightChange={setEdgeWeight}
             unit={unit}
             onUnitChange={setUnit}
             allSourceFiles={allSourceFiles}
@@ -503,7 +480,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
             ipcTree={ipcTree}
             hasIpcData={hasIpcData}
             applicantAvailability={applicantDataAvailability}
-            showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}
             visibleLayers={visibleLayers}
@@ -517,14 +493,12 @@ export default function GraphLayout({ graph, jobId }: Props) {
               if (node) setSelectedEdge(null);
             }}
             onEdgeClose={() => setSelectedEdge(null)}
-            onSemanticChange={setShowSemantic}
             onMinSupportChange={setMinSupport}
+            showCitations={showCitations}
+            onCitationsChange={setShowCitations}
           />
         )}
       </div>
-
-      {/* ── Stats bar ── */}
-      <StatsBar stats={view.stats} />
     </div>
   );
 }

@@ -9,7 +9,6 @@ import type { GraphData, GraphMethodology, GraphMode } from "@/types/graph";
 
 interface Props {
   mode: GraphMode;
-  showSemantic: boolean;
   minSupport: number;
   colorMode?: ColorMode;
   unit?: Unit;
@@ -28,7 +27,6 @@ interface Props {
 
 export default function GraphLegend({
   mode,
-  showSemantic,
   minSupport,
   methodology,
   capabilityWarning,
@@ -167,9 +165,6 @@ export default function GraphLegend({
                     顏色＝以 support 加權的 Louvain 技術社群
                   </LegendItem>
                 )}
-                <LegendItem marker={<DashedLineMarker />}>
-                  虛線＝LLM 語意關係（{showSemantic ? "目前顯示" : "目前關閉"}）
-                </LegendItem>
               </>
             ) : (
               <>
@@ -326,10 +321,6 @@ function IpcChips({ legend }: { legend: Array<{ key: string; color: string; coun
 
 function SolidLineMarker() {
   return <span className="h-1 w-8 rounded-full bg-slate-500" />;
-}
-
-function DashedLineMarker() {
-  return <span className="w-8 border-t-2 border-dashed border-violet-500" />;
 }
 
 function StructuralLineMarker() {

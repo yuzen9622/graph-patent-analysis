@@ -22,7 +22,7 @@ const stats: GraphData['stats'] = {
 /** paperMode 讓圖例展開，才能取得完整內文。 */
 function render(mode: GraphMode, unit: 'patent' | 'applicant') {
   return renderToStaticMarkup(
-    createElement(GraphLegend, { mode, unit, showSemantic: false, minSupport: 2, methodology, stats, paperMode: true }),
+    createElement(GraphLegend, { mode, unit, minSupport: 2, methodology, stats, paperMode: true }),
   )
 }
 

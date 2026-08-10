@@ -16,7 +16,7 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
-import type { ColorMode, EdgeWeightMetric, Unit, ApplicantAvailability } from "@/lib/graph-view";
+import type { ColorMode, Unit, ApplicantAvailability } from "@/lib/graph-view";
 import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
 import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
 import IpcTree from "./IpcTree";
@@ -43,8 +43,6 @@ interface Props {
   mode: GraphMode;
   colorMode: ColorMode;
   onColorModeChange: (mode: ColorMode) => void;
-  edgeWeight: EdgeWeightMetric;
-  onEdgeWeightChange: (metric: EdgeWeightMetric) => void;
   unit: Unit;
   onUnitChange: (unit: Unit) => void;
   /** P9: 家單位資料可用性（stored／rebuildable／none）。'none' 時停用「家」切換。 */
@@ -60,7 +58,6 @@ interface Props {
   onIpcFilterChange: (keys: string[]) => void;
   ipcTree: IpcTreeNode[];
   hasIpcData: boolean;
-  showSemantic: boolean;
   minSupport: number;
   maxSupport: number;
   visibleLayers: Set<NodeType>;
@@ -71,8 +68,10 @@ interface Props {
   onNodeFocus: (nodeId: string) => void;
   onNodeSelect: (node: GraphNode | null) => void;
   onEdgeClose: () => void;
-  onSemanticChange: (value: boolean) => void;
   onMinSupportChange: (value: number) => void;
+  /** P6 獨立的引用虛線證據圖層（僅概念模式）。 */
+  showCitations: boolean;
+  onCitationsChange: (value: boolean) => void;
 }
 
 interface SectionProps {
@@ -113,8 +112,6 @@ export default function Sidebar({
   mode,
   colorMode,
   onColorModeChange,
-  edgeWeight,
-  onEdgeWeightChange,
   unit,
   onUnitChange,
   applicantAvailability,
@@ -127,7 +124,6 @@ export default function Sidebar({
   onIpcFilterChange,
   ipcTree,
   hasIpcData,
-  showSemantic,
   minSupport,
   maxSupport,
   visibleLayers,
@@ -138,8 +134,9 @@ export default function Sidebar({
   onNodeFocus,
   onNodeSelect,
   onEdgeClose,
-  onSemanticChange,
   onMinSupportChange,
+  showCitations,
+  onCitationsChange,
 }: Props) {
   return (
     <aside
@@ -318,7 +315,6 @@ export default function Sidebar({
                     >
                       {( [
                         ["community", "社群色"],
-                          ["community_applicants", "社群色（家）"],
                           ["first_year", "首次出現年"],
                           ...(allSourceFiles.length > 1
                             ? ([["source", "依來源檔"]] as const)
@@ -341,6 +337,13 @@ export default function Sidebar({
                         </button>
                       ))}
                     </div>
+                    {colorMode === "community" && (
+                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
+                        {unit === "applicant"
+                          ? "顏色＝「家」單位 Louvain 社群（同一機構跨篇碰過的概念對分）；隨分析單位自動切換，分區獨立於「篇」單位社群。"
+                          : "顏色＝以 support 加權的 Louvain 技術社群（「篇」單位）。"}
+                      </p>
+                    )}
                     {colorMode === "first_year" && (
                       <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
                         顏色＝概念首次出現的申請年份（漸層由早至晚）；切換只影響顯示，不改變資料。
@@ -361,40 +364,6 @@ export default function Sidebar({
                         顏色＝概念優勢 IPC（L{ipcLevel}）：該概念的多數專利落在哪個分類。IPC 篩選請見下方「IPC 分類篩選」。
                       </p>
                     )}
-                    <div className="mt-3">
-                      <p className="text-xs text-foreground font-medium mb-2">
-                        線寬指標
-                      </p>
-                      <div
-                        className="inline-flex rounded-md border border-border bg-background p-0.5"
-                        role="group"
-                        aria-label="線寬指標"
-                      >
-                        {(
-                          [
-                            ["jaccard", "Jaccard"],
-                            ["npmi", "NPMI"],
-                          ] as const
-                        ).map(([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => onEdgeWeightChange(value)}
-                            aria-pressed={edgeWeight === value}
-                            className={`rounded px-2 py-1 text-xs transition-colors ${
-                              edgeWeight === value
-                                ? "bg-primary text-primary-foreground"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
-                        線寬用有界指標（Jaccard 或 NPMI）；NPMI 在 p_ij=1 時不顯示。指標皆為全量計算，門檻只過濾顯示。
-                      </p>
-                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-foreground font-medium mb-2">
@@ -514,14 +483,14 @@ export default function Sidebar({
                   <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={showSemantic}
-                      onChange={(event) => onSemanticChange(event.target.checked)}
+                      checked={showCitations}
+                      onChange={(event) => onCitationsChange(event.target.checked)}
                       className="mt-0.5"
                     />
                     <span>
-                      顯示 LLM 語意關係
+                      顯示引用虛線
                       <span className="block text-[0.65rem] text-muted-foreground mt-0.5">
-                        虛線僅為模型判讀證據，不參與社群與排版
+                        疊上專利間引用關係投影到概念層；可用內部引用篇數不多，畫面通常變化很小
                       </span>
                     </span>
                   </label>
