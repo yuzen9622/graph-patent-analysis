@@ -102,7 +102,8 @@ export default function GraphLegend({
             {isInstMode ? (
               <>
                 <LegendItem marker={<InstitutionNodeMarker />}>
-                  節點大小＝該機構涉足的不同技術概念數（家，非篇數）
+                  節點大小＝該機構涉足的不同技術概念數，非專利篇數（1 概念＝23、4
+                  概念＝28、9 概念＝33）
                 </LegendItem>
                 <LegendItem marker={<InstitutionLineMarker />}>
                   邊＝兩家機構共同投入的概念 ≥ {minSupport} 個；線粗∝共享概念數
@@ -131,7 +132,7 @@ export default function GraphLegend({
               <>
                 <LegendItem marker={<NodeScaleMarker />}>
                   {unit === "applicant"
-                    ? "概念大小＝涵蓋該概念的不同機構家數（家，非篇數）"
+                    ? "概念大小＝涵蓋該概念的不同機構家數，非專利篇數（1 家＝16、4 家＝22、9 家＝28）"
                     : "概念大小＝包含該概念的不同專利篇數（1 篇＝16、4 篇＝22、9 篇＝28）"}
                 </LegendItem>
                 <LegendItem marker={<SolidLineMarker />}>
@@ -187,7 +188,7 @@ export default function GraphLegend({
 
           <div className="mt-3 border-t border-border pt-2 text-[0.65rem] leading-relaxed text-muted-foreground">
             <p>
-              分析樣本：{stats.patent_count} 篇專利
+              分析樣本：{stats.applicant_count} 家機構、{stats.patent_count} 篇專利
               {hasYearRange(stats.year_range)
                 ? `，年份 ${stats.year_range[0]}–${stats.year_range[1]}`
                 : ""}
