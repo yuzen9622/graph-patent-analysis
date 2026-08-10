@@ -16,8 +16,8 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
+import SourceFileChecklist from "./SourceFileChecklist";
 import type { ColorMode, Unit, ApplicantAvailability } from "@/lib/graph-view";
-import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
 import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
 import IpcTree from "./IpcTree";
 import type {
@@ -51,6 +51,10 @@ interface Props {
   allSourceFiles: string[];
   sourceFiles: string[];
   onSourceFilesChange: (files: string[]) => void;
+  /** 比較模式：右圖獨立的來源檔選取；左圖沿用上面的 sourceFiles。 */
+  compareMode: boolean;
+  sourceFilesRight: string[];
+  onSourceFilesRightChange: (files: string[]) => void;
   /** PRD v2 / P5: IPC 層級與篩選（樹狀多選，S8）。 */
   ipcLevel: IpcLevel;
   onIpcLevelChange: (level: IpcLevel) => void;
@@ -118,6 +122,9 @@ export default function Sidebar({
   allSourceFiles,
   sourceFiles,
   onSourceFilesChange,
+  compareMode,
+  sourceFilesRight,
+  onSourceFilesRightChange,
   ipcLevel,
   onIpcLevelChange,
   ipcFilter,
@@ -373,62 +380,27 @@ export default function Sidebar({
                       <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
                         此分析只有一個來源檔；多檔上傳後可用來源檔篩選做「比對」。
                       </p>
+                    ) : compareMode ? (
+                      <div className="space-y-3">
+                        <SourceFileChecklist
+                          label="左圖來源"
+                          allSourceFiles={allSourceFiles}
+                          sourceFiles={sourceFiles}
+                          onChange={onSourceFilesChange}
+                        />
+                        <SourceFileChecklist
+                          label="右圖來源"
+                          allSourceFiles={allSourceFiles}
+                          sourceFiles={sourceFilesRight}
+                          onChange={onSourceFilesRightChange}
+                        />
+                      </div>
                     ) : (
-                      <>
-                        <div className="flex flex-col gap-1.5">
-                          {allSourceFiles.map((file, i) => {
-                            const active = sourceFiles.includes(file);
-                            return (
-                              <label
-                                key={file}
-                                className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-colors ${
-                                  active
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border bg-background"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={active}
-                                  onChange={(event) => {
-                                    const next = event.target.checked
-                                      ? [...sourceFiles, file]
-                                      : sourceFiles.filter((f) => f !== file);
-                                    onSourceFilesChange(next);
-                                  }}
-                                  className="mt-0.5"
-                                />
-                                <span className="inline-flex items-center gap-1.5 min-w-0">
-                                  <span
-                                    aria-hidden
-                                    className="size-2.5 shrink-0 rounded-full"
-                                    style={{
-                                      background:
-                                        SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length],
-                                    }}
-                                  />
-                                  <span className="truncate">{file}</span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-2 flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onSourceFilesChange([])}
-                            aria-pressed={sourceFiles.length === 0}
-                            className="rounded border border-border px-2 py-1 text-[0.65rem] text-muted-foreground hover:bg-accent"
-                          >
-                            全部來源
-                          </button>
-                          <p className="text-[0.65rem] text-muted-foreground self-center">
-                            {sourceFiles.length === 0
-                              ? "未篩選（顯示全圖）"
-                              : `篩選 ${sourceFiles.length} 個檔（任一來源命中即保留）`}
-                          </p>
-                        </div>
-                      </>
+                      <SourceFileChecklist
+                        allSourceFiles={allSourceFiles}
+                        sourceFiles={sourceFiles}
+                        onChange={onSourceFilesChange}
+                      />
                     )}
                   </div>
                   {hasIpcData && (

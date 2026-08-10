@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart2, Copy, Check, Download, FileText } from "lucide-react";
+import { BarChart2, Copy, Check, Download, FileText, ImageDown, GitCompare } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Sidebar from "./Sidebar";
@@ -11,6 +11,7 @@ import { selectGraphView, sourceFilesOf, applicantAvailability, type ColorMode, 
 import { ipcLegendItems, ipcTreeOf, DEFAULT_IPC_LEVEL, type IpcLevel } from "@/lib/ipc-filter";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
+import type { ImageCapture } from "./GraphViewer";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -45,6 +46,49 @@ function filenameFromContentDisposition(header: string | null): string | null {
   return basic ? clean(basic[1] ?? basic[2]) : null;
 }
 
+function loadPngImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("匯出圖片解碼失敗"));
+    img.src = dataUrl;
+  });
+}
+
+/** 比較模式匯出：左右兩張畫面 PNG 併成一張，白底、中間留一條分隔線。 */
+async function composeSideBySide(
+  leftDataUrl: string,
+  rightDataUrl: string,
+): Promise<string | null> {
+  try {
+    const [left, right] = await Promise.all([
+      loadPngImage(leftDataUrl),
+      loadPngImage(rightDataUrl),
+    ]);
+    const gap = 24;
+    const width = left.width + gap + right.width;
+    const height = Math.max(left.height, right.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(left, 0, 0);
+    ctx.drawImage(right, left.width + gap, 0);
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left.width + gap / 2, 0);
+    ctx.lineTo(left.width + gap / 2, height);
+    ctx.stroke();
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 export default function GraphLayout({ graph, jobId }: Props) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
@@ -56,6 +100,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
   const [unit, setUnit] = useState<Unit>("patent");
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
+  // 比較模式（試做版）：同一份分析裡，左右兩側各自選來源檔子集並排比較；
+  // 其餘篩選條件（年份/單位/顏色/IPC…）共用，只有來源檔各自獨立。
+  const [compareMode, setCompareMode] = useState(false);
+  const [sourceFilesRight, setSourceFilesRight] = useState<string[]>([]);
   const [ipcLevel, setIpcLevel] = useState<IpcLevel>(DEFAULT_IPC_LEVEL);
   const [ipcFilter, setIpcFilter] = useState<string[]>([]);
   // 分析範圍中位年／全史中位年切換已移除（PRD：時序 UI mode 未實作，畫面幾乎無變化）；固定用分析範圍。
@@ -79,6 +127,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [hasPositionSnapshotProvider, setHasPositionSnapshotProvider] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const imageCaptureLeftRef = useRef<ImageCapture | null>(null);
+  const imageCaptureRightRef = useRef<ImageCapture | null>(null);
+  const [imageLeftReady, setImageLeftReady] = useState(false);
+  const [imageRightReady, setImageRightReady] = useState(false);
+  const imageExportReady = compareMode ? imageLeftReady && imageRightReady : imageLeftReady;
 
   const handlePositionSnapshotProvider = useCallback((provider: PositionSnapshotProvider | null) => {
     positionSnapshotProviderRef.current = provider;
@@ -87,8 +140,40 @@ export default function GraphLayout({ graph, jobId }: Props) {
     setExportError(null);
   }, []);
 
-  const layoutSnapshotKey = useMemo(
-    () => JSON.stringify({
+  const handleImageCaptureReadyLeft = useCallback((capture: ImageCapture | null) => {
+    imageCaptureLeftRef.current = capture;
+    setImageLeftReady(capture !== null);
+  }, []);
+
+  const handleImageCaptureReadyRight = useCallback((capture: ImageCapture | null) => {
+    imageCaptureRightRef.current = capture;
+    setImageRightReady(capture !== null);
+  }, []);
+
+  const handleExportImage = useCallback(async () => {
+    const left = imageCaptureLeftRef.current?.();
+    if (!left) return;
+    let dataUrl = left;
+    if (compareMode) {
+      const right = imageCaptureRightRef.current?.();
+      if (!right) return;
+      const composed = await composeSideBySide(left, right);
+      if (!composed) return;
+      dataUrl = composed;
+    }
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `patent-graph-${jobId.slice(0, 8)}${compareMode ? "-compare" : ""}.png`;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, [compareMode, jobId]);
+
+  // 兩側面板共用的篩選條件（來源檔除外）——比較模式下左右各自的 sourceFiles
+  // 疊上這份共用選項，其餘（年份/單位/顏色/IPC…）保持一致才有得比。
+  const sharedViewOptions = useMemo(
+    () => ({
       mode,
       showSemantic,
       minSupport,
@@ -96,7 +181,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
       colorMode,
       edgeWeight,
       unit,
-      sourceFiles,
       ipcLevel,
       ipcFilter,
       temporalReference,
@@ -110,12 +194,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
       colorMode,
       edgeWeight,
       unit,
-      sourceFiles,
       ipcLevel,
       ipcFilter,
       temporalReference,
       showCitations,
     ],
+  );
+
+  const layoutSnapshotKey = useMemo(
+    () => JSON.stringify({ ...sharedViewOptions, sourceFiles }),
+    [sharedViewOptions, sourceFiles],
+  );
+  const layoutSnapshotKeyRight = useMemo(
+    () => JSON.stringify({ ...sharedViewOptions, sourceFiles: sourceFilesRight }),
+    [sharedViewOptions, sourceFilesRight],
   );
 
   // PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
@@ -174,28 +266,25 @@ export default function GraphLayout({ graph, jobId }: Props) {
   }, [mode, colorMode, showSemantic, minSupport, paperMode, yearRange, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter, temporalReference, showCitations]);
 
   const view = useMemo(
+    () => selectGraphView(graph, { ...sharedViewOptions, sourceFiles }),
+    [graph, sharedViewOptions, sourceFiles],
+  );
+  const viewRight = useMemo(
     () =>
-      selectGraphView(graph, {
-        mode,
-        showSemantic,
-        minSupport,
-        yearRange,
-        colorMode,
-        edgeWeight,
-        unit,
-        sourceFiles,
-        ipcLevel,
-        ipcFilter,
-        temporalReference,
-        showCitations,
-      }),
-    [graph, mode, showSemantic, minSupport, yearRange, colorMode, edgeWeight, unit, sourceFiles, ipcLevel, ipcFilter, temporalReference, showCitations],
+      compareMode
+        ? selectGraphView(graph, { ...sharedViewOptions, sourceFiles: sourceFilesRight })
+        : null,
+    [compareMode, graph, sharedViewOptions, sourceFilesRight],
   );
   const selectedViewNode = selectedNode
-    ? view.nodes.find((node) => node.id === selectedNode.id) ?? null
+    ? view.nodes.find((node) => node.id === selectedNode.id) ??
+      viewRight?.nodes.find((node) => node.id === selectedNode.id) ??
+      null
     : null;
   const selectedViewEdge = selectedEdge
-    ? view.edges.find((edge) => edge.id === selectedEdge.id) ?? null
+    ? view.edges.find((edge) => edge.id === selectedEdge.id) ??
+      viewRight?.edges.find((edge) => edge.id === selectedEdge.id) ??
+      null
     : null;
 
   const selectMode = useCallback((nextMode: GraphMode) => {
@@ -342,6 +431,25 @@ export default function GraphLayout({ graph, jobId }: Props) {
           </div>
           <button
             type="button"
+            onClick={() => setCompareMode((value) => !value)}
+            disabled={allSourceFiles.length <= 1}
+            aria-pressed={compareMode}
+            title={
+              allSourceFiles.length <= 1
+                ? "此分析只有一個來源檔，無法比較"
+                : "左右並排比較不同來源檔子集（試做版）"
+            }
+            className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              compareMode
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background border-border text-foreground hover:bg-accent"
+            }`}
+          >
+            <GitCompare size={12} />
+            比較模式
+          </button>
+          <button
+            type="button"
             onClick={() => setPaperMode((value) => !value)}
             aria-pressed={paperMode}
             className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors ${
@@ -375,10 +483,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
           <button
             type="button"
             onClick={() => void handleOfflineExport()}
-            disabled={!exportReady || exporting}
-            title={exportError ?? (exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成")}
+            disabled={!exportReady || exporting || compareMode}
+            title={
+              compareMode
+                ? "比較模式下無法匯出離線 HTML，請先關閉比較模式"
+                : exportError ?? (exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成")
+            }
             className={`inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground transition-colors duration-150 ${
-              !exportReady || exporting
+              !exportReady || exporting || compareMode
                 ? "cursor-not-allowed opacity-50"
                 : "cursor-pointer hover:bg-accent hover:text-accent-foreground"
             }`}
@@ -386,6 +498,27 @@ export default function GraphLayout({ graph, jobId }: Props) {
           >
             <Download size={12} />
             {exporting ? "匯出中…" : "離線 HTML"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExportImage()}
+            disabled={!imageExportReady}
+            title={
+              imageExportReady
+                ? compareMode
+                  ? "下載左右並排的比較 PNG 圖片"
+                  : "下載目前畫面的 PNG 圖片"
+                : "等待圖譜佈局完成"
+            }
+            className={`inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground transition-colors duration-150 ${
+              !imageExportReady
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer hover:bg-accent hover:text-accent-foreground"
+            }`}
+            aria-label="匯出目前畫面為 PNG 圖片"
+          >
+            <ImageDown size={12} />
+            {compareMode ? "匯出圖片（併圖）" : "匯出圖片"}
           </button>
           {exportError && (
             <span role="status" title={exportError} className="max-w-28 truncate text-xs text-destructive">
@@ -406,47 +539,101 @@ export default function GraphLayout({ graph, jobId }: Props) {
         </div>
 
         {/* Graph canvas */}
-        <div className="relative flex-1 min-w-0 overflow-hidden">
-          <GraphViewer
-            nodes={view.nodes}
-            edges={view.edges}
-            citationEdges={view.citationEdges}
-            analysis={mode === "concept" ? graph.analysis : undefined}
-            onNodeSelect={setSelectedNode}
-            onEdgeSelect={setSelectedEdge}
-            positionSnapshotKey={layoutSnapshotKey}
-            onPositionSnapshotProvider={handlePositionSnapshotProvider}
-            yearRange={yearRange}
-            edgeWeight={edgeWeight}
-            unit={unit}
-            visibleLayers={
-              mode === "concept"
-                ? new Set<NodeType>(["concept"])
-                : mode === "institution"
-                  ? new Set<NodeType>(["applicant"])
-                  : visibleLayers
-            }
-            hiddenCommunities={
-              mode === "concept" || mode === "institution"
-                ? hiddenCommunities
-                : undefined
-            }
-            focusNodeId={focusNodeId}
-          />
-          <GraphLegend
-            mode={mode}
-            minSupport={minSupport}
-            colorMode={colorMode}
-            unit={unit}
-            sourceFiles={sourceFiles}
-            allSourceFiles={allSourceFiles}
-            methodology={graph.methodology}
-            capabilityWarning={view.capabilityWarning}
-            stats={view.stats}
-            paperMode={paperMode}
-            ipcLevel={ipcLevel}
-            ipcLegend={ipcLegend}
-          />
+        <div className="relative flex-1 min-w-0 overflow-hidden flex">
+          <div
+            className={`relative min-w-0 overflow-hidden flex-1 ${
+              compareMode ? "border-r border-border" : ""
+            }`}
+          >
+            {compareMode && (
+              <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[0.65rem] text-muted-foreground backdrop-blur-sm">
+                <span className="font-medium text-foreground">左圖</span>
+                {" · "}
+                {sourceFiles.length === 0 ? "全部來源" : sourceFiles.join("、")}
+                {" · "}
+                {view.stats.applicant_count} 家 · {view.stats.patent_count} 篇
+              </div>
+            )}
+            <GraphViewer
+              nodes={view.nodes}
+              edges={view.edges}
+              citationEdges={view.citationEdges}
+              analysis={mode === "concept" ? graph.analysis : undefined}
+              onNodeSelect={setSelectedNode}
+              onEdgeSelect={setSelectedEdge}
+              positionSnapshotKey={layoutSnapshotKey}
+              onPositionSnapshotProvider={compareMode ? undefined : handlePositionSnapshotProvider}
+              onImageCaptureReady={handleImageCaptureReadyLeft}
+              yearRange={yearRange}
+              edgeWeight={edgeWeight}
+              unit={unit}
+              visibleLayers={
+                mode === "concept"
+                  ? new Set<NodeType>(["concept"])
+                  : mode === "institution"
+                    ? new Set<NodeType>(["applicant"])
+                    : visibleLayers
+              }
+              hiddenCommunities={
+                mode === "concept" || mode === "institution"
+                  ? hiddenCommunities
+                  : undefined
+              }
+              focusNodeId={focusNodeId}
+            />
+            <GraphLegend
+              mode={mode}
+              minSupport={minSupport}
+              colorMode={colorMode}
+              unit={unit}
+              sourceFiles={sourceFiles}
+              allSourceFiles={allSourceFiles}
+              methodology={graph.methodology}
+              capabilityWarning={view.capabilityWarning}
+              stats={view.stats}
+              paperMode={paperMode}
+              ipcLevel={ipcLevel}
+              ipcLegend={ipcLegend}
+            />
+          </div>
+
+          {compareMode && viewRight && (
+            <div className="relative min-w-0 overflow-hidden flex-1">
+              <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[0.65rem] text-muted-foreground backdrop-blur-sm">
+                <span className="font-medium text-foreground">右圖</span>
+                {" · "}
+                {sourceFilesRight.length === 0 ? "全部來源" : sourceFilesRight.join("、")}
+                {" · "}
+                {viewRight.stats.applicant_count} 家 · {viewRight.stats.patent_count} 篇
+              </div>
+              <GraphViewer
+                nodes={viewRight.nodes}
+                edges={viewRight.edges}
+                citationEdges={viewRight.citationEdges}
+                analysis={mode === "concept" ? graph.analysis : undefined}
+                onNodeSelect={setSelectedNode}
+                onEdgeSelect={setSelectedEdge}
+                positionSnapshotKey={layoutSnapshotKeyRight}
+                onImageCaptureReady={handleImageCaptureReadyRight}
+                yearRange={yearRange}
+                edgeWeight={edgeWeight}
+                unit={unit}
+                visibleLayers={
+                  mode === "concept"
+                    ? new Set<NodeType>(["concept"])
+                    : mode === "institution"
+                      ? new Set<NodeType>(["applicant"])
+                      : visibleLayers
+                }
+                hiddenCommunities={
+                  mode === "concept" || mode === "institution"
+                    ? hiddenCommunities
+                    : undefined
+                }
+                focusNodeId={focusNodeId}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right sidebar */}
@@ -470,6 +657,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
             allSourceFiles={allSourceFiles}
             sourceFiles={sourceFiles}
             onSourceFilesChange={setSourceFiles}
+            compareMode={compareMode}
+            sourceFilesRight={sourceFilesRight}
+            onSourceFilesRightChange={setSourceFilesRight}
             ipcLevel={ipcLevel}
             onIpcLevelChange={(level) => {
               setIpcLevel(level);
@@ -481,7 +671,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             hasIpcData={hasIpcData}
             applicantAvailability={applicantDataAvailability}
             minSupport={minSupport}
-            maxSupport={view.maxSupport}
+            maxSupport={viewRight ? Math.max(view.maxSupport, viewRight.maxSupport) : view.maxSupport}
             visibleLayers={visibleLayers}
             hiddenCommunities={hiddenCommunities}
             onYearChange={setYearRange}

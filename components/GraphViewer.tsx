@@ -22,6 +22,9 @@ import type {
   PositionSnapshotProvider,
 } from "@/lib/export-positions";
 
+/** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
+export type ImageCapture = () => string | null;
+
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
 // HUGE:  straight edges, hover off, hideEdgesOnZoom on, clustering
@@ -200,6 +203,29 @@ function toVisCitationEdge(edge: CitationEdge) {
     arrows: { to: { enabled: true, scaleFactor: 0.35 } },
     physics: false,
   }
+}
+
+/**
+ * 輕量版圖片匯出：直接讀 vis-network 內部畫布，貼到一張不透明白底的畫布上再
+ * 輸出 PNG——不重算佈局、不做標籤分級／碰撞避讓，畫面上有什麼就存什麼
+ * （vis-network 的 canvas 本身透明，論文用圖需要不透明白底）。
+ * `network.canvas` 不在公開型別中，故此處以最小必要的形狀轉型存取。
+ */
+function captureNetworkImage(network: Network): string | null {
+  const rawCanvas = (
+    network as unknown as { canvas?: { frame?: { canvas?: HTMLCanvasElement } } }
+  ).canvas?.frame?.canvas;
+  if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0) return null;
+
+  const output = document.createElement("canvas");
+  output.width = rawCanvas.width;
+  output.height = rawCanvas.height;
+  const ctx = output.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, output.width, output.height);
+  ctx.drawImage(rawCanvas, 0, 0);
+  return output.toDataURL("image/png");
 }
 
 function stableUnit(value: string): number {
@@ -410,6 +436,8 @@ interface Props {
   onEdgeSelect?: (edge: GraphEdge | null) => void;
   positionSnapshotKey: string;
   onPositionSnapshotProvider?: (provider: PositionSnapshotProvider | null) => void;
+  /** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
+  onImageCaptureReady?: (capture: ImageCapture | null) => void;
 }
 
 export default function GraphViewer({
@@ -427,6 +455,7 @@ export default function GraphViewer({
   onEdgeSelect,
   positionSnapshotKey,
   onPositionSnapshotProvider,
+  onImageCaptureReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
@@ -446,6 +475,7 @@ export default function GraphViewer({
   useEffect(() => {
     // A parent must not export a completed layout while this instance rebuilds.
     onPositionSnapshotProvider?.(null);
+    onImageCaptureReady?.(null);
     if (!containerRef.current) return;
     let cancelled = false;
 
@@ -520,6 +550,7 @@ export default function GraphViewer({
               return positions;
             },
           });
+          onImageCaptureReady?.(() => captureNetworkImage(network));
           setStabilized(true);
           setStabProgress(100);
         }
@@ -678,6 +709,7 @@ export default function GraphViewer({
     unit,
     positionSnapshotKey,
     onPositionSnapshotProvider,
+    onImageCaptureReady,
   ]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
@@ -725,12 +757,14 @@ export default function GraphViewer({
   // ── Focus a node (from SearchBox) ──
   useEffect(() => {
     if (!focusNodeId || !networkRef.current) return;
+    // 比較模式下兩側面板的節點子集不同，聚焦的節點可能不在這一側——沒有就跳過。
+    if (!nodes.some((n) => n.id === focusNodeId)) return;
     networkRef.current.focus(focusNodeId, {
       scale: 1.5,
       animation: { duration: 400, easingFunction: "easeInOutQuad" },
     });
     networkRef.current.selectNodes([focusNodeId]);
-  }, [focusNodeId]);
+  }, [focusNodeId, nodes]);
 
   const isLarge = nodes.length >= LARGE_GRAPH;
 
