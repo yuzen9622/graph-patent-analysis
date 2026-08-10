@@ -16,7 +16,7 @@ import YearFilter from "./YearFilter";
 import LayerToggle from "./LayerToggle";
 import CommunityLegend from "./CommunityLegend";
 import AIReport from "./AIReport";
-import type { ColorMode, EdgeWeightMetric, Unit } from "@/lib/graph-view";
+import type { ColorMode, EdgeWeightMetric, Unit, ApplicantAvailability } from "@/lib/graph-view";
 import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
 import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
 import IpcTree from "./IpcTree";
@@ -47,6 +47,8 @@ interface Props {
   onEdgeWeightChange: (metric: EdgeWeightMetric) => void;
   unit: Unit;
   onUnitChange: (unit: Unit) => void;
+  /** P9: 家單位資料可用性（stored／rebuildable／none）。'none' 時停用「家」切換。 */
+  applicantAvailability: ApplicantAvailability;
   /** PRD v2 / P2: 可選的來源檔清單與須選取。 */
   allSourceFiles: string[];
   sourceFiles: string[];
@@ -115,6 +117,7 @@ export default function Sidebar({
   onEdgeWeightChange,
   unit,
   onUnitChange,
+  applicantAvailability,
   allSourceFiles,
   sourceFiles,
   onSourceFilesChange,
@@ -268,26 +271,40 @@ export default function Sidebar({
                           ["patent", "篇（專利）"],
                           ["applicant", "家（機構）"],
                         ] as const
-                      ).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => onUnitChange(value)}
-                          aria-pressed={unit === value}
-                          className={`rounded px-2 py-1 text-xs transition-colors ${
-                            unit === value
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                      ).map(([value, label]) => {
+                        const disabled = value === "applicant" && applicantAvailability === "none";
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => onUnitChange(value)}
+                            disabled={disabled}
+                            aria-pressed={unit === value}
+                            title={
+                              disabled
+                                ? "此分析未含機構資料，無法使用「家（機構）」單位"
+                                : undefined
+                            }
+                            className={`rounded px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                              unit === value
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <p className="text-[0.65rem] text-muted-foreground mt-1.5 leading-relaxed">
-                      {unit === "applicant"
-                        ? "門檻/大小/線寬改以「機構家數」計；同一機構跨篇碰過兩概念也算共同投入。"
-                        : "門檻/大小/線寬以「專利篇數」計。"}
+                      {applicantAvailability === "none"
+                        ? "此分析未含機構資料，無法使用「家（機構）」單位；請重新執行分析。"
+                        : unit === "applicant"
+                          ? "門檻/大小/線寬改以「機構家數」計；同一機構跨篇碰過兩概念也算共同投入。" +
+                            (applicantAvailability === "rebuildable"
+                              ? "（此分析為舊格式，「家」計量由專利—機構結構重建）"
+                              : "")
+                          : "門檻/大小/線寬以「專利篇數」計。"}
                     </p>
                   </div>
                   <div>

@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import StatsBar from "./StatsBar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
-import { selectGraphView, sourceFilesOf, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
+import { selectGraphView, sourceFilesOf, applicantAvailability, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
 import { ipcLegendItems, ipcTreeOf, DEFAULT_IPC_LEVEL, type IpcLevel } from "@/lib/ipc-filter";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
@@ -119,6 +119,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   // PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
   const allSourceFiles = useMemo(() => sourceFilesOf(graph), [graph]);
+  // P9: 家單位資料可用性（stored／rebuildable／none）——決定「家」切換是否可用。
+  const applicantDataAvailability = useMemo(
+    () => applicantAvailability(graph),
+    [graph],
+  );
   // PRD v2 / P5: IPC 樹（目前層級）與圖例（依 IPC 著色用）。
   const ipcTree = useMemo(() => ipcTreeOf(graph, ipcLevel), [graph, ipcLevel]);
   const ipcLegend = useMemo(() => ipcLegendItems(graph, ipcLevel), [graph, ipcLevel]);
@@ -139,7 +144,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.mode) setMode(parsed.mode);
     if (parsed.colorMode) setColorMode(parsed.colorMode);
     if (parsed.edgeWeight) setEdgeWeight(parsed.edgeWeight);
-    if (parsed.unit) setUnit(parsed.unit);
+    if (parsed.unit && (parsed.unit !== "applicant" || applicantDataAvailability !== "none")) {
+      setUnit(parsed.unit);
+      // P9: 舊格式若不純粹可用（無機構資料），URL 殘留的 unit=applicant 視為無效，回到篇。
+    }
     if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
     if (parsed.ipcLevel) setIpcLevel(parsed.ipcLevel);
     if (parsed.ipcFilter) setIpcFilter(parsed.ipcFilter);
@@ -151,6 +159,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (parsed.yearRange) setYearRange(parsed.yearRange);
     hydratedRef.current = true;
     // Intentional: run once with the initial URL, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -493,6 +502,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             onIpcFilterChange={setIpcFilter}
             ipcTree={ipcTree}
             hasIpcData={hasIpcData}
+            applicantAvailability={applicantDataAvailability}
             showSemantic={showSemantic}
             minSupport={minSupport}
             maxSupport={view.maxSupport}

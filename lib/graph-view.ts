@@ -170,7 +170,7 @@ function viewStats(
   }
 }
 
-function capabilityWarning(graph: GraphData): string | undefined {
+function capabilityWarning(graph: GraphData, extra?: string): string | undefined {
   const warnings: string[] = []
   if (graph.methodology.cooccurrence_data === 'unavailable') {
     warnings.push('舊資料缺少可重建的專利—概念成員關係，無法產生共現統計。')
@@ -180,8 +180,40 @@ function capabilityWarning(graph: GraphData): string | undefined {
   if (graph.methodology.semantic_provenance === 'partial') {
     warnings.push('舊資料只保留部分 LLM 關係來源；目前顯示的是可觀測來源，不代表完整支持篇數。')
   }
+  if (extra) warnings.push(extra)
   return warnings.length > 0 ? warnings.join(' ') : undefined
 }
+
+/**
+ * 家單位（applicant）資料可用性：這個圖能不能產出「家」單位的概念視圖，以及數據從哪來。
+ *
+ * - 'stored'      — 圖內建（P4）時已儲存家單位欄位（concept.applicant_count 或
+ *                  edge.support_applicants），直接讀用。
+ * - 'rebuildable' — 舊格式（schema v2 備份）沒有家單位欄位，但仍存有結構邊
+ *                  （申請了 專利↔機構），view 層可像已篩選路徑那樣由結構重建家計量。
+ * - 'none'        — 既無儲存也無從重建；切到「家」會畫出一張邊數 0、大小誤讀成篇數的空圖。
+ */
+export type ApplicantAvailability = 'stored' | 'rebuildable' | 'none'
+
+export function applicantAvailability(graph: GraphData): ApplicantAvailability {
+  const stored =
+    graph.nodes.some(
+      (node) => node.type === 'concept' && typeof node.applicant_count === 'number',
+    ) ||
+    graph.edges.some(
+      (edge) =>
+        edge.kind === 'cooccurrence' && typeof edge.support_applicants === 'number',
+    )
+  if (stored) return 'stored'
+  const rebuildable = graph.edges.some(
+    (edge) => edge.kind === 'structural' && edge.relation === '申請了',
+  )
+  return rebuildable ? 'rebuildable' : 'none'
+}
+
+/** 舊格式分析在「家」單位下由結構重建時的說明文字（圖例/離線匯出共用）。 */
+export const APPLICANT_REBUILD_NOTE =
+  '此分析為舊格式（未儲存機構單位統計）；「家」計量由專利—機構結構重建。重新執行分析即可取得已儲存的機構統計。'
 
 function legacyCycleInfo(edges: GraphEdge[], nodes: GraphNode[]) {
   const medianById = new Map(nodes.map((node) => [node.id, node.median_year] as const))
@@ -218,7 +250,38 @@ function temporalWarnings(
 function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphViewData {
   // PRD v2 / P2 + P5: 來源檔／IPC 篩選 → 由子集重推導概念視圖（不重跑 LLM）。
   const rawSel = selectedRawIds(graph, options)
-  if (rawSel) return selectConceptViewFiltered(graph, options, sourceFilesOf(graph), rawSel)
+  // P9: 舊格式分析（schema v2 備份）在「家」單位下由結構邊重建，圖例同步說明。
+  const availability = applicantAvailability(graph)
+  const rebuildNote =
+    options.unit === 'applicant' && availability === 'rebuildable'
+      ? APPLICANT_REBUILD_NOTE
+      : undefined
+  if (rawSel) {
+    return selectConceptViewFiltered(
+      graph,
+      options,
+      sourceFilesOf(graph),
+      rawSel,
+      rebuildNote,
+    )
+  }
+  // P9 核心：未篩選時，家單位不得靜默讀 NULL——把它當成「全量 cohort 的重建」（與上方
+  // 已篩選路徑同一條 申請了/包含 結構重推導，只是不篩）。否則舊資料在「家」單位下會得到
+  // 0 條邊、節點大小誤退回篇數，而圖例正聲稱「大小＝機構家數」。
+  if (options.unit === 'applicant' && availability === 'rebuildable') {
+    const fullCohort = new Set(
+      graph.nodes
+        .filter((node) => node.type === 'patent')
+        .map((node) => node.id.replace(/^patent:/, '')),
+    )
+    return selectConceptViewFiltered(
+      graph,
+      options,
+      sourceFilesOf(graph),
+      fullCohort,
+      rebuildNote,
+    )
+  }
   let nodes = graph.nodes.filter((node) => node.type === 'concept')
   const nodeIds = new Set(nodes.map((node) => node.id))
   // PRD v2 / P4 (Q3): 概念視圖的門檻/大小跟「家」隨之。缺省 unit='patent'。
@@ -321,7 +384,7 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
       community_count: communities.length,
     },
     maxSupport,
-    capabilityWarning: capabilityWarning(graph),
+    capabilityWarning: capabilityWarning(graph, rebuildNote),
   }
 }
 
@@ -480,6 +543,7 @@ function selectConceptViewFiltered(
   options: GraphViewOptions,
   fileList: string[],
   rawSel: Set<string>,
+  extraCapabilityNote?: string,
 ): GraphViewData {
   const idx = buildConceptIndex(graph)
 
@@ -688,7 +752,7 @@ function selectConceptViewFiltered(
       year_range: options.yearRange,
     },
     maxSupport,
-    capabilityWarning: capabilityWarning(graph),
+    capabilityWarning: capabilityWarning(graph, extraCapabilityNote),
   }
 }
 function projectCitationEvidence(
