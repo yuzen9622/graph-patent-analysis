@@ -247,6 +247,14 @@ export default function Sidebar({
               ) : (
                 <>
                   <div>
+                    <p className="text-xs text-foreground font-medium mb-2">年份範圍</p>
+                    <YearFilter
+                      value={yearRange}
+                      fullRange={fullYearRange}
+                      onChange={onYearChange}
+                    />
+                  </div>
+                  <div>
                     <p className="text-xs text-foreground font-medium mb-2">
                       分析單位
                     </p>
@@ -517,7 +525,7 @@ export default function Sidebar({
                     />
                   </label>
                   <p className="text-[0.65rem] text-muted-foreground leading-relaxed">
-                    概念統計涵蓋完整分析樣本；概念模式不套用年份篩選。
+                    概念統計與關係指標由選定的年份／來源檔／IPC 子集重新計算；門檻只過濾顯示。
                   </p>
                 </>
               )}

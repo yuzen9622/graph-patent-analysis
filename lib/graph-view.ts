@@ -651,15 +651,25 @@ function selectConceptViewFiltered(
     nodes = applyIpcColour(graph, nodes, options.ipcLevel ?? DEFAULT_IPC_LEVEL)
   }
 
-  const activeCommunityIds = new Set(
-    nodes
-      .map((node) => (options.colorMode === 'community_applicants' ? node.community_id_applicants : node.community_id))
-      .filter((id): id is number => typeof id === 'number'),
-  )
+  const communityIdOf = (node: GraphNode) =>
+    options.colorMode === 'community_applicants'
+      ? node.community_id_applicants
+      : node.community_id
+  const communityNodeCounts = new Map<number, number>()
+  for (const node of nodes) {
+    const communityId = communityIdOf(node)
+    if (typeof communityId !== 'number') continue
+    communityNodeCounts.set(communityId, (communityNodeCounts.get(communityId) ?? 0) + 1)
+  }
   const communities = (options.colorMode === 'community_applicants'
     ? graph.communities_applicants ?? []
     : graph.communities
-  ).filter((community) => activeCommunityIds.has(community.id))
+  )
+    .filter((community) => communityNodeCounts.has(community.id))
+    .map((community) => ({
+      ...community,
+      node_count: communityNodeCounts.get(community.id) ?? 0,
+    }))
 
   nodes = nodes.map((node) => ({ ...node, scope_id: scopeId }))
   return {
@@ -675,6 +685,7 @@ function selectConceptViewFiltered(
       patent_count: rawSel.size,
       concept_count: nodes.length,
       community_count: communities.length,
+      year_range: options.yearRange,
     },
     maxSupport,
     capabilityWarning: capabilityWarning(graph),
