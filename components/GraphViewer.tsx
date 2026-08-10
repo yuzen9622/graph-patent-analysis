@@ -21,9 +21,49 @@ import type {
   FrozenPositions,
   PositionSnapshotProvider,
 } from "@/lib/export-positions";
+import {
+  computeDegrees,
+  mmToPixels,
+  primaryLabelCap,
+  PRINT_DIM_EDGE_OPACITY,
+  PRINT_DPI,
+  PRINT_EDGE_SCALE,
+  PRINT_NODE_SCALE,
+  selectPrimaryLabels,
+  subgraphNodeIds,
+  type PublicationDpi,
+  type PublicationLabelMode,
+  type PublicationWidthMm,
+} from "@/lib/publication-export";
 
 /** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
 export type ImageCapture = () => string | null;
+
+/** PRD-Q8 出版整體圖（M1）／局部子圖（M2）共用的匯出選項。 */
+export interface PublicationFigureOptions {
+  /** 缺省 'overview'（M1）；'subgraph'（M2）需另帶 centerNodeId。 */
+  mode?: "overview" | "subgraph";
+  widthMm: PublicationWidthMm;
+  dpi?: PublicationDpi;
+  /** M2 子圖一律視為 'all'（規格：子圖是唯一允許全標籤的場合），此欄位在該模式下被忽略。 */
+  labelMode: PublicationLabelMode;
+  /** M2 子圖中心節點 id；mode='subgraph' 時必填，否則忽略。 */
+  centerNodeId?: string;
+  /** M2 子圖 hop 半徑，缺省 2。 */
+  hops?: 1 | 2;
+  /** 圖片下方的說明文字（每個元素一行），例如樣本數/單位/座標免責聲明。 */
+  caption?: string[];
+}
+export interface PublicationFigureResult {
+  dataUrl: string;
+  /** 依 labelMode 打算標的節點數（'none' 恆為 0）。 */
+  requestedLabels: number;
+  /** 實際成功放上去的標籤數——碰撞避讓會讓兩者不相等，呼叫端應把差額回報給使用者。 */
+  placedLabels: number;
+}
+export type PublicationCapture = (
+  options: PublicationFigureOptions,
+) => PublicationFigureResult | null;
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -226,6 +266,195 @@ function captureNetworkImage(network: Network): string | null {
   ctx.fillRect(0, 0, output.width, output.height);
   ctx.drawImage(rawCanvas, 0, 0);
   return output.toDataURL("image/png");
+}
+
+const CAPTION_FONT_PX = 30;
+const CAPTION_LINE_HEIGHT_PX = 40;
+
+function intersects(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+}
+
+/**
+ * PRD-Q8 出版整體圖（M1）／局部子圖（M2）：讀目前穩定的佈局座標；M1 依 §4 主要
+ * 概念判定挑標籤，M2 一律全標（規格：子圖是唯一允許全標籤的場合）；§5 貪婪碰撞
+ * 避讓保證任兩個標籤不重疊；§6 print-scale 放大節點/線寬，並疊上既有的
+ * support-strength 邊透明度（`lib/temporal.ts` 的 τ=5 heuristic，非另立新指標）；
+ * 輸出白底 PNG（mm 圖幅 × dpi）。不重跑 layout，不落地標籤分級到資料庫。
+ * 未做：像素級視覺驗收（封鎖判斷在呼叫端 lib/publication-export.ts 的
+ * isFullLabelBlocked 先示警，實際是否產生交給使用者 opt-in）。
+ */
+function renderPublicationFigure(
+  network: Network,
+  allNodes: GraphNode[],
+  allEdges: GraphEdge[],
+  options: PublicationFigureOptions,
+): PublicationFigureResult | null {
+  const positions = network.getPositions();
+
+  // M2：把檢視收斂成中心節點 hops 步以內的子圖；其餘照 M1 overview 處理。
+  const isSubgraph = options.mode === "subgraph" && !!options.centerNodeId;
+  const subgraphIds = isSubgraph
+    ? subgraphNodeIds(options.centerNodeId!, allEdges, options.hops ?? 2)
+    : null;
+  const nodes = subgraphIds ? allNodes.filter((n) => subgraphIds.has(n.id)) : allNodes;
+  const edges = subgraphIds
+    ? allEdges.filter((e) => subgraphIds.has(e.from) && subgraphIds.has(e.to))
+    : allEdges;
+  // §2 M2：子圖一律全標籤，忽略面板選的 labelMode。
+  const labelMode: PublicationLabelMode = isSubgraph ? "all" : options.labelMode;
+
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const visibleIds = nodes.map((n) => n.id).filter((id) => positions[id]);
+  if (visibleIds.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const id of visibleIds) {
+    const p = positions[id];
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const maxRadius = Math.max(
+    1,
+    ...visibleIds.map((id) => ((nodeById.get(id)?.size ?? 10) / 2) * PRINT_NODE_SCALE),
+  );
+  const pad = maxRadius + 60;
+  minX -= pad;
+  maxX += pad;
+  minY -= pad;
+  maxY += pad;
+  const worldW = Math.max(1, maxX - minX);
+  const worldH = Math.max(1, maxY - minY);
+
+  const targetWpx = mmToPixels(options.widthMm, options.dpi ?? PRINT_DPI);
+  const scale = targetWpx / worldW;
+  const graphHpx = Math.round(worldH * scale);
+  const footerHpx = options.caption?.length
+    ? 24 + options.caption.length * CAPTION_LINE_HEIGHT_PX
+    : 0;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWpx;
+  canvas.height = graphHpx + footerHpx;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const toCanvas = (x: number, y: number) => ({ x: (x - minX) * scale, y: (y - minY) * scale });
+
+  const degreeMap = computeDegrees(nodes, edges);
+  const maxLabels = primaryLabelCap(options.widthMm);
+  const primaryIds =
+    labelMode === "all"
+      ? new Set(visibleIds)
+      : labelMode === "none"
+        ? new Set<string>()
+        : selectPrimaryLabels(nodes, edges, maxLabels);
+
+  // ── 邊：primary 模式才做透明度分層，其餘模式全部邊維持既有透明度 ──
+  // 疊在既有的 support-strength 透明度（edge.opacity，τ=5 heuristic）之上，
+  // 不是另立一套跟活體檢視脫鉤的印刷專用指標。
+  for (const edge of edges) {
+    const a = positions[edge.from];
+    const b = positions[edge.to];
+    if (!a || !b) continue;
+    const pa = toCanvas(a.x, a.y);
+    const pb = toCanvas(b.x, b.y);
+    const isPrimaryEdge =
+      labelMode !== "primary" || (primaryIds.has(edge.from) && primaryIds.has(edge.to));
+    const baseWidth =
+      edge.kind === "cooccurrence"
+        ? Math.min(8, 1 + (edge.jaccard ?? 0) * 7)
+        : edge.kind === "semantic"
+          ? 1.5
+          : 1;
+    const existingOpacity = edge.opacity ?? 1;
+    ctx.globalAlpha = isPrimaryEdge ? 1 : Math.min(PRINT_DIM_EDGE_OPACITY, existingOpacity);
+    ctx.strokeStyle = edge.kind === "semantic" ? "#8B5CF6" : "#64748B";
+    ctx.lineWidth = Math.max(0.5, baseWidth * PRINT_EDGE_SCALE * scale);
+    ctx.setLineDash(edge.kind === "semantic" ? [6 * scale, 4 * scale] : []);
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // ── 節點 ──
+  for (const id of visibleIds) {
+    const n = nodeById.get(id);
+    if (!n) continue;
+    const p = toCanvas(positions[id].x, positions[id].y);
+    const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
+    ctx.beginPath();
+    ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── 標籤：貪婪碰撞避讓（§5）——依優先序放，量到重疊就跳過（讓給更優先的） ──
+  // requestedLabels/placedLabels 讓呼叫端能誠實回報「全部概念」等被自動省略的數量。
+  let requestedLabels = 0;
+  let placedLabels = 0;
+  if (labelMode !== "none") {
+    const fontPx = Math.max(9, Math.round(11 * PRINT_NODE_SCALE * scale));
+    ctx.font = `${fontPx}px "Atkinson Hyperlegible", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#0f172a";
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const labelIds =
+      labelMode === "all"
+        ? [...visibleIds].sort(
+            (a, b) => (degreeMap.get(b)?.degree ?? 0) - (degreeMap.get(a)?.degree ?? 0),
+          )
+        : [...primaryIds];
+    requestedLabels = labelIds.length;
+    for (const id of labelIds) {
+      const n = nodeById.get(id);
+      const p = positions[id];
+      if (!n || !p) continue;
+      const canvasPos = toCanvas(p.x, p.y);
+      const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
+      const textWidth = ctx.measureText(n.label).width;
+      const box = {
+        x: canvasPos.x - textWidth / 2,
+        y: canvasPos.y + radius + 2,
+        w: textWidth,
+        h: fontPx,
+      };
+      if (placed.some((existing) => intersects(existing, box))) continue;
+      placed.push(box);
+      placedLabels += 1;
+      ctx.fillText(n.label, canvasPos.x, box.y);
+    }
+  }
+
+  // ── 說明文字（不隨 scale 縮放，固定 300dpi 字級） ──
+  if (options.caption?.length) {
+    ctx.font = `${CAPTION_FONT_PX}px "Atkinson Hyperlegible", sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#0f172a";
+    let y = graphHpx + 12;
+    for (const line of options.caption) {
+      ctx.fillText(line, 16, y);
+      y += CAPTION_LINE_HEIGHT_PX;
+    }
+  }
+
+  return { dataUrl: canvas.toDataURL("image/png"), requestedLabels, placedLabels };
 }
 
 function stableUnit(value: string): number {
@@ -438,6 +667,8 @@ interface Props {
   onPositionSnapshotProvider?: (provider: PositionSnapshotProvider | null) => void;
   /** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
   onImageCaptureReady?: (capture: ImageCapture | null) => void;
+  /** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
+  onPublicationCaptureReady?: (capture: PublicationCapture | null) => void;
 }
 
 export default function GraphViewer({
@@ -456,6 +687,7 @@ export default function GraphViewer({
   positionSnapshotKey,
   onPositionSnapshotProvider,
   onImageCaptureReady,
+  onPublicationCaptureReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
@@ -476,6 +708,7 @@ export default function GraphViewer({
     // A parent must not export a completed layout while this instance rebuilds.
     onPositionSnapshotProvider?.(null);
     onImageCaptureReady?.(null);
+    onPublicationCaptureReady?.(null);
     if (!containerRef.current) return;
     let cancelled = false;
 
@@ -551,6 +784,11 @@ export default function GraphViewer({
             },
           });
           onImageCaptureReady?.(() => captureNetworkImage(network));
+          onPublicationCaptureReady?.((options) =>
+            networkRef.current === network
+              ? renderPublicationFigure(network, nodes, edges, options)
+              : null,
+          );
           setStabilized(true);
           setStabProgress(100);
         }
@@ -710,6 +948,7 @@ export default function GraphViewer({
     positionSnapshotKey,
     onPositionSnapshotProvider,
     onImageCaptureReady,
+    onPublicationCaptureReady,
   ]);
 
   // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──

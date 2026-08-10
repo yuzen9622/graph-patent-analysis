@@ -7,11 +7,14 @@ import Link from "next/link";
 import Sidebar from "./Sidebar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import GraphLegend from "./GraphLegend";
+import PublicationExportPanel, { type PublicationGenerateOptions } from "./PublicationExportPanel";
 import { selectGraphView, sourceFilesOf, applicantAvailability, type ColorMode, type EdgeWeightMetric, type Unit } from "@/lib/graph-view";
 import { ipcLegendItems, ipcTreeOf, DEFAULT_IPC_LEVEL, type IpcLevel } from "@/lib/ipc-filter";
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
-import type { ImageCapture } from "./GraphViewer";
+import { subgraphNodeIds } from "@/lib/publication-export";
+import { TEMPORAL_OPACITY_LINE } from "@/lib/temporal";
+import type { ImageCapture, PublicationCapture } from "./GraphViewer";
 import type { GraphData, GraphEdge, GraphMode, GraphNode, NodeType } from "@/types/graph";
 
 // Load vis-network component client-side only
@@ -132,6 +135,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [imageLeftReady, setImageLeftReady] = useState(false);
   const [imageRightReady, setImageRightReady] = useState(false);
   const imageExportReady = compareMode ? imageLeftReady && imageRightReady : imageLeftReady;
+  const publicationCaptureRef = useRef<PublicationCapture | null>(null);
+  const [publicationReady, setPublicationReady] = useState(false);
+  const [publicationError, setPublicationError] = useState<string | null>(null);
+  const [publicationNotice, setPublicationNotice] = useState<string | null>(null);
 
   const handlePositionSnapshotProvider = useCallback((provider: PositionSnapshotProvider | null) => {
     positionSnapshotProviderRef.current = provider;
@@ -148,6 +155,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const handleImageCaptureReadyRight = useCallback((capture: ImageCapture | null) => {
     imageCaptureRightRef.current = capture;
     setImageRightReady(capture !== null);
+  }, []);
+
+  const handlePublicationCaptureReady = useCallback((capture: PublicationCapture | null) => {
+    publicationCaptureRef.current = capture;
+    setPublicationReady(capture !== null);
   }, []);
 
   const handleExportImage = useCallback(async () => {
@@ -286,6 +298,47 @@ export default function GraphLayout({ graph, jobId }: Props) {
       viewRight?.edges.find((edge) => edge.id === selectedEdge.id) ??
       null
     : null;
+
+  const getSubgraphNodeCount = useCallback(
+    (nodeId: string, hops: 1 | 2) => subgraphNodeIds(nodeId, view.edges, hops).size,
+    [view.edges],
+  );
+
+  const handleGeneratePublicationFigure = useCallback(
+    (options: PublicationGenerateOptions) => {
+      const capture = publicationCaptureRef.current;
+      if (!capture) return;
+      const [y0, y1] = view.stats.year_range;
+      const caption = [
+        `分析樣本：${view.stats.applicant_count} 家機構、${view.stats.patent_count} 篇專利${
+          y0 && y1 ? `｜年份 ${y0}–${y1}` : ""
+        }｜分析單位：${unit === "applicant" ? "家（機構）" : "篇（專利）"}`,
+        `社群方法：${graph.methodology.community_algorithm}｜座標僅供排版，不代表定量距離`,
+        TEMPORAL_OPACITY_LINE,
+      ];
+      const result = capture({ ...options, caption });
+      if (!result) {
+        setPublicationError("匯出失敗，請確認圖譜佈局已完成後重試。");
+        setPublicationNotice(null);
+        return;
+      }
+      setPublicationError(null);
+      setPublicationNotice(
+        result.placedLabels < result.requestedLabels
+          ? `已放置 ${result.placedLabels}/${result.requestedLabels} 個標籤，其餘因版面重疊被自動省略。`
+          : null,
+      );
+      const link = document.createElement("a");
+      link.href = result.dataUrl;
+      const modeSuffix = options.mode === "subgraph" ? "-subgraph" : "";
+      link.download = `patent-graph-publication${modeSuffix}-${options.widthMm}mm-${jobId.slice(0, 8)}.png`;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    },
+    [graph.methodology.community_algorithm, jobId, unit, view.stats],
+  );
 
   const selectMode = useCallback((nextMode: GraphMode) => {
     setMode(nextMode);
@@ -520,9 +573,31 @@ export default function GraphLayout({ graph, jobId }: Props) {
             <ImageDown size={12} />
             {compareMode ? "匯出圖片（併圖）" : "匯出圖片"}
           </button>
-          {exportError && (
-            <span role="status" title={exportError} className="max-w-28 truncate text-xs text-destructive">
-              {exportError}
+          <PublicationExportPanel
+            overviewNodeCount={view.nodes.length}
+            selectedNodeId={selectedViewNode?.id ?? null}
+            selectedNodeLabel={selectedViewNode?.label ?? null}
+            getSubgraphNodeCount={getSubgraphNodeCount}
+            disabled={!publicationReady || compareMode}
+            disabledReason={compareMode ? "比較模式下無法產生出版圖，請先關閉比較模式" : undefined}
+            onGenerate={handleGeneratePublicationFigure}
+          />
+          {(exportError || publicationError) && (
+            <span
+              role="status"
+              title={exportError ?? publicationError ?? undefined}
+              className="max-w-28 truncate text-xs text-destructive"
+            >
+              {exportError ?? publicationError}
+            </span>
+          )}
+          {!exportError && !publicationError && publicationNotice && (
+            <span
+              role="status"
+              title={publicationNotice}
+              className="max-w-40 truncate text-xs text-muted-foreground"
+            >
+              {publicationNotice}
             </span>
           )}
         </div>
@@ -562,8 +637,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
               onNodeSelect={setSelectedNode}
               onEdgeSelect={setSelectedEdge}
               positionSnapshotKey={layoutSnapshotKey}
-              onPositionSnapshotProvider={compareMode ? undefined : handlePositionSnapshotProvider}
+              onPositionSnapshotProvider={handlePositionSnapshotProvider}
               onImageCaptureReady={handleImageCaptureReadyLeft}
+              onPublicationCaptureReady={handlePublicationCaptureReady}
               yearRange={yearRange}
               edgeWeight={edgeWeight}
               unit={unit}
