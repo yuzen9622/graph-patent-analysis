@@ -170,6 +170,16 @@ function viewStats(
   }
 }
 
+/**
+ * 決定是否用「家」單位社群著色：明確選 'community_applicants'，或缺省色（未指定／
+ * 'community'）且分析單位為「家」——後者讓顏色自動跟著單位走，不必額外選一次。
+ */
+function usesApplicantCommunityColour(options: GraphViewOptions): boolean {
+  if (options.colorMode === 'community_applicants') return true
+  const isDefaultColour = options.colorMode === undefined || options.colorMode === 'community'
+  return isDefaultColour && options.unit === 'applicant'
+}
+
 function capabilityWarning(graph: GraphData, extra?: string): string | undefined {
   const warnings: string[] = []
   if (graph.methodology.cooccurrence_data === 'unavailable') {
@@ -306,8 +316,9 @@ function selectConceptView(graph: GraphData, options: GraphViewOptions): GraphVi
     })
   }
   // PRD v2 / P4 (Q2): colorMode 'community_applicants' 用「家」單位分區與色盤
-  // （色盤 key = unit + id，兩單位同 id 不共享色）。
-  const useApplicantCommunity = options.colorMode === 'community_applicants'
+  // （色盤 key = unit + id，兩單位同 id 不共享色）。缺省顏色（'community'／未指定）
+  // 跟著分析單位走：unit='applicant' 時自動改用家單位社群色，避免「大小講家、顏色講篇」互相打架。
+  const useApplicantCommunity = usesApplicantCommunityColour(options)
   const activeCommunityIds = new Set(
     nodes
       .map((node) =>
@@ -705,9 +716,10 @@ function selectConceptViewFiltered(
   }
 
   // 著色：source／first_year／community／ipc 都沿用既有規則（以子集為準）。
+  const useApplicantCommunity = usesApplicantCommunityColour(options)
   if (options.colorMode === 'first_year') {
     nodes = applyTimeColour(nodes, graph.methodology?.time_window)
-  } else if (options.colorMode === 'community_applicants') {
+  } else if (useApplicantCommunity) {
     nodes = applyCommunityApplicantsColour(nodes, graph.communities_applicants ?? [])
   } else if (options.colorMode === 'source') {
     nodes = applySourceColour(graph, nodes, fileList)
@@ -716,7 +728,7 @@ function selectConceptViewFiltered(
   }
 
   const communityIdOf = (node: GraphNode) =>
-    options.colorMode === 'community_applicants'
+    useApplicantCommunity
       ? node.community_id_applicants
       : node.community_id
   const communityNodeCounts = new Map<number, number>()
@@ -725,7 +737,7 @@ function selectConceptViewFiltered(
     if (typeof communityId !== 'number') continue
     communityNodeCounts.set(communityId, (communityNodeCounts.get(communityId) ?? 0) + 1)
   }
-  const communities = (options.colorMode === 'community_applicants'
+  const communities = (useApplicantCommunity
     ? graph.communities_applicants ?? []
     : graph.communities
   )
