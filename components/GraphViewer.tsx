@@ -3,37 +3,38 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Network } from "vis-network";
 import type {
-  GraphNode,
-  GraphEdge,
-  CitationEdge,
-  NodeType,
-  GraphAnalysis,
-  GodNode,
-  SurprisingConnection,
+	GraphNode,
+	GraphEdge,
+	CitationEdge,
+	NodeType,
+	GraphAnalysis,
+	GodNode,
+	SurprisingConnection,
 } from "@/types/graph";
 import {
-  isValidGraphViewport,
-  type GraphViewport,
+	graphViewportsEqual,
+	isValidGraphViewport,
+	type GraphViewport,
 } from "@/lib/graph-viewport";
 import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
 import { nodeTooltipLines } from "@/lib/node-tooltip";
 import type {
-  FrozenPositions,
-  PositionSnapshotProvider,
+	FrozenPositions,
+	PositionSnapshotProvider,
 } from "@/lib/export-positions";
 import {
-  computeDegrees,
-  mmToPixels,
-  primaryLabelCap,
-  PRINT_DIM_EDGE_OPACITY,
-  PRINT_DPI,
-  PRINT_EDGE_SCALE,
-  PRINT_NODE_SCALE,
-  selectPrimaryLabels,
-  subgraphNodeIds,
-  type PublicationDpi,
-  type PublicationLabelMode,
-  type PublicationWidthMm,
+	computeDegrees,
+	mmToPixels,
+	primaryLabelCap,
+	PRINT_DIM_EDGE_OPACITY,
+	PRINT_DPI,
+	PRINT_EDGE_SCALE,
+	PRINT_NODE_SCALE,
+	selectPrimaryLabels,
+	subgraphNodeIds,
+	type PublicationDpi,
+	type PublicationLabelMode,
+	type PublicationWidthMm,
 } from "@/lib/publication-export";
 
 /** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
@@ -41,28 +42,28 @@ export type ImageCapture = () => string | null;
 
 /** PRD-Q8 出版整體圖（M1）／局部子圖（M2）共用的匯出選項。 */
 export interface PublicationFigureOptions {
-  /** 缺省 'overview'（M1）；'subgraph'（M2）需另帶 centerNodeId。 */
-  mode?: "overview" | "subgraph";
-  widthMm: PublicationWidthMm;
-  dpi?: PublicationDpi;
-  /** M2 子圖一律視為 'all'（規格：子圖是唯一允許全標籤的場合），此欄位在該模式下被忽略。 */
-  labelMode: PublicationLabelMode;
-  /** M2 子圖中心節點 id；mode='subgraph' 時必填，否則忽略。 */
-  centerNodeId?: string;
-  /** M2 子圖 hop 半徑，缺省 2。 */
-  hops?: 1 | 2;
-  /** 圖片下方的說明文字（每個元素一行），例如樣本數/單位/座標免責聲明。 */
-  caption?: string[];
+	/** 缺省 'overview'（M1）；'subgraph'（M2）需另帶 centerNodeId。 */
+	mode?: "overview" | "subgraph";
+	widthMm: PublicationWidthMm;
+	dpi?: PublicationDpi;
+	/** M2 子圖一律視為 'all'（規格：子圖是唯一允許全標籤的場合），此欄位在該模式下被忽略。 */
+	labelMode: PublicationLabelMode;
+	/** M2 子圖中心節點 id；mode='subgraph' 時必填，否則忽略。 */
+	centerNodeId?: string;
+	/** M2 子圖 hop 半徑，缺省 2。 */
+	hops?: 1 | 2;
+	/** 圖片下方的說明文字（每個元素一行），例如樣本數/單位/座標免責聲明。 */
+	caption?: string[];
 }
 export interface PublicationFigureResult {
-  dataUrl: string;
-  /** 依 labelMode 打算標的節點數（'none' 恆為 0）。 */
-  requestedLabels: number;
-  /** 實際成功放上去的標籤數——碰撞避讓會讓兩者不相等，呼叫端應把差額回報給使用者。 */
-  placedLabels: number;
+	dataUrl: string;
+	/** 依 labelMode 打算標的節點數（'none' 恆為 0）。 */
+	requestedLabels: number;
+	/** 實際成功放上去的標籤數——碰撞避讓會讓兩者不相等，呼叫端應把差額回報給使用者。 */
+	placedLabels: number;
 }
 export type PublicationCapture = (
-  options: PublicationFigureOptions,
+	options: PublicationFigureOptions,
 ) => PublicationFigureResult | null;
 
 // ── Performance thresholds ────────────────────────────────────────────────────
@@ -74,11 +75,11 @@ const HUGE_GRAPH = 350;
 // ── DataSet update types ──────────────────────────────────────────────────────
 
 type NodeUpdate = {
-  id: string;
-  hidden?: boolean;
-  opacity?: number;
-  color?: string;
-  label?: string;
+	id: string;
+	hidden?: boolean;
+	opacity?: number;
+	color?: string;
+	label?: string;
 };
 type EdgeColorProp = { inherit: "from"; opacity?: number };
 type EdgeUpdate = { id: string; hidden?: boolean; color?: EdgeColorProp };
@@ -88,161 +89,210 @@ type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
 function buildTitle(n: GraphNode, unit: Unit, godInfo?: GodNode): string {
-  const base = nodeTooltipLines(n, unit).join("\n");
-  return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
+	const base = nodeTooltipLines(n, unit).join("\n");
+	return godInfo ? `${base}\n🔥 樞紐節點（degree: ${godInfo.degree}）` : base;
 }
 
-function toVisNode(n: GraphNode, unit: Unit, pos?: { x: number; y: number }, godInfo?: GodNode) {
-  const isApplicant = n.type === "applicant";
-  const isPatent = n.type === "patent";
+function toVisNode(
+	n: GraphNode,
+	unit: Unit,
+	pos?: { x: number; y: number },
+	godInfo?: GodNode,
+) {
+	const isApplicant = n.type === "applicant";
+	const isPatent = n.type === "patent";
 
-  // Handle color being a string or an object
-  let bgColor = "#BAB0AC";
-  let borderColor = "#BAB0AC";
-  let highlightBg = "#6B9CC3";
-  let highlightBorder = "#6B9CC3";
+	// Handle color being a string or an object
+	let bgColor = "#BAB0AC";
+	let borderColor = "#BAB0AC";
+	let highlightBg = "#6B9CC3";
+	let highlightBorder = "#6B9CC3";
 
-  if (typeof n.color === "string") {
-    bgColor = n.color;
-    const baseColor = n.color.length === 9 ? n.color.slice(0, 7) : n.color;
-    borderColor = baseColor;
-    highlightBg = n.color;
-    highlightBorder = baseColor;
-  } else if (n.color && typeof n.color === "object") {
-    const colorObj = n.color as {
-      background?: string;
-      border?: string;
-      highlight?: { background?: string; border?: string };
-    };
-    bgColor = colorObj.background ?? bgColor;
-    borderColor = colorObj.border ?? borderColor;
-    if (colorObj.highlight) {
-      highlightBg = colorObj.highlight.background ?? highlightBg;
-      highlightBorder = colorObj.highlight.border ?? highlightBorder;
-    } else {
-      highlightBg = bgColor;
-      highlightBorder = borderColor;
-    }
-  }
+	if (typeof n.color === "string") {
+		bgColor = n.color;
+		const baseColor = n.color.length === 9 ? n.color.slice(0, 7) : n.color;
+		borderColor = baseColor;
+		highlightBg = n.color;
+		highlightBorder = baseColor;
+	} else if (n.color && typeof n.color === "object") {
+		const colorObj = n.color as {
+			background?: string;
+			border?: string;
+			highlight?: { background?: string; border?: string };
+		};
+		bgColor = colorObj.background ?? bgColor;
+		borderColor = colorObj.border ?? borderColor;
+		if (colorObj.highlight) {
+			highlightBg = colorObj.highlight.background ?? highlightBg;
+			highlightBorder = colorObj.highlight.border ?? highlightBorder;
+		} else {
+			highlightBg = bgColor;
+			highlightBorder = borderColor;
+		}
+	}
 
-  const nodeFont = (n as { font?: unknown }).font as { size?: number; color?: string } | undefined;
-  const fontSize = nodeFont?.size !== undefined
-    ? nodeFont.size
-    : (isApplicant ? 14 : isPatent ? 0 : 11);
-  const fontColor = nodeFont?.color !== undefined
-    ? nodeFont.color
-    : "#000000";
+	const nodeFont = (n as { font?: unknown }).font as
+		| { size?: number; color?: string }
+		| undefined;
+	const fontSize =
+		nodeFont?.size !== undefined
+			? nodeFont.size
+			: isApplicant
+				? 14
+				: isPatent
+					? 0
+					: 11;
+	const fontColor = nodeFont?.color !== undefined ? nodeFont.color : "#000000";
 
-  const shape = (n as { shape?: string }).shape ?? (isApplicant ? "star" : "dot");
+	const shape = n.shape ?? (isApplicant ? "star" : "dot");
 
-  return {
-    id: n.id,
-    label: isApplicant ? n.label : isPatent ? "" : n.label,
-    title: buildTitle(n, unit, godInfo),
-    shape: shape,
-    size: n.size,
-    borderWidth: godInfo ? 4 : undefined,
-    color: {
-      background: bgColor,
-      border: godInfo ? "#FFD700" : borderColor,
-      highlight: { background: highlightBg, border: godInfo ? "#FFD700" : highlightBorder },
-      hover: { background: highlightBg, border: godInfo ? "#FFD700" : highlightBorder },
-    },
-    font: {
-      color: fontColor,
-      size: fontSize,
-      face: "Atkinson Hyperlegible, sans-serif",
-    },
-    ...(pos ?? {}),
-  };
+	return {
+		id: n.id,
+		label: isApplicant ? n.label : isPatent ? "" : n.label,
+		title: buildTitle(n, unit, godInfo),
+		shape: shape,
+		size: n.size,
+		borderWidth: godInfo ? 4 : undefined,
+		color: {
+			background: bgColor,
+			border: godInfo ? "#FFD700" : borderColor,
+			highlight: {
+				background: highlightBg,
+				border: godInfo ? "#FFD700" : highlightBorder,
+			},
+			hover: {
+				background: highlightBg,
+				border: godInfo ? "#FFD700" : highlightBorder,
+			},
+		},
+		font: {
+			color: fontColor,
+			size: fontSize,
+			face: "Atkinson Hyperlegible, sans-serif",
+		},
+		...(pos ?? {}),
+	};
 }
 
-function toVisEdge(e: GraphEdge, surprising?: SurprisingConnection, edgeWeight: EdgeWeightMetric = 'jaccard', unit: Unit = 'patent') {
-  const isCooccurrence = e.kind === "cooccurrence";
-  const isSemantic = e.kind === "semantic";
-  const isInstitution = e.kind === "institution";
-  const supportLine = isCooccurrence
-    ? `共同出現：${e.support_count ?? 0} 篇 / ${e.support_applicants ?? 0} 家
+function toVisEdge(
+	e: GraphEdge,
+	surprising?: SurprisingConnection,
+	edgeWeight: EdgeWeightMetric = "jaccard",
+	unit: Unit = "patent",
+) {
+	const isCooccurrence = e.kind === "cooccurrence";
+	const isSemantic = e.kind === "semantic";
+	const isInstitution = e.kind === "institution";
+	const supportLine = isCooccurrence
+		? `共同出現：${e.support_count ?? 0} 篇 / ${e.support_applicants ?? 0} 家
 ` +
-      `Jaccard：篇 ${(e.jaccard ?? 0).toFixed(3)} ｜ 家 ${fmt(e.jaccard_applicants)}
+			`Jaccard：篇 ${(e.jaccard ?? 0).toFixed(3)} ｜ 家 ${fmt(e.jaccard_applicants)}
 ` +
-      `NPMI：篇 ${fmt(e.npmi)} ｜ 家 ${fmt(e.npmi_applicants)}`
-    : "";
-  const semanticLine = isSemantic
-    ? `LLM 語意關係：${e.relation}\n目前保存來源：${e.source_patents?.length ?? 0} 篇`
-    : "";
-  const institutionLine = isInstitution
-    ? `共享概念：${e.support_count ?? 0} 個\n${(e.shared_concepts ?? []).slice(0, 6).join("、")}${(e.shared_concepts?.length ?? 0) > 6 ? ` …共 ${e.shared_concepts!.length} 個` : ""}`
-    : "";
-  const surprisingLine = surprising ? "\n跨社群罕見橋接" : "";
-  const citationLine = e.citation_direction_conflict
-    ? "\n⚠ 引用方向與中位年排序衝突"
-    : e.citation_supported ? "\n引用支持" : "";
-  const title = `${supportLine}${semanticLine}${institutionLine}${surprisingLine}${citationLine}` || e.relation;
+			`NPMI：篇 ${fmt(e.npmi)} ｜ 家 ${fmt(e.npmi_applicants)}`
+		: "";
+	const semanticLine = isSemantic
+		? `LLM 語意關係：${e.relation}\n目前保存來源：${e.source_patents?.length ?? 0} 篇`
+		: "";
+	const institutionLine = isInstitution
+		? `共享概念：${e.support_count ?? 0} 個\n${(e.shared_concepts ?? []).slice(0, 6).join("、")}${(e.shared_concepts?.length ?? 0) > 6 ? ` …共 ${e.shared_concepts!.length} 個` : ""}`
+		: "";
+	const surprisingLine = surprising ? "\n跨社群罕見橋接" : "";
+	const citationLine = e.citation_direction_conflict
+		? "\n⚠ 引用方向與中位年排序衝突"
+		: e.citation_supported
+			? "\n引用支持"
+			: "";
+	const title =
+		`${supportLine}${semanticLine}${institutionLine}${surprisingLine}${citationLine}` ||
+		e.relation;
 
-  return {
-    id: e.id,
-    from: e.from,
-    to: e.to,
-    label: isSemantic ? e.relation : e.citation_direction_conflict ? "⚠" : e.citation_supported ? "引用" : "",
-    title,
-    dashes: isSemantic ? ([6, 4] as [number, number]) : undefined,
-    width: isCooccurrence
-      ? cooccurrenceWidth(e, edgeWeight, unit)
-      : isInstitution
-        ? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.4)
-        : isSemantic
-          ? 1.5
-          : 1,
-    color: surprising
-      ? { color: "#FF6B35", opacity: e.opacity ?? 1 }
-      : isSemantic
-        ? { color: "#8B5CF6", opacity: e.opacity ?? 1 }
-        : isInstitution
-          ? { color: "#0f766e", opacity: e.opacity ?? 1 }
-          : isCooccurrence
-            ? { color: "#64748B", opacity: e.opacity ?? 1 }
-            : { color: "#94A3B8", opacity: e.opacity ?? 1 },
-    arrows: {
-      to: {
-        enabled: isSemantic || e.temporal_directed || e.kind === "structural",
-        scaleFactor: 0.4,
-      },
-    },
-    font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
-    // Semantic relations are an evidence overlay and must not alter layout.
-    physics: !(isSemantic || isInstitution),
-    // smooth is controlled globally via options — not set per-edge
-    // so that perf-adaptive global setting takes effect
-  };
+	return {
+		id: e.id,
+		from: e.from,
+		to: e.to,
+		label: isSemantic
+			? e.relation
+			: e.citation_direction_conflict
+				? "⚠"
+				: e.citation_supported
+					? "引用"
+					: "",
+		title,
+		dashes:
+			e.dashes !== undefined
+				? e.dashes
+				: isSemantic
+					? ([6, 4] as [number, number])
+					: undefined,
+		width: isCooccurrence
+			? cooccurrenceWidth(e, edgeWeight, unit)
+			: isInstitution
+				? Math.min(8, 1 + Math.sqrt(e.support_count ?? 1) * 1.4)
+				: isSemantic
+					? 1.5
+					: 1,
+		color: e.color
+			? { color: e.color, opacity: e.opacity ?? 1 }
+			: surprising
+				? { color: "#FF6B35", opacity: e.opacity ?? 1 }
+				: isSemantic
+					? { color: "#8B5CF6", opacity: e.opacity ?? 1 }
+					: isInstitution
+						? { color: "#0f766e", opacity: e.opacity ?? 1 }
+						: isCooccurrence
+							? { color: "#64748B", opacity: e.opacity ?? 1 }
+							: { color: "#94A3B8", opacity: e.opacity ?? 1 },
+		arrows: {
+			to: {
+				enabled: isSemantic || e.temporal_directed || e.kind === "structural",
+				scaleFactor: 0.4,
+			},
+		},
+		font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
+		// Semantic relations are an evidence overlay and must not alter layout.
+		physics: !(isSemantic || isInstitution),
+		// smooth is controlled globally via options — not set per-edge
+		// so that perf-adaptive global setting takes effect
+	};
 }
 
 function fmt(value: number | undefined): string {
-  return value === undefined ? "—" : value.toFixed(3)
+	return value === undefined ? "—" : value.toFixed(3);
 }
 
 /** 線寬用有界指標（意圖決策 2）：jaccard（預設）或 NPMI（p_ij=1 → 不顯示）。 */
-function cooccurrenceWidth(e: GraphEdge, metric: EdgeWeightMetric, unit: Unit = 'patent'): number {
-  if (metric === 'npmi') {
-    const v = Math.max(0, unit === 'applicant' ? (e.npmi_applicants ?? 0) : (e.npmi ?? 0))
-    return Math.min(8, 1 + v * 7)
-  }
-  const j = unit === 'applicant' ? (e.jaccard_applicants ?? 0) : (e.jaccard ?? 0)
-  return Math.min(8, 1 + j * 7)
+function cooccurrenceWidth(
+	e: GraphEdge,
+	metric: EdgeWeightMetric,
+	unit: Unit = "patent",
+): number {
+	if (metric === "npmi") {
+		const v = Math.max(
+			0,
+			unit === "applicant" ? (e.npmi_applicants ?? 0) : (e.npmi ?? 0),
+		);
+		return Math.min(8, 1 + v * 7);
+	}
+	const j =
+		unit === "applicant" ? (e.jaccard_applicants ?? 0) : (e.jaccard ?? 0);
+	return Math.min(8, 1 + j * 7);
 }
 
 function toVisCitationEdge(edge: CitationEdge) {
-  return {
-    id: `citation:${edge.id}`,
-    from: edge.from,
-    to: edge.to,
-    title: `引用證據：順向 ${edge.forward_count} ／反向 ${edge.reverse_count}${edge.direction_conflict ? '\n與中位年排序方向衝突' : ''}`,
-    dashes: [4, 5] as [number, number],
-    width: 1.5,
-    color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 },
-    arrows: { to: { enabled: true, scaleFactor: 0.35 } },
-    physics: false,
-  }
+	return {
+		id: `citation:${edge.id}`,
+		from: edge.from,
+		to: edge.to,
+		title: `引用證據：順向 ${edge.forward_count} ／反向 ${edge.reverse_count}${edge.direction_conflict ? "\n與中位年排序方向衝突" : ""}`,
+		dashes: [4, 5] as [number, number],
+		width: 1.5,
+		color: {
+			color: edge.direction_conflict ? "#dc2626" : "#2563eb",
+			opacity: 1,
+		},
+		arrows: { to: { enabled: true, scaleFactor: 0.35 } },
+		physics: false,
+	};
 }
 
 /**
@@ -252,30 +302,38 @@ function toVisCitationEdge(edge: CitationEdge) {
  * `network.canvas` 不在公開型別中，故此處以最小必要的形狀轉型存取。
  */
 function captureNetworkImage(network: Network): string | null {
-  const rawCanvas = (
-    network as unknown as { canvas?: { frame?: { canvas?: HTMLCanvasElement } } }
-  ).canvas?.frame?.canvas;
-  if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0) return null;
+	const rawCanvas = (
+		network as unknown as {
+			canvas?: { frame?: { canvas?: HTMLCanvasElement } };
+		}
+	).canvas?.frame?.canvas;
+	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0)
+		return null;
 
-  const output = document.createElement("canvas");
-  output.width = rawCanvas.width;
-  output.height = rawCanvas.height;
-  const ctx = output.getContext("2d");
-  if (!ctx) return null;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, output.width, output.height);
-  ctx.drawImage(rawCanvas, 0, 0);
-  return output.toDataURL("image/png");
+	const output = document.createElement("canvas");
+	output.width = rawCanvas.width;
+	output.height = rawCanvas.height;
+	const ctx = output.getContext("2d");
+	if (!ctx) return null;
+	ctx.fillStyle = "#ffffff";
+	ctx.fillRect(0, 0, output.width, output.height);
+	ctx.drawImage(rawCanvas, 0, 0);
+	return output.toDataURL("image/png");
 }
 
 const CAPTION_FONT_PX = 30;
 const CAPTION_LINE_HEIGHT_PX = 40;
 
 function intersects(
-  a: { x: number; y: number; w: number; h: number },
-  b: { x: number; y: number; w: number; h: number },
+	a: { x: number; y: number; w: number; h: number },
+	b: { x: number; y: number; w: number; h: number },
 ): boolean {
-  return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+	return !(
+		a.x + a.w < b.x ||
+		b.x + b.w < a.x ||
+		a.y + a.h < b.y ||
+		b.y + b.h < a.y
+	);
 }
 
 /**
@@ -288,182 +346,205 @@ function intersects(
  * isFullLabelBlocked 先示警，實際是否產生交給使用者 opt-in）。
  */
 function renderPublicationFigure(
-  network: Network,
-  allNodes: GraphNode[],
-  allEdges: GraphEdge[],
-  options: PublicationFigureOptions,
+	network: Network,
+	allNodes: GraphNode[],
+	allEdges: GraphEdge[],
+	options: PublicationFigureOptions,
 ): PublicationFigureResult | null {
-  const positions = network.getPositions();
+	const positions = network.getPositions();
 
-  // M2：把檢視收斂成中心節點 hops 步以內的子圖；其餘照 M1 overview 處理。
-  const isSubgraph = options.mode === "subgraph" && !!options.centerNodeId;
-  const subgraphIds = isSubgraph
-    ? subgraphNodeIds(options.centerNodeId!, allEdges, options.hops ?? 2)
-    : null;
-  const nodes = subgraphIds ? allNodes.filter((n) => subgraphIds.has(n.id)) : allNodes;
-  const edges = subgraphIds
-    ? allEdges.filter((e) => subgraphIds.has(e.from) && subgraphIds.has(e.to))
-    : allEdges;
-  // §2 M2：子圖一律全標籤，忽略面板選的 labelMode。
-  const labelMode: PublicationLabelMode = isSubgraph ? "all" : options.labelMode;
+	// M2：把檢視收斂成中心節點 hops 步以內的子圖；其餘照 M1 overview 處理。
+	const isSubgraph = options.mode === "subgraph" && !!options.centerNodeId;
+	const subgraphIds = isSubgraph
+		? subgraphNodeIds(options.centerNodeId!, allEdges, options.hops ?? 2)
+		: null;
+	const nodes = subgraphIds
+		? allNodes.filter((n) => subgraphIds.has(n.id))
+		: allNodes;
+	const edges = subgraphIds
+		? allEdges.filter((e) => subgraphIds.has(e.from) && subgraphIds.has(e.to))
+		: allEdges;
+	// §2 M2：子圖一律全標籤，忽略面板選的 labelMode。
+	const labelMode: PublicationLabelMode = isSubgraph
+		? "all"
+		: options.labelMode;
 
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  const visibleIds = nodes.map((n) => n.id).filter((id) => positions[id]);
-  if (visibleIds.length === 0) return null;
+	const nodeById = new Map(nodes.map((n) => [n.id, n]));
+	const visibleIds = nodes.map((n) => n.id).filter((id) => positions[id]);
+	if (visibleIds.length === 0) return null;
 
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const id of visibleIds) {
-    const p = positions[id];
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  }
-  const maxRadius = Math.max(
-    1,
-    ...visibleIds.map((id) => ((nodeById.get(id)?.size ?? 10) / 2) * PRINT_NODE_SCALE),
-  );
-  const pad = maxRadius + 60;
-  minX -= pad;
-  maxX += pad;
-  minY -= pad;
-  maxY += pad;
-  const worldW = Math.max(1, maxX - minX);
-  const worldH = Math.max(1, maxY - minY);
+	let minX = Infinity;
+	let minY = Infinity;
+	let maxX = -Infinity;
+	let maxY = -Infinity;
+	for (const id of visibleIds) {
+		const p = positions[id];
+		if (p.x < minX) minX = p.x;
+		if (p.x > maxX) maxX = p.x;
+		if (p.y < minY) minY = p.y;
+		if (p.y > maxY) maxY = p.y;
+	}
+	const maxRadius = Math.max(
+		1,
+		...visibleIds.map(
+			(id) => ((nodeById.get(id)?.size ?? 10) / 2) * PRINT_NODE_SCALE,
+		),
+	);
+	const pad = maxRadius + 60;
+	minX -= pad;
+	maxX += pad;
+	minY -= pad;
+	maxY += pad;
+	const worldW = Math.max(1, maxX - minX);
+	const worldH = Math.max(1, maxY - minY);
 
-  const targetWpx = mmToPixels(options.widthMm, options.dpi ?? PRINT_DPI);
-  const scale = targetWpx / worldW;
-  const graphHpx = Math.round(worldH * scale);
-  const footerHpx = options.caption?.length
-    ? 24 + options.caption.length * CAPTION_LINE_HEIGHT_PX
-    : 0;
+	const targetWpx = mmToPixels(options.widthMm, options.dpi ?? PRINT_DPI);
+	const scale = targetWpx / worldW;
+	const graphHpx = Math.round(worldH * scale);
+	const footerHpx = options.caption?.length
+		? 24 + options.caption.length * CAPTION_LINE_HEIGHT_PX
+		: 0;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = targetWpx;
-  canvas.height = graphHpx + footerHpx;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
+	const canvas = document.createElement("canvas");
+	canvas.width = targetWpx;
+	canvas.height = graphHpx + footerHpx;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return null;
 
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.fillStyle = "#ffffff";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const toCanvas = (x: number, y: number) => ({ x: (x - minX) * scale, y: (y - minY) * scale });
+	const toCanvas = (x: number, y: number) => ({
+		x: (x - minX) * scale,
+		y: (y - minY) * scale,
+	});
 
-  const degreeMap = computeDegrees(nodes, edges);
-  const maxLabels = primaryLabelCap(options.widthMm);
-  const primaryIds =
-    labelMode === "all"
-      ? new Set(visibleIds)
-      : labelMode === "none"
-        ? new Set<string>()
-        : selectPrimaryLabels(nodes, edges, maxLabels);
+	const degreeMap = computeDegrees(nodes, edges);
+	const maxLabels = primaryLabelCap(options.widthMm);
+	const primaryIds =
+		labelMode === "all"
+			? new Set(visibleIds)
+			: labelMode === "none"
+				? new Set<string>()
+				: selectPrimaryLabels(nodes, edges, maxLabels);
 
-  // ── 邊：primary 模式才做透明度分層，其餘模式全部邊維持既有透明度 ──
-  // 疊在既有的 support-strength 透明度（edge.opacity，τ=5 heuristic）之上，
-  // 不是另立一套跟活體檢視脫鉤的印刷專用指標。
-  for (const edge of edges) {
-    const a = positions[edge.from];
-    const b = positions[edge.to];
-    if (!a || !b) continue;
-    const pa = toCanvas(a.x, a.y);
-    const pb = toCanvas(b.x, b.y);
-    const isPrimaryEdge =
-      labelMode !== "primary" || (primaryIds.has(edge.from) && primaryIds.has(edge.to));
-    const baseWidth =
-      edge.kind === "cooccurrence"
-        ? Math.min(8, 1 + (edge.jaccard ?? 0) * 7)
-        : edge.kind === "semantic"
-          ? 1.5
-          : 1;
-    const existingOpacity = edge.opacity ?? 1;
-    ctx.globalAlpha = isPrimaryEdge ? 1 : Math.min(PRINT_DIM_EDGE_OPACITY, existingOpacity);
-    ctx.strokeStyle = edge.kind === "semantic" ? "#8B5CF6" : "#64748B";
-    ctx.lineWidth = Math.max(0.5, baseWidth * PRINT_EDGE_SCALE * scale);
-    ctx.setLineDash(edge.kind === "semantic" ? [6 * scale, 4 * scale] : []);
-    ctx.beginPath();
-    ctx.moveTo(pa.x, pa.y);
-    ctx.lineTo(pb.x, pb.y);
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  ctx.globalAlpha = 1;
+	// ── 邊：primary 模式才做透明度分層，其餘模式全部邊維持既有透明度 ──
+	// 疊在既有的 support-strength 透明度（edge.opacity，τ=5 heuristic）之上，
+	// 不是另立一套跟活體檢視脫鉤的印刷專用指標。
+	for (const edge of edges) {
+		const a = positions[edge.from];
+		const b = positions[edge.to];
+		if (!a || !b) continue;
+		const pa = toCanvas(a.x, a.y);
+		const pb = toCanvas(b.x, b.y);
+		const isPrimaryEdge =
+			labelMode !== "primary" ||
+			(primaryIds.has(edge.from) && primaryIds.has(edge.to));
+		const baseWidth =
+			edge.kind === "cooccurrence"
+				? Math.min(8, 1 + (edge.jaccard ?? 0) * 7)
+				: edge.kind === "semantic"
+					? 1.5
+					: 1;
+		const existingOpacity = edge.opacity ?? 1;
+		ctx.globalAlpha = isPrimaryEdge
+			? 1
+			: Math.min(PRINT_DIM_EDGE_OPACITY, existingOpacity);
+		ctx.strokeStyle = edge.kind === "semantic" ? "#8B5CF6" : "#64748B";
+		ctx.lineWidth = Math.max(0.5, baseWidth * PRINT_EDGE_SCALE * scale);
+		ctx.setLineDash(edge.kind === "semantic" ? [6 * scale, 4 * scale] : []);
+		ctx.beginPath();
+		ctx.moveTo(pa.x, pa.y);
+		ctx.lineTo(pb.x, pb.y);
+		ctx.stroke();
+	}
+	ctx.setLineDash([]);
+	ctx.globalAlpha = 1;
 
-  // ── 節點 ──
-  for (const id of visibleIds) {
-    const n = nodeById.get(id);
-    if (!n) continue;
-    const p = toCanvas(positions[id].x, positions[id].y);
-    const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
-    ctx.beginPath();
-    ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
-    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
+	// ── 節點 ──
+	for (const id of visibleIds) {
+		const n = nodeById.get(id);
+		if (!n) continue;
+		const p = toCanvas(positions[id].x, positions[id].y);
+		const radius = Math.max(
+			1.5,
+			((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale,
+		);
+		ctx.beginPath();
+		ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
+		ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+		ctx.fill();
+	}
 
-  // ── 標籤：貪婪碰撞避讓（§5）——依優先序放，量到重疊就跳過（讓給更優先的） ──
-  // requestedLabels/placedLabels 讓呼叫端能誠實回報「全部概念」等被自動省略的數量。
-  let requestedLabels = 0;
-  let placedLabels = 0;
-  if (labelMode !== "none") {
-    const fontPx = Math.max(9, Math.round(11 * PRINT_NODE_SCALE * scale));
-    ctx.font = `${fontPx}px "Atkinson Hyperlegible", sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "#0f172a";
-    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
-    const labelIds =
-      labelMode === "all"
-        ? [...visibleIds].sort(
-            (a, b) => (degreeMap.get(b)?.degree ?? 0) - (degreeMap.get(a)?.degree ?? 0),
-          )
-        : [...primaryIds];
-    requestedLabels = labelIds.length;
-    for (const id of labelIds) {
-      const n = nodeById.get(id);
-      const p = positions[id];
-      if (!n || !p) continue;
-      const canvasPos = toCanvas(p.x, p.y);
-      const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
-      const textWidth = ctx.measureText(n.label).width;
-      const box = {
-        x: canvasPos.x - textWidth / 2,
-        y: canvasPos.y + radius + 2,
-        w: textWidth,
-        h: fontPx,
-      };
-      if (placed.some((existing) => intersects(existing, box))) continue;
-      placed.push(box);
-      placedLabels += 1;
-      ctx.fillText(n.label, canvasPos.x, box.y);
-    }
-  }
+	// ── 標籤：貪婪碰撞避讓（§5）——依優先序放，量到重疊就跳過（讓給更優先的） ──
+	// requestedLabels/placedLabels 讓呼叫端能誠實回報「全部概念」等被自動省略的數量。
+	let requestedLabels = 0;
+	let placedLabels = 0;
+	if (labelMode !== "none") {
+		const fontPx = Math.max(9, Math.round(11 * PRINT_NODE_SCALE * scale));
+		ctx.font = `${fontPx}px "Atkinson Hyperlegible", sans-serif`;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "top";
+		ctx.fillStyle = "#0f172a";
+		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+		const labelIds =
+			labelMode === "all"
+				? [...visibleIds].sort(
+						(a, b) =>
+							(degreeMap.get(b)?.degree ?? 0) - (degreeMap.get(a)?.degree ?? 0),
+					)
+				: [...primaryIds];
+		requestedLabels = labelIds.length;
+		for (const id of labelIds) {
+			const n = nodeById.get(id);
+			const p = positions[id];
+			if (!n || !p) continue;
+			const canvasPos = toCanvas(p.x, p.y);
+			const radius = Math.max(
+				1.5,
+				((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale,
+			);
+			const textWidth = ctx.measureText(n.label).width;
+			const box = {
+				x: canvasPos.x - textWidth / 2,
+				y: canvasPos.y + radius + 2,
+				w: textWidth,
+				h: fontPx,
+			};
+			if (placed.some((existing) => intersects(existing, box))) continue;
+			placed.push(box);
+			placedLabels += 1;
+			ctx.fillText(n.label, canvasPos.x, box.y);
+		}
+	}
 
-  // ── 說明文字（不隨 scale 縮放，固定 300dpi 字級） ──
-  if (options.caption?.length) {
-    ctx.font = `${CAPTION_FONT_PX}px "Atkinson Hyperlegible", sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "#0f172a";
-    let y = graphHpx + 12;
-    for (const line of options.caption) {
-      ctx.fillText(line, 16, y);
-      y += CAPTION_LINE_HEIGHT_PX;
-    }
-  }
+	// ── 說明文字（不隨 scale 縮放，固定 300dpi 字級） ──
+	if (options.caption?.length) {
+		ctx.font = `${CAPTION_FONT_PX}px "Atkinson Hyperlegible", sans-serif`;
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+		ctx.fillStyle = "#0f172a";
+		let y = graphHpx + 12;
+		for (const line of options.caption) {
+			ctx.fillText(line, 16, y);
+			y += CAPTION_LINE_HEIGHT_PX;
+		}
+	}
 
-  return { dataUrl: canvas.toDataURL("image/png"), requestedLabels, placedLabels };
+	return {
+		dataUrl: canvas.toDataURL("image/png"),
+		requestedLabels,
+		placedLabels,
+	};
 }
 
 function stableUnit(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0) / 0xffffffff;
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < value.length; i += 1) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 0) / 0xffffffff;
 }
 
 // Pre-spread concept nodes by community so ForceAtlas2 starts from a
@@ -472,116 +553,122 @@ function stableUnit(value: string): number {
 // are computed iteratively from their connected nodes to prevent them from
 // starting in a giant default outer circle, solving layout issues.
 function buildInitialPositions(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
+	nodes: GraphNode[],
+	edges: GraphEdge[],
 ): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>();
+	const positions = new Map<string, { x: number; y: number }>();
 
-  // 1. Group nodes by community if they have one (supports both community_id and community)
-  const byComm = new Map<number, string[]>();
-  nodes.forEach((n) => {
-    const commId = n.community_id !== undefined ? n.community_id : (n as { community?: number }).community;
-    if (commId !== undefined) {
-      const arr = byComm.get(commId) ?? [];
-      arr.push(n.id);
-      byComm.set(commId, arr);
-    }
-  });
+	// 1. Group nodes by community if they have one (supports both community_id and community)
+	const byComm = new Map<number, string[]>();
+	nodes.forEach((n) => {
+		const commId =
+			n.community_id !== undefined
+				? n.community_id
+				: (n as { community?: number }).community;
+		if (commId !== undefined) {
+			const arr = byComm.get(commId) ?? [];
+			arr.push(n.id);
+			byComm.set(commId, arr);
+		}
+	});
 
-  const comms = [...byComm.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([id, ids]) => [id, [...ids].sort()] as [number, string[]]);
-  const K = comms.length;
+	const comms = [...byComm.entries()]
+		.sort(([a], [b]) => a - b)
+		.map(([id, ids]) => [id, [...ids].sort()] as [number, string[]]);
+	const K = comms.length;
 
-  if (K > 0) {
-    const RING = Math.max(300, Math.min(K * 40, 1200));
-    const SPREAD = 80;
+	if (K > 0) {
+		const RING = Math.max(300, Math.min(K * 40, 1200));
+		const SPREAD = 80;
 
-    comms.forEach(([, ids], ci) => {
-      const ca = (ci / K) * 2 * Math.PI;
-      const cx = Math.cos(ca) * RING;
-      const cy = Math.sin(ca) * RING;
-      ids.forEach((id, ni) => {
-        const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
-        const r = SPREAD * (0.35 + (ni % 3) * 0.32);
-        positions.set(id, {
-          x: cx + Math.cos(na) * r,
-          y: cy + Math.sin(na) * r,
-        });
-      });
-    });
-  }
+		comms.forEach(([, ids], ci) => {
+			const ca = (ci / K) * 2 * Math.PI;
+			const cx = Math.cos(ca) * RING;
+			const cy = Math.sin(ca) * RING;
+			ids.forEach((id, ni) => {
+				const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
+				const r = SPREAD * (0.35 + (ni % 3) * 0.32);
+				positions.set(id, {
+					x: cx + Math.cos(na) * r,
+					y: cy + Math.sin(na) * r,
+				});
+			});
+		});
+	}
 
-  // 2. Build adjacency list for connected nodes to compute positions of unpositioned nodes
-  const adj = new Map<string, string[]>();
-  edges.forEach((e) => {
-    if (!adj.has(e.from)) adj.set(e.from, []);
-    if (!adj.has(e.to)) adj.set(e.to, []);
-    adj.get(e.from)!.push(e.to);
-    adj.get(e.to)!.push(e.from);
-  });
+	// 2. Build adjacency list for connected nodes to compute positions of unpositioned nodes
+	const adj = new Map<string, string[]>();
+	edges.forEach((e) => {
+		if (!adj.has(e.from)) adj.set(e.from, []);
+		if (!adj.has(e.to)) adj.set(e.to, []);
+		adj.get(e.from)!.push(e.to);
+		adj.get(e.to)!.push(e.from);
+	});
 
-  // 3. For nodes without a community, position them based on their neighbors' positions
-  const unpositionedNodes = nodes.filter((n) => {
-    const commId = n.community_id !== undefined ? n.community_id : (n as { community?: number }).community;
-    return commId === undefined;
-  });
+	// 3. For nodes without a community, position them based on their neighbors' positions
+	const unpositionedNodes = nodes.filter((n) => {
+		const commId =
+			n.community_id !== undefined
+				? n.community_id
+				: (n as { community?: number }).community;
+		return commId === undefined;
+	});
 
-  for (let pass = 0; pass < 3; pass++) {
-    let placedAny = false;
-    unpositionedNodes.forEach((n) => {
-      if (positions.has(n.id)) return;
+	for (let pass = 0; pass < 3; pass++) {
+		let placedAny = false;
+		unpositionedNodes.forEach((n) => {
+			if (positions.has(n.id)) return;
 
-      const neighbors = adj.get(n.id) ?? [];
-      let sumX = 0;
-      let sumY = 0;
-      let count = 0;
+			const neighbors = adj.get(n.id) ?? [];
+			let sumX = 0;
+			let sumY = 0;
+			let count = 0;
 
-      neighbors.forEach((neighId) => {
-        const pos = positions.get(neighId);
-        if (pos) {
-          sumX += pos.x;
-          sumY += pos.y;
-          count++;
-        }
-      });
+			neighbors.forEach((neighId) => {
+				const pos = positions.get(neighId);
+				if (pos) {
+					sumX += pos.x;
+					sumY += pos.y;
+					count++;
+				}
+			});
 
-      if (count > 0) {
-        // Add a small jitter to avoid exact overlapping
-        const jitterX = (stableUnit(`${n.id}:x`) - 0.5) * 30;
-        const jitterY = (stableUnit(`${n.id}:y`) - 0.5) * 30;
-        positions.set(n.id, {
-          x: sumX / count + jitterX,
-          y: sumY / count + jitterY,
-        });
-        placedAny = true;
-      }
-    });
-    if (!placedAny) break;
-  }
+			if (count > 0) {
+				// Add a small jitter to avoid exact overlapping
+				const jitterX = (stableUnit(`${n.id}:x`) - 0.5) * 30;
+				const jitterY = (stableUnit(`${n.id}:y`) - 0.5) * 30;
+				positions.set(n.id, {
+					x: sumX / count + jitterX,
+					y: sumY / count + jitterY,
+				});
+				placedAny = true;
+			}
+		});
+		if (!placedAny) break;
+	}
 
-  // 4. Any remaining nodes (completely disconnected or no positioned neighbors) get a default position on a circle
-  let unplacedCount = 0;
-  unpositionedNodes.forEach((n) => {
-    if (!positions.has(n.id)) {
-      unplacedCount++;
-    }
-  });
+	// 4. Any remaining nodes (completely disconnected or no positioned neighbors) get a default position on a circle
+	let unplacedCount = 0;
+	unpositionedNodes.forEach((n) => {
+		if (!positions.has(n.id)) {
+			unplacedCount++;
+		}
+	});
 
-  let unplacedIdx = 0;
-  unpositionedNodes.forEach((n) => {
-    if (!positions.has(n.id)) {
-      const angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
-      const r = 200 + stableUnit(`${n.id}:radius`) * 100;
-      positions.set(n.id, {
-        x: Math.cos(angle) * r,
-        y: Math.sin(angle) * r,
-      });
-      unplacedIdx++;
-    }
-  });
+	let unplacedIdx = 0;
+	unpositionedNodes.forEach((n) => {
+		if (!positions.has(n.id)) {
+			const angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
+			const r = 200 + stableUnit(`${n.id}:radius`) * 100;
+			positions.set(n.id, {
+				x: Math.cos(angle) * r,
+				y: Math.sin(angle) * r,
+			});
+			unplacedIdx++;
+		}
+	});
 
-  return positions;
+	return positions;
 }
 
 // Adaptive options: degrade rendering quality as graph size grows.
@@ -589,453 +676,544 @@ function buildInitialPositions(
 // rendering by: adaptiveTimestep, continuous (not dynamic) smooth, and
 // hiding edges during drag/zoom.
 function buildOptions(nodeCount: number) {
-  const isLarge = nodeCount >= LARGE_GRAPH;
-  const isHuge = nodeCount >= HUGE_GRAPH;
+	const isLarge = nodeCount >= LARGE_GRAPH;
+	const isHuge = nodeCount >= HUGE_GRAPH;
 
-  return {
-    nodes: {
-      // borderWidth: 0 cuts per-node border stroke in large graphs
-      borderWidth: isLarge ? 0 : 1,
-      // shadow is very expensive — disable for large graphs
-      shadow: isLarge
-        ? false
-        : { enabled: true, size: 5, x: 2, y: 2, color: "rgba(0,0,0,0.6)" },
-    },
-    edges: {
-      color: { inherit: "from" as const, opacity: 1 },
-      selectionWidth: 2,
-      // "continuous" smooth: canvas-only, no hidden physics nodes (fast).
-      // For huge graphs use straight lines — eliminates all curve math.
-      smooth: isHuge
-        ? false
-        : { enabled: true, type: "continuous" as const, roundness: 0.2 },
-    },
-    physics: {
-      solver: "forceAtlas2Based" as const,
-      forceAtlas2Based: {
-        gravitationalConstant: isLarge ? -80 : -150, // 大幅增加互斥力，把節點推開
-        centralGravity: 0.003, // 極大降低向心力，避免擠在中心
-        springLength: isLarge ? 150 : 250, // 把線拉長
-        springConstant: 0.04,
-        damping: 0.5,
-        avoidOverlap: 1, 
-      },
-      // adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
-      // meaning the solver converges in far fewer real iterations
-      adaptiveTimestep: true,
-      maxVelocity: 50,
-      minVelocity: 0.75,
-      stabilization: {
-        enabled: true,
-        iterations: isHuge ? 80 : isLarge ? 130 : 200,
-        updateInterval: isLarge ? 25 : 15,
-        fit: false,
-      },
-    },
-    interaction: {
-      hover: !isHuge,
-      tooltipDelay: 250,
-      navigationButtons: false,
-      keyboard: { enabled: true, bindToWindow: false },
-      zoomView: true,
-      dragView: true,
-      // hiding edges during drag/zoom is the single biggest UX win for
-      // large graphs — canvas redraws drop from O(E) to O(N) per frame
-      hideEdgesOnDrag: isLarge,
-      hideEdgesOnZoom: isHuge,
-    },
-    layout: { improvedLayout: false },
-  };
+	return {
+		nodes: {
+			// borderWidth: 0 cuts per-node border stroke in large graphs
+			borderWidth: isLarge ? 0 : 1,
+			// shadow is very expensive — disable for large graphs
+			shadow: isLarge
+				? false
+				: { enabled: true, size: 5, x: 2, y: 2, color: "rgba(0,0,0,0.6)" },
+		},
+		edges: {
+			color: { inherit: "from" as const, opacity: 1 },
+			selectionWidth: 2,
+			// "continuous" smooth: canvas-only, no hidden physics nodes (fast).
+			// For huge graphs use straight lines — eliminates all curve math.
+			smooth: isHuge
+				? false
+				: { enabled: true, type: "continuous" as const, roundness: 0.2 },
+		},
+		physics: {
+			solver: "forceAtlas2Based" as const,
+			forceAtlas2Based: {
+				gravitationalConstant: isLarge ? -80 : -150, // 大幅增加互斥力，把節點推開
+				centralGravity: 0.003, // 極大降低向心力，避免擠在中心
+				springLength: isLarge ? 150 : 250, // 把線拉長
+				springConstant: 0.04,
+				damping: 0.5,
+				avoidOverlap: 1,
+			},
+			// adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
+			// meaning the solver converges in far fewer real iterations
+			adaptiveTimestep: true,
+			maxVelocity: 50,
+			minVelocity: 0.75,
+			stabilization: {
+				enabled: true,
+				iterations: isHuge ? 80 : isLarge ? 130 : 200,
+				updateInterval: isLarge ? 25 : 15,
+				fit: false,
+			},
+		},
+		interaction: {
+			hover: !isHuge,
+			tooltipDelay: 250,
+			navigationButtons: false,
+			keyboard: { enabled: true, bindToWindow: false },
+			zoomView: true,
+			dragView: true,
+			// hiding edges during drag/zoom is the single biggest UX win for
+			// large graphs — canvas redraws drop from O(E) to O(N) per frame
+			hideEdgesOnDrag: isLarge,
+			hideEdgesOnZoom: isHuge,
+		},
+		layout: { improvedLayout: false },
+	};
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  citationEdges?: CitationEdge[];
-  analysis?: GraphAnalysis;
-  onNodeSelect?: (node: GraphNode | null) => void;
-  yearRange?: [number, number];
-  edgeWeight?: EdgeWeightMetric;
-  unit?: Unit;
-  visibleLayers?: Set<NodeType>;
-  hiddenCommunities?: Set<number>;
-  focusNodeId?: string;
-  onEdgeSelect?: (edge: GraphEdge | null) => void;
-  positionSnapshotKey: string;
-  onPositionSnapshotProvider?: (provider: PositionSnapshotProvider | null) => void;
-  /** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
-  onImageCaptureReady?: (capture: ImageCapture | null) => void;
-  /** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
-  onPublicationCaptureReady?: (capture: PublicationCapture | null) => void;
+	nodes: GraphNode[];
+	edges: GraphEdge[];
+	citationEdges?: CitationEdge[];
+	analysis?: GraphAnalysis;
+	onNodeSelect?: (node: GraphNode | null) => void;
+	yearRange?: [number, number];
+	edgeWeight?: EdgeWeightMetric;
+	unit?: Unit;
+	visibleLayers?: Set<NodeType>;
+	hiddenCommunities?: Set<number>;
+	focusNodeId?: string;
+	onEdgeSelect?: (edge: GraphEdge | null) => void;
+	positionSnapshotKey: string;
+	onPositionSnapshotProvider?: (
+		provider: PositionSnapshotProvider | null,
+	) => void;
+	/** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
+	onImageCaptureReady?: (capture: ImageCapture | null) => void;
+	/** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
+	onPublicationCaptureReady?: (capture: PublicationCapture | null) => void;
+	/** 差異檢視的成員篩選：這些 id 只隱藏、不重算佈局。 */
+	hiddenNodeIds?: Set<string>;
+	hiddenEdgeIds?: Set<string>;
+	/** 比較模式左右同步：外部下達的視窗位置／縮放（與目前值等價時不套用）。 */
+	viewport?: GraphViewport | null;
+	/** 使用者平移／縮放後回報目前視窗；等價的更新不會重複轉發。 */
+	onViewportChange?: (viewport: GraphViewport) => void;
 }
 
 export default function GraphViewer({
-  nodes,
-  edges,
-  citationEdges = [],
-  analysis,
-  onNodeSelect,
-  yearRange,
-  edgeWeight = 'jaccard',
-  unit = 'patent',
-  visibleLayers,
-  hiddenCommunities,
-  focusNodeId,
-  onEdgeSelect,
-  positionSnapshotKey,
-  onPositionSnapshotProvider,
-  onImageCaptureReady,
-  onPublicationCaptureReady,
+	nodes,
+	edges,
+	citationEdges = [],
+	analysis,
+	onNodeSelect,
+	yearRange,
+	edgeWeight = "jaccard",
+	unit = "patent",
+	visibleLayers,
+	hiddenCommunities,
+	focusNodeId,
+	onEdgeSelect,
+	positionSnapshotKey,
+	onPositionSnapshotProvider,
+	onImageCaptureReady,
+	onPublicationCaptureReady,
+	hiddenNodeIds,
+	hiddenEdgeIds,
+	viewport,
+	onViewportChange,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const networkRef = useRef<Network | null>(null);
-  const nodeDataSetRef = useRef<NodeDataSet | null>(null);
-  const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
-  const viewportRef = useRef<GraphViewport | null>(null);
-  const [stabilized, setStabilized] = useState(false);
-  const [stabProgress, setStabProgress] = useState(0);
+	const containerRef = useRef<HTMLDivElement>(null);
+	const networkRef = useRef<Network | null>(null);
+	const nodeDataSetRef = useRef<NodeDataSet | null>(null);
+	const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
+	const viewportRef = useRef<GraphViewport | null>(null);
+	// 最後一次「已同步」的視窗：外送前與收到指令時都拿它比對，等價就不動作，
+	// 這樣 A→B 的移動不會再被 B 反彈回 A。
+	const syncedViewportRef = useRef<GraphViewport | null>(null);
+	// 篩選（含差異成員）是底層可見性；雙擊的暫時聚焦結束時必須回到這份狀態，
+	// 不能把使用者已隱藏的成員重新顯示。
+	const baseHiddenNodeIdsRef = useRef<ReadonlySet<string>>(new Set());
+	const onViewportChangeRef = useRef(onViewportChange);
+	const [stabilized, setStabilized] = useState(false);
+	const [stabProgress, setStabProgress] = useState(0);
 
-  const handleFit = useCallback(() => {
-    networkRef.current?.fit({
-      animation: { duration: 400, easingFunction: "easeInOutQuad" },
-    });
-  }, []);
+	useEffect(() => {
+		onViewportChangeRef.current = onViewportChange;
+	}, [onViewportChange]);
 
-  // ── Build / rebuild network when nodes or edges change ──
-  useEffect(() => {
-    // A parent must not export a completed layout while this instance rebuilds.
-    onPositionSnapshotProvider?.(null);
-    onImageCaptureReady?.(null);
-    onPublicationCaptureReady?.(null);
-    if (!containerRef.current) return;
-    let cancelled = false;
+	const handleFit = useCallback(() => {
+		networkRef.current?.fit({
+			animation: { duration: 400, easingFunction: "easeInOutQuad" },
+		});
+	}, []);
 
-    const init = async () => {
-      const { Network } = await import("vis-network");
-      const { DataSet } = await import("vis-data");
-      if (cancelled || !containerRef.current) return;
+	// ── Build / rebuild network when nodes or edges change ──
+	useEffect(() => {
+		// A parent must not export a completed layout while this instance rebuilds.
+		onPositionSnapshotProvider?.(null);
+		onImageCaptureReady?.(null);
+		onPublicationCaptureReady?.(null);
+		if (!containerRef.current) return;
+		let cancelled = false;
 
-      const initPos = buildInitialPositions(nodes, edges);
-      const godNodeMap = new Map((analysis?.god_nodes ?? []).map((g) => [g.id, g]));
-      const surprisingEdgeMap = new Map(
-        (analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
-      );
-      const nodeDataSet = new DataSet(
-        nodes.map((n) => toVisNode(n, unit, initPos.get(n.id), godNodeMap.get(n.id))),
-      );
-      const edgeDataSet = new DataSet(
-        [
-          ...edges.map((e) => toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit)),
-          ...citationEdges.map(toVisCitationEdge),
-        ],
-      );
-      nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
-      edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
+		const init = async () => {
+			const { Network } = await import("vis-network");
+			const { DataSet } = await import("vis-data");
+			if (cancelled || !containerRef.current) return;
 
-      if (networkRef.current) {
-        const viewport = {
-          position: networkRef.current.getViewPosition(),
-          scale: networkRef.current.getScale(),
-        };
-        viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
-        networkRef.current.destroy();
-        networkRef.current = null;
-      }
+			const initPos = buildInitialPositions(nodes, edges);
+			const godNodeMap = new Map(
+				(analysis?.god_nodes ?? []).map((g) => [g.id, g]),
+			);
+			const surprisingEdgeMap = new Map(
+				(analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
+			);
+			const nodeDataSet = new DataSet(
+				nodes.map((n) =>
+					toVisNode(n, unit, initPos.get(n.id), godNodeMap.get(n.id)),
+				),
+			);
+			const edgeDataSet = new DataSet([
+				...edges.map((e) =>
+					toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit),
+				),
+				...citationEdges.map(toVisCitationEdge),
+			]);
+			nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
+			edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 
-      const network = new Network(
-        containerRef.current,
-        { nodes: nodeDataSet, edges: edgeDataSet },
-        buildOptions(nodes.length),
-      );
-      networkRef.current = network;
+			if (networkRef.current) {
+				const viewport = {
+					position: networkRef.current.getViewPosition(),
+					scale: networkRef.current.getScale(),
+				};
+				viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
+				networkRef.current.destroy();
+				networkRef.current = null;
+			}
 
-      if (isValidGraphViewport(viewportRef.current)) {
-        network.moveTo({
-          position: viewportRef.current.position,
-          scale: viewportRef.current.scale,
-          animation: false,
-        });
-      }
+			const network = new Network(
+				containerRef.current,
+				{ nodes: nodeDataSet, edges: edgeDataSet },
+				buildOptions(nodes.length),
+			);
+			networkRef.current = network;
 
-      setStabilized(false);
-      setStabProgress(0);
+			if (isValidGraphViewport(viewportRef.current)) {
+				network.moveTo({
+					position: viewportRef.current.position,
+					scale: viewportRef.current.scale,
+					animation: false,
+				});
+			}
 
-      network.on("stabilizationProgress", (params) => {
-        if (!cancelled)
-          setStabProgress(Math.round((params.iterations / params.total) * 100));
-      });
+			setStabilized(false);
+			setStabProgress(0);
 
-      network.once("stabilizationIterationsDone", () => {
-        if (!cancelled && networkRef.current === network) {
-          network.setOptions({ physics: { enabled: false } });
-          onPositionSnapshotProvider?.({
-            key: positionSnapshotKey,
-            getPositions: () => {
-              if (cancelled || networkRef.current !== network) return null;
-              const positions: FrozenPositions = Object.fromEntries(
-                Object.entries(network.getPositions()).map(([id, position]) => [
-                  id,
-                  { x: position.x, y: position.y },
-                ]),
-              );
-              return positions;
-            },
-          });
-          onImageCaptureReady?.(() => captureNetworkImage(network));
-          onPublicationCaptureReady?.((options) =>
-            networkRef.current === network
-              ? renderPublicationFigure(network, nodes, edges, options)
-              : null,
-          );
-          setStabilized(true);
-          setStabProgress(100);
-        }
-      });
+			network.on("stabilizationProgress", (params) => {
+				if (!cancelled)
+					setStabProgress(Math.round((params.iterations / params.total) * 100));
+			});
 
-      // ── Highlight: Neighbourhood Highlight (1st & 2nd degree) ───────────
-      let highlightActive = false;
-      const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.05 };
-      const DIM_NODE_COLOR = "rgba(200,200,200,0.3)";
+			network.once("stabilizationIterationsDone", () => {
+				if (!cancelled && networkRef.current === network) {
+					network.setOptions({ physics: { enabled: false } });
+					onPositionSnapshotProvider?.({
+						key: positionSnapshotKey,
+						getPositions: () => {
+							if (cancelled || networkRef.current !== network) return null;
+							const positions: FrozenPositions = Object.fromEntries(
+								Object.entries(network.getPositions()).map(([id, position]) => [
+									id,
+									{ x: position.x, y: position.y },
+								]),
+							);
+							return positions;
+						},
+					});
+					onImageCaptureReady?.(() => captureNetworkImage(network));
+					onPublicationCaptureReady?.((options) =>
+						networkRef.current === network
+							? renderPublicationFigure(network, nodes, edges, options)
+							: null,
+					);
+					setStabilized(true);
+					setStabProgress(100);
+				}
+			});
 
-      const applyHighlight = (clickedId: string) => {
-        const degree1 = new Set<string>([clickedId]);
-        const degree2 = new Set<string>();
-        const activeEdges = new Set<string>();
+			// ── 比較模式視窗同步：使用者拖曳⁃縮放後向上回報 ───────────────
+			const emitViewport = () => {
+				if (cancelled || networkRef.current !== network) return;
+				const current: GraphViewport = {
+					position: network.getViewPosition(),
+					scale: network.getScale(),
+				};
+				if (!isValidGraphViewport(current)) return;
+				if (graphViewportsEqual(current, syncedViewportRef.current)) return;
+				syncedViewportRef.current = current;
+				onViewportChangeRef.current?.(current);
+			};
+			network.on("dragEnd", emitViewport);
+			network.on("zoom", emitViewport);
+			// fit() 與 focus() 都用動畫改變視窗而不保證觸發 dragEnd/zoom；
+			// 動畫完成時再讀一次，A/B 才能維持同步。
+			network.on("animationFinished", emitViewport);
 
-        // Find 1st degree connections
-        edges.forEach((e) => {
-          if (e.from === clickedId) {
-            degree1.add(e.to);
-            activeEdges.add(e.id);
-          } else if (e.to === clickedId) {
-            degree1.add(e.from);
-            activeEdges.add(e.id);
-          }
-        });
+			// ── Highlight: Neighbourhood Highlight (1st & 2nd degree) ───────────
+			let highlightActive = false;
+			const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.05 };
+			const DIM_NODE_COLOR = "rgba(200,200,200,0.3)";
 
-        // Find 2nd degree connections
-        edges.forEach((e) => {
-          if (degree1.has(e.from) && !degree1.has(e.to)) {
-            degree2.add(e.to);
-            activeEdges.add(e.id);
-          } else if (degree1.has(e.to) && !degree1.has(e.from)) {
-            degree2.add(e.from);
-            activeEdges.add(e.id);
-          }
-        });
+			const applyHighlight = (clickedId: string) => {
+				const degree1 = new Set<string>([clickedId]);
+				const degree2 = new Set<string>();
+				const activeEdges = new Set<string>();
 
-        nodeDataSet.update(
-          nodes.map((n) => {
-            const original = toVisNode(n, unit);
-            if (degree1.has(n.id)) {
-              // 1st degree & selected: Original color, Original label, Fully opaque
-              return {
-                id: n.id,
-                color: original.color,
-                label: original.label,
-                opacity: 1,
-              };
-            } else if (degree2.has(n.id)) {
-              // 2nd degree: Original color, Original label, Slightly dimmed
-              return {
-                id: n.id,
-                color: original.color,
-                label: original.label,
-                opacity: 0.5,
-              };
-            } else {
-              // Non-connected: Grey out, highly dimmed, hide label (unless it's an applicant)
-              // We hide concept and patent labels to reduce clutter. Applicant labels are usually kept but we can hide them too if we want a clean view.
-              return {
-                id: n.id,
-                color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR },
-                label: "",
-                opacity: 0.2,
-              };
-            }
-          }),
-        );
+				// Find 1st degree connections
+				edges.forEach((e) => {
+					if (e.from === clickedId) {
+						degree1.add(e.to);
+						activeEdges.add(e.id);
+					} else if (e.to === clickedId) {
+						degree1.add(e.from);
+						activeEdges.add(e.id);
+					}
+				});
 
-        edgeDataSet.update(
-          edges.map((e) => ({
-            id: e.id,
-            color: activeEdges.has(e.id) ? toVisEdge(e, undefined, edgeWeight, unit).color : DIM_EDGE,
-          })),
-        );
-        highlightActive = true;
-      };
+				// Find 2nd degree connections
+				edges.forEach((e) => {
+					if (degree1.has(e.from) && !degree1.has(e.to)) {
+						degree2.add(e.to);
+						activeEdges.add(e.id);
+					} else if (degree1.has(e.to) && !degree1.has(e.from)) {
+						degree2.add(e.from);
+						activeEdges.add(e.id);
+					}
+				});
 
-      const clearHighlight = () => {
-        if (!highlightActive) return;
-        nodeDataSet.update(
-          nodes.map((n) => {
-            const original = toVisNode(n, unit);
-            return {
-              id: n.id,
-              color: original.color,
-              label: original.label,
-              opacity: 1,
-            };
-          }),
-        );
-        edgeDataSet.update(
-          edges.map((e) => ({ id: e.id, color: toVisEdge(e, undefined, edgeWeight, unit).color })),
-        );
-        highlightActive = false;
-      };
+				nodeDataSet.update(
+					nodes.map((n) => {
+						const original = toVisNode(n, unit);
+						if (degree1.has(n.id)) {
+							// 1st degree & selected: Original color, Original label, Fully opaque
+							return {
+								id: n.id,
+								color: original.color,
+								label: original.label,
+								opacity: 1,
+							};
+						} else if (degree2.has(n.id)) {
+							// 2nd degree: Original color, Original label, Slightly dimmed
+							return {
+								id: n.id,
+								color: original.color,
+								label: original.label,
+								opacity: 0.5,
+							};
+						} else {
+							// Non-connected: Grey out, highly dimmed, hide label (unless it's an applicant)
+							// We hide concept and patent labels to reduce clutter. Applicant labels are usually kept but we can hide them too if we want a clean view.
+							return {
+								id: n.id,
+								color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR },
+								label: "",
+								opacity: 0.2,
+							};
+						}
+					}),
+				);
 
-      network.on("click", (params) => {
-        if (params.nodes.length > 0) {
-          const nodeId = params.nodes[0] as string;
-          onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null);
-          onEdgeSelect?.(null);
-          applyHighlight(nodeId);
-        } else if (params.edges.length > 0) {
-          const edgeId = params.edges[0] as string;
-          onNodeSelect?.(null);
-          onEdgeSelect?.(edges.find((edge) => edge.id === edgeId) ?? null);
-          clearHighlight();
-        } else {
-          onNodeSelect?.(null);
-          onEdgeSelect?.(null);
-          clearHighlight();
-        }
-      });
+				edgeDataSet.update(
+					edges.map((e) => ({
+						id: e.id,
+						color: activeEdges.has(e.id)
+							? toVisEdge(e, undefined, edgeWeight, unit).color
+							: DIM_EDGE,
+					})),
+				);
+				highlightActive = true;
+			};
 
-      // Double-click: focus mode (hide non-adjacent).
-      // Clear opacity-highlight first to avoid stacked visual states.
-      network.on("doubleClick", (params) => {
-        clearHighlight();
-        if (params.nodes.length === 0) {
-          nodeDataSet.update(nodes.map((n) => ({ id: n.id, hidden: false })));
-          return;
-        }
-        const clickedId = params.nodes[0] as string;
-        const adjacent = new Set<string>([clickedId]);
-        edges.forEach((e) => {
-          if (e.from === clickedId) adjacent.add(e.to);
-          if (e.to === clickedId) adjacent.add(e.from);
-        });
-        nodeDataSet.update(
-          nodes.map((n) => ({ id: n.id, hidden: !adjacent.has(n.id) })),
-        );
-      });
-    };
+			const clearHighlight = () => {
+				if (!highlightActive) return;
+				nodeDataSet.update(
+					nodes.map((n) => {
+						const original = toVisNode(n, unit);
+						return {
+							id: n.id,
+							color: original.color,
+							label: original.label,
+							opacity: 1,
+						};
+					}),
+				);
+				edgeDataSet.update(
+					edges.map((e) => ({
+						id: e.id,
+						color: toVisEdge(e, undefined, edgeWeight, unit).color,
+					})),
+				);
+				highlightActive = false;
+			};
 
-    void init();
+			network.on("click", (params) => {
+				if (params.nodes.length > 0) {
+					const nodeId = params.nodes[0] as string;
+					onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null);
+					onEdgeSelect?.(null);
+					applyHighlight(nodeId);
+				} else if (params.edges.length > 0) {
+					const edgeId = params.edges[0] as string;
+					onNodeSelect?.(null);
+					onEdgeSelect?.(edges.find((edge) => edge.id === edgeId) ?? null);
+					clearHighlight();
+				} else {
+					onNodeSelect?.(null);
+					onEdgeSelect?.(null);
+					clearHighlight();
+				}
+			});
 
-    return () => {
-      cancelled = true;
-      if (networkRef.current) {
-        const viewport = {
-          position: networkRef.current.getViewPosition(),
-          scale: networkRef.current.getScale(),
-        };
-        viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
-        networkRef.current.destroy();
-        networkRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    nodes,
-    edges,
-    citationEdges,
-    edgeWeight,
-    unit,
-    positionSnapshotKey,
-    onPositionSnapshotProvider,
-    onImageCaptureReady,
-    onPublicationCaptureReady,
-  ]);
+			// Double-click: focus mode (hide non-adjacent).
+			// Clear opacity-highlight first to avoid stacked visual states.
+			network.on("doubleClick", (params) => {
+				clearHighlight();
+				const baseHidden = baseHiddenNodeIdsRef.current;
+				if (params.nodes.length === 0) {
+					// 退出暫時聚焦時還原篩選結果，而非無條件顯示所有節點。
+					nodeDataSet.update(
+						nodes.map((n) => ({ id: n.id, hidden: baseHidden.has(n.id) })),
+					);
+					return;
+				}
+				const clickedId = params.nodes[0] as string;
+				const adjacent = new Set<string>([clickedId]);
+				edges.forEach((e) => {
+					if (e.from === clickedId) adjacent.add(e.to);
+					if (e.to === clickedId) adjacent.add(e.from);
+				});
+				nodeDataSet.update(
+					nodes.map((n) => ({
+						id: n.id,
+						hidden: baseHidden.has(n.id) || !adjacent.has(n.id),
+					})),
+				);
+			});
+		};
 
-  // ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
-  useEffect(() => {
-    if (!nodeDataSetRef.current) return;
+		void init();
 
-    const [y0, y1] = yearRange ?? [0, 9999];
+		return () => {
+			cancelled = true;
+			if (networkRef.current) {
+				const viewport = {
+					position: networkRef.current.getViewPosition(),
+					scale: networkRef.current.getScale(),
+				};
+				viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
+				networkRef.current.destroy();
+				networkRef.current = null;
+			}
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		nodes,
+		edges,
+		citationEdges,
+		edgeWeight,
+		unit,
+		positionSnapshotKey,
+		onPositionSnapshotProvider,
+		onImageCaptureReady,
+		onPublicationCaptureReady,
+	]);
 
-    const hiddenIds = new Set<string>();
-    const nodeUpdates = nodes.map((n) => {
-      let hidden = false;
+	// ── 比較模式：套用外部下達的視窗。已經在同一個位置就不動，避免兩側互推。
+	useEffect(() => {
+		const network = networkRef.current;
+		if (!network || !isValidGraphViewport(viewport)) return;
+		const current: GraphViewport = {
+			position: network.getViewPosition(),
+			scale: network.getScale(),
+		};
+		if (graphViewportsEqual(viewport, current)) return;
+		syncedViewportRef.current = viewport;
+		network.moveTo({
+			position: viewport.position,
+			scale: viewport.scale,
+			animation: false,
+		});
+	}, [viewport, stabilized]);
 
-      if (visibleLayers && !visibleLayers.has(n.type)) hidden = true;
+	// ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
+	useEffect(() => {
+		if (!nodeDataSetRef.current) return;
 
-      if (!hidden && n.type === "patent" && n.year) {
-        if (n.year < y0 || n.year > y1) hidden = true;
-      }
+		const [y0, y1] = yearRange ?? [0, 9999];
 
-      if (!hidden && n.type === "concept" && n.community_id !== undefined) {
-        if (hiddenCommunities?.has(n.community_id)) hidden = true;
-      }
+		const hiddenIds = new Set<string>();
+		const nodeUpdates = nodes.map((n) => {
+			let hidden = false;
 
-      if (hidden) hiddenIds.add(n.id);
-      return { id: n.id, hidden };
-    });
+			if (visibleLayers && !visibleLayers.has(n.type)) hidden = true;
 
-    nodeDataSetRef.current.update(nodeUpdates);
+			if (!hidden && n.type === "patent" && n.year) {
+				if (n.year < y0 || n.year > y1) hidden = true;
+			}
 
-    // Sync edge visibility: hide any edge whose from OR to node is hidden.
-    if (edgeDataSetRef.current) {
-      const edgeUpdates = [
-        ...edges.map((e) => ({
-          id: e.id,
-          hidden: hiddenIds.has(e.from) || hiddenIds.has(e.to),
-        })),
-        ...citationEdges.map((edge) => ({
-          id: `citation:${edge.id}`,
-          hidden: hiddenIds.has(edge.from) || hiddenIds.has(edge.to),
-        })),
-      ];
-      edgeDataSetRef.current.update(edgeUpdates);
-    }
-  }, [nodes, edges, citationEdges, yearRange, visibleLayers, hiddenCommunities]);
+			if (!hidden && n.type === "concept" && n.community_id !== undefined) {
+				if (hiddenCommunities?.has(n.community_id)) hidden = true;
+			}
 
-  // ── Focus a node (from SearchBox) ──
-  useEffect(() => {
-    if (!focusNodeId || !networkRef.current) return;
-    // 比較模式下兩側面板的節點子集不同，聚焦的節點可能不在這一側——沒有就跳過。
-    if (!nodes.some((n) => n.id === focusNodeId)) return;
-    networkRef.current.focus(focusNodeId, {
-      scale: 1.5,
-      animation: { duration: 400, easingFunction: "easeInOutQuad" },
-    });
-    networkRef.current.selectNodes([focusNodeId]);
-  }, [focusNodeId, nodes]);
+			if (!hidden && hiddenNodeIds?.has(n.id)) hidden = true;
 
-  const isLarge = nodes.length >= LARGE_GRAPH;
+			if (hidden) hiddenIds.add(n.id);
+			return { id: n.id, hidden };
+		});
 
-  return (
-    <div className="relative w-full h-full bg-accent">
-      {/* Fit-to-view button */}
-      <button
-        onClick={handleFit}
-        title="全部顯示"
-        className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
-      >
-        全部顯示
-      </button>
+		baseHiddenNodeIdsRef.current = hiddenIds;
+		nodeDataSetRef.current.update(nodeUpdates);
 
-      {/* Stabilizing overlay with progress */}
-      {!stabilized && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 bg-accent/85 border border-border rounded-md px-4 py-2 pointer-events-none backdrop-blur-sm">
-          <span className="text-xs text-muted-foreground">
-            佈局計算中… {stabProgress > 0 ? `${stabProgress}%` : ""}
-          </span>
-          {isLarge && (
-            <div className="w-32 h-1 bg-background rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent rounded-full transition-all duration-150"
-                style={{ width: `${stabProgress}%` }}
-              />
-            </div>
-          )}
-        </div>
-      )}
+		// Sync edge visibility: hide any edge whose from OR to node is hidden.
+		if (edgeDataSetRef.current) {
+			const edgeUpdates = [
+				...edges.map((e) => ({
+					id: e.id,
+					hidden:
+						hiddenIds.has(e.from) ||
+						hiddenIds.has(e.to) ||
+						Boolean(hiddenEdgeIds?.has(e.id)),
+				})),
+				...citationEdges.map((edge) => ({
+					id: `citation:${edge.id}`,
+					hidden: hiddenIds.has(edge.from) || hiddenIds.has(edge.to),
+				})),
+			];
+			edgeDataSetRef.current.update(edgeUpdates);
+		}
+	}, [
+		nodes,
+		edges,
+		citationEdges,
+		yearRange,
+		visibleLayers,
+		hiddenCommunities,
+		hiddenNodeIds,
+		hiddenEdgeIds,
+		stabilized,
+	]);
 
-      <div ref={containerRef} className="w-full h-full" />
-    </div>
-  );
+	// ── Focus a node (from SearchBox) ──
+	useEffect(() => {
+		if (!focusNodeId || !networkRef.current) return;
+		// 比較模式下兩側面板的節點子集不同，聚焦的節點可能不在這一側——沒有就跳過。
+		if (!nodes.some((n) => n.id === focusNodeId)) return;
+		networkRef.current.focus(focusNodeId, {
+			scale: 1.5,
+			animation: { duration: 400, easingFunction: "easeInOutQuad" },
+		});
+		networkRef.current.selectNodes([focusNodeId]);
+	}, [focusNodeId, nodes]);
+
+	const isLarge = nodes.length >= LARGE_GRAPH;
+
+	return (
+		<div className="relative w-full h-full bg-accent">
+			{/* Fit-to-view button */}
+			<button
+				onClick={handleFit}
+				title="全部顯示"
+				className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
+			>
+				全部顯示
+			</button>
+
+			{/* Stabilizing overlay with progress */}
+			{!stabilized && (
+				<div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 bg-accent/85 border border-border rounded-md px-4 py-2 pointer-events-none backdrop-blur-sm">
+					<span className="text-xs text-muted-foreground">
+						佈局計算中… {stabProgress > 0 ? `${stabProgress}%` : ""}
+					</span>
+					{isLarge && (
+						<div className="w-32 h-1 bg-background rounded-full overflow-hidden">
+							<div
+								className="h-full bg-accent rounded-full transition-all duration-150"
+								style={{ width: `${stabProgress}%` }}
+							/>
+						</div>
+					)}
+				</div>
+			)}
+
+			<div ref={containerRef} className="w-full h-full" />
+		</div>
+	);
 }
