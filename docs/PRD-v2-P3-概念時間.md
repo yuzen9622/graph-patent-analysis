@@ -165,7 +165,10 @@ time_window = [ min(所有有 first_year 概念), max(…概念 first_year) ]
 ### 3.3 色與映射（B4）
 
 > **2026-08-09 修訂**：色盤由 `sequential_blue`（9 錨）改為 **`rainbow`（彩虹 7 錨，紅橙黃綠藍靛紫）**（老師指定）。
-> 圖例由左（紅＝最早）至右（紫＝最近）；灰 `#BAB0AC`＝年份未知不變；插值公式與 clamp 規則不變。
+> 圖例由左（紅＝最早）至右（紫＝最近）；灰 `#BAB0AC`＝年份未知不變；clamp 規則不變。
+> **2026-08-09 二次修訂**：插值空間由 sRGB 逐通道改為 **OKLab（感知均勻，Ottosson 2019）**——
+> sRGB 直線插值在彩虹上的中間色會變濁變暗（如黃→綠的濁綠），OKLab 讓漸變平滑無濁色；
+> 錨點語意不變（t 落在錨點座標時精確命中該錨色，round-trip 精確）。
 > `methodology.time_color_scale` 一律寫 `'rainbow'`；舊資料的 `'sequential_blue'` 在 normalize 時正規化為 `'rainbow'`（圖例不印舊名）。
 
 **色盤 `rainbow`（7 錨色，值為常數）**：
@@ -181,7 +184,7 @@ t   = clamp((first_year - window[0]) / max(1, window[1] - window[0]), 0, 1)
 pos = t * (N - 1)                  // N = 錨色個數（此為 7）
 lo  = floor(pos)                   // hi = min(N-1, lo+1)
 f   = pos - lo                     // 0 ≤ f < 1
-color = sRGB 逐通道線性插值(锚[lo], 锚[hi], f)，每通道 Math.round，輸出 #RRGGBB
+color = OKLab 空間線性插值(锚[lo], 锚[hi], f) → sRGB，每通道 Math.round，輸出 #RRGGBB
 ```
 
 - **sRGB 逐通道**（非 OkLab／HSV）；四捨五入用 `Math.round`。
