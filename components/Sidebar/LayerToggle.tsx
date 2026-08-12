@@ -9,22 +9,46 @@ interface Props {
   onToggle: (type: NodeType) => void;
 }
 
-const LAYERS: { type: NodeType; label: string; color: string; token: string }[] = [
-  { type: "applicant", label: "申請人層", color: "#4E79A7", token: "layer-applicant" },
-  { type: "patent", label: "專利層", color: "#F28E2B", token: "layer-patent" },
-  { type: "concept", label: "概念層", color: "#59A14F", token: "layer-concept" },
+const LAYERS: {
+  type: NodeType;
+  label: string;
+  color: string;
+  /** 靜態 class 字串（Tailwind 需在原始碼可見才能產出樣式）。 */
+  checkedClass: string;
+}[] = [
+  {
+    type: "applicant",
+    label: "申請人層",
+    color: "#4E79A7",
+    checkedClass:
+      "data-[state=checked]:bg-layer-applicant data-[state=checked]:border-layer-applicant",
+  },
+  {
+    type: "patent",
+    label: "專利層",
+    color: "#F28E2B",
+    checkedClass:
+      "data-[state=checked]:bg-layer-patent data-[state=checked]:border-layer-patent",
+  },
+  {
+    type: "concept",
+    label: "概念層",
+    color: "#59A14F",
+    checkedClass:
+      "data-[state=checked]:bg-layer-concept data-[state=checked]:border-layer-concept",
+  },
 ];
 
 export default function LayerToggle({ visibleLayers, onToggle }: Props) {
   return (
-    <div className="space-y-2">
-      {LAYERS.map(({ type, label, color, token }) => (
-        <div key={type} className="flex items-center gap-2">
+    <div className="space-y-1.5">
+      {LAYERS.map(({ type, label, color, checkedClass }) => (
+        <div key={type} className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted/60 transition-colors">
           <Checkbox
             id={`layer-${type}`}
             checked={visibleLayers.has(type)}
             onCheckedChange={() => onToggle(type)}
-            className={`border-border data-[state=checked]:bg-${token} data-[state=checked]:border-${token}`}
+            className={`border-border ${checkedClass}`}
           />
           <Label
             htmlFor={`layer-${type}`}
@@ -33,7 +57,7 @@ export default function LayerToggle({ visibleLayers, onToggle }: Props) {
             <span
               aria-hidden
               className="w-2 h-2 rounded-sm shrink-0"
-              style={{ background: `var(--color-${token}, ${color})` }}
+              style={{ background: `var(--color-${type === "applicant" ? "layer-applicant" : type === "patent" ? "layer-patent" : "layer-concept"}, ${color})` }}
             />
             {label}
           </Label>

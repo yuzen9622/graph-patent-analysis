@@ -746,6 +746,18 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		});
 	}, []);
 
+	/** 重設所有篩選（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
+	const handleResetFilters = useCallback(() => {
+		setYearRange(graph.stats.year_range);
+		setMinSupport(1);
+		setIpcFilter([]);
+		setShowCitations(false);
+		setVisibleLayers(new Set<NodeType>(["applicant", "patent", "concept"]));
+		setHiddenCommunities(new Set());
+		setSourceFiles([]);
+		setSourceFilesRight([]);
+	}, [graph.stats.year_range]);
+
 	return (
 		<div className="flex flex-col h-screen bg-background overflow-hidden">
 			{/* ── Header ── */}
@@ -1156,6 +1168,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						}}
 						onEdgeClose={() => setSelectedEdge(null)}
 						onMinSupportChange={setMinSupport}
+						onResetFilters={handleResetFilters}
 						showCitations={showCitations}
 						onCitationsChange={setShowCitations}
 					/>

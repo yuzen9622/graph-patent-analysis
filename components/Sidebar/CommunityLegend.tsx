@@ -1,5 +1,6 @@
 "use client";
 
+import { EyeOff } from "lucide-react";
 import type { Community } from "@/types/graph";
 
 interface Props {
@@ -15,19 +16,35 @@ export default function CommunityLegend({
 }: Props) {
   if (communities.length === 0) return null;
 
-  const allHidden = communities.every((c) => hiddenCommunities.has(c.id));
+  const hiddenCount = communities.filter((c) =>
+    hiddenCommunities.has(c.id),
+  ).length;
 
   return (
     <div>
-      <p className="mb-2 text-[0.65rem] leading-relaxed text-muted-foreground">
+      <p className="mb-2 text-[0.7rem] leading-relaxed text-muted-foreground">
         社群名稱取群內連結度最高的概念作為代表概念，不等同人工分類名稱。
       </p>
-      {allHidden && (
-        <p className="text-xs text-muted-foreground mb-2">
-          所有社群已隱藏，點擊色點以顯示
-        </p>
+      {hiddenCount > 0 && (
+        <div className="mb-2 flex items-center justify-between rounded-md border border-border bg-muted/40 px-2 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+            <EyeOff size={11} aria-hidden />
+            已隱藏 {hiddenCount} 個社群
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              communities
+                .filter((c) => hiddenCommunities.has(c.id))
+                .forEach((c) => onToggle(c.id))
+            }
+            className="text-[0.7rem] text-primary hover:underline cursor-pointer"
+          >
+            全部顯示
+          </button>
+        </div>
       )}
-      <ul className="space-y-1">
+      <ul className="space-y-0.5">
         {communities.map((c) => {
           const isHidden = hiddenCommunities.has(c.id);
           return (
@@ -35,17 +52,24 @@ export default function CommunityLegend({
               <button
                 onClick={() => onToggle(c.id)}
                 title={isHidden ? `顯示「${c.name}」` : `隱藏「${c.name}」`}
-                className="w-full flex items-center gap-2 px-1 py-1 rounded hover:bg-muted transition-colors cursor-pointer group"
+                aria-pressed={!isHidden}
+                className="w-full flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted transition-colors cursor-pointer group"
               >
                 <span
                   aria-hidden
                   className="w-3 h-3 rounded-full shrink-0 transition-opacity"
                   style={{ background: c.color, opacity: isHidden ? 0.3 : 1 }}
                 />
-                <span className="flex-1 text-foreground text-xs text-left truncate transition-colors">
+                <span
+                  className={`flex-1 text-xs text-left truncate transition-colors ${
+                    isHidden
+                      ? "text-muted-foreground/60 line-through decoration-muted-foreground/40"
+                      : "text-foreground"
+                  }`}
+                >
                   {c.name}
                 </span>
-                <span className="text-[0.65rem] text-muted-foreground shrink-0 tabular-nums">
+                <span className="text-[0.7rem] text-muted-foreground shrink-0 tabular-nums">
                   {c.node_count}
                 </span>
               </button>
