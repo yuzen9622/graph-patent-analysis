@@ -57,6 +57,7 @@ import type { GraphViewport } from "@/lib/graph-viewport";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
 import { subgraphNodeIds } from "@/lib/publication-export";
 import { TEMPORAL_OPACITY_LINE } from "@/lib/temporal";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import type { ImageCapture, PublicationCapture } from "./GraphViewer";
 import type {
 	GraphData,
@@ -149,6 +150,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	const [yearRange, setYearRange] = useState<[number, number]>(
 		graph.stats.year_range,
 	);
+	const debouncedMinSupport = useDebouncedValue(minSupport, 200);
+	const debouncedYearRange = useDebouncedValue(yearRange, 200);
 	const [visibleLayers, setVisibleLayers] = useState<Set<NodeType>>(
 		new Set<NodeType>(["applicant", "patent", "concept"]),
 	);
@@ -223,8 +226,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		() => ({
 			mode,
 			showSemantic,
-			minSupport,
-			yearRange,
+			minSupport: debouncedMinSupport,
+			yearRange: debouncedYearRange,
 			colorMode,
 			edgeWeight,
 			unit,
@@ -236,8 +239,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		[
 			mode,
 			showSemantic,
-			minSupport,
-			yearRange,
+			debouncedMinSupport,
+			debouncedYearRange,
 			colorMode,
 			edgeWeight,
 			unit,
@@ -423,6 +426,22 @@ export default function GraphLayout({ graph, jobId }: Props) {
 			showCitations: sharedViewOptions.showCitations,
 		}),
 		[sharedViewOptions],
+	);
+	const viewerLayers = useMemo(
+		() =>
+			mode === "concept"
+				? new Set<NodeType>(["concept"])
+				: mode === "institution"
+					? new Set<NodeType>(["applicant"])
+					: visibleLayers,
+		[mode, visibleLayers],
+	);
+	const viewerHiddenCommunities = useMemo(
+		() =>
+			mode === "concept" || mode === "institution"
+				? hiddenCommunities
+				: undefined,
+		[mode, hiddenCommunities],
 	);
 
 	const openCompareSetup = useCallback(() => {
@@ -970,18 +989,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 									yearRange={yearRange}
 									edgeWeight={edgeWeight}
 									unit={unit}
-									visibleLayers={
-										mode === "concept"
-											? new Set<NodeType>(["concept"])
-											: mode === "institution"
-												? new Set<NodeType>(["applicant"])
-												: visibleLayers
-									}
-									hiddenCommunities={
-										mode === "concept" || mode === "institution"
-											? hiddenCommunities
-											: undefined
-									}
+									visibleLayers={viewerLayers}
+									hiddenCommunities={viewerHiddenCommunities}
 									hiddenNodeIds={membershipHidden.nodes}
 									hiddenEdgeIds={membershipHidden.edges}
 									focusNodeId={focusNodeId}
@@ -1032,18 +1041,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 										yearRange={yearRange}
 										edgeWeight={edgeWeight}
 										unit={unit}
-										visibleLayers={
-											mode === "concept"
-												? new Set<NodeType>(["concept"])
-												: mode === "institution"
-													? new Set<NodeType>(["applicant"])
-													: visibleLayers
-										}
-										hiddenCommunities={
-											mode === "concept" || mode === "institution"
-												? hiddenCommunities
-												: undefined
-										}
+										visibleLayers={viewerLayers}
+										hiddenCommunities={viewerHiddenCommunities}
 										focusNodeId={focusNodeId}
 									/>
 									<GraphLegend
@@ -1088,18 +1087,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
 											yearRange={yearRange}
 											edgeWeight={edgeWeight}
 											unit={unit}
-											visibleLayers={
-												mode === "concept"
-													? new Set<NodeType>(["concept"])
-													: mode === "institution"
-														? new Set<NodeType>(["applicant"])
-														: visibleLayers
-											}
-											hiddenCommunities={
-												mode === "concept" || mode === "institution"
-													? hiddenCommunities
-													: undefined
-											}
+											visibleLayers={viewerLayers}
+											hiddenCommunities={viewerHiddenCommunities}
 											focusNodeId={focusNodeId}
 										/>
 									</div>
