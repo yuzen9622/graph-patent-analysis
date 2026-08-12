@@ -155,7 +155,7 @@ function Section({
 					)}
 					<ChevronDown
 						size={13}
-						className="text-muted-foreground shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180"
+						className="text-muted-foreground shrink-0 transition-transform duration-200 group-data-[panel-open]:rotate-180"
 					/>
 				</CollapsibleTrigger>
 				{headerAction}
@@ -213,12 +213,12 @@ function Inspector({
 					<span className="flex-1 text-xs font-semibold tracking-wide text-foreground">
 						{title}
 					</span>
-					<span className="text-[0.7rem] text-muted-foreground group-data-[state=open]:hidden">
+					<span className="text-[0.7rem] text-muted-foreground group-data-[panel-open]:hidden">
 						展開
 					</span>
 					<ChevronDown
 						size={13}
-						className="shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+						className="shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180"
 						aria-hidden
 					/>
 				</CollapsibleTrigger>

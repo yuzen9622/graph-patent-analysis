@@ -1682,7 +1682,7 @@ export default function GraphViewer({
 			<button
 				onClick={handleFit}
 				title="全部顯示"
-				className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:primary-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
+				className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:text-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
 			>
 				全部顯示
 			</button>

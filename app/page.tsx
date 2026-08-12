@@ -11,6 +11,7 @@ import UploadZone, { type ParsedUpload } from "@/components/UploadZone";
 import ProgressPanel from "@/components/ProgressPanel";
 import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
 import UserMenu from "@/components/UserMenu";
+import ModeToggle from "@/components/ModeToggle";
 import { notifyHistoryChanged } from "@/lib/analysis-history";
 import {
 	DEFAULT_LIMITS,
@@ -245,25 +246,26 @@ function HomePageContent() {
 	}
 
 	return (
-		<div className="min-h-dvh bg-background primary-foreground flex flex-col relative overflow-hidden">
+		<div className="min-h-dvh bg-background text-foreground flex flex-col relative overflow-hidden">
 			{/* ── Header ── */}
 			<header className="sticky top-0 z-10 border-b border-white/[0.08] px-6 py-3.5 flex items-center gap-3 shrink-0 h-14 bg-background/80 backdrop-blur-xl">
 				<BarChart2 size={20} className="text-success" aria-hidden />
 				<div>
-					<h1 className="font-serif text-base font-bold leading-tight primary-foreground">
+					<h1 className="font-serif text-base font-bold leading-tight text-foreground">
 						王老師專利知識圖譜分析平台
 					</h1>
-					<p className="text-[0.65rem] primary-foreground mt-0.5 font-mono tracking-wide">
+					<p className="text-[0.65rem] text-muted-foreground mt-0.5 font-mono tracking-wide">
 						Patent Knowledge Graph Analysis
 					</p>
 				</div>
 				<div className="ml-auto flex items-center gap-3">
 					{USE_MOCK && (
-						<span className="flex items-center gap-1.5 text-xs text-warning bg-wartext-warning/10 border border-wartext-warning/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
+						<span className="flex items-center gap-1.5 text-xs text-warning bg-warning/10 border border-warning/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
 							<FlaskConical size={12} aria-hidden />
 							Mock 模式
 						</span>
 					)}
+					<ModeToggle />
 					<UserMenu />
 				</div>
 			</header>

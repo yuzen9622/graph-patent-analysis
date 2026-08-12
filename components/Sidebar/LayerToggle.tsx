@@ -21,21 +21,21 @@ const LAYERS: {
     label: "申請人層",
     color: "#4E79A7",
     checkedClass:
-      "data-[state=checked]:bg-layer-applicant data-[state=checked]:border-layer-applicant",
+      "data-checked:bg-layer-applicant data-checked:border-layer-applicant dark:data-checked:bg-layer-applicant dark:data-checked:border-layer-applicant",
   },
   {
     type: "patent",
     label: "專利層",
     color: "#F28E2B",
     checkedClass:
-      "data-[state=checked]:bg-layer-patent data-[state=checked]:border-layer-patent",
+      "data-checked:bg-layer-patent data-checked:border-layer-patent dark:data-checked:bg-layer-patent dark:data-checked:border-layer-patent",
   },
   {
     type: "concept",
     label: "概念層",
     color: "#59A14F",
     checkedClass:
-      "data-[state=checked]:bg-layer-concept data-[state=checked]:border-layer-concept",
+      "data-checked:bg-layer-concept data-checked:border-layer-concept dark:data-checked:bg-layer-concept dark:data-checked:border-layer-concept",
   },
 ];
 
