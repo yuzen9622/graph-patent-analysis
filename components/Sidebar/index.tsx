@@ -9,7 +9,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
 	ChevronDown,
-	MousePointerClick,
 	Network,
 	RotateCcw,
 	SlidersHorizontal,
@@ -28,6 +27,7 @@ import SourceFileChecklist from "./SourceFileChecklist";
 import type { ColorMode, Unit, ApplicantAvailability } from "@/lib/graph-view";
 import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
 import IpcTree from "./IpcTree";
+import type { CompareCount } from "@/lib/graph-compare";
 import type {
 	GraphNode,
 	GraphEdge,
@@ -38,10 +38,18 @@ import type {
 } from "@/types/graph";
 
 interface Props {
+	/** 左側主檢視的節點；僅供固定搜尋列使用。 */
 	nodes: GraphNode[];
-	allNodes: GraphNode[];
-	edges: GraphEdge[];
+	/** 主檢視社群；供下方社群圖例使用。 */
 	communities: Community[];
+	/** 每次實際選取遞增，強制 inspector 重置為預設展開／收合狀態。 */
+	inspectionKey: string;
+	/** 目前 inspector 所屬檢視的資料，與搜尋資料刻意分開。 */
+	inspectionNodes: GraphNode[];
+	inspectionEdges: GraphEdge[];
+	/** 完整節點資料僅供關係中的專利 ID 解析；不影響相鄰節點計算。 */
+	inspectionLookupNodes: GraphNode[];
+	inspectionCommunities: Community[];
 	aiReport: string;
 	yearRange: [number, number];
 	fullYearRange: [number, number];
@@ -49,6 +57,8 @@ interface Props {
 	selectedEdge: GraphEdge | null;
 	methodology: GraphMethodology;
 	mode: GraphMode;
+	/** 脈絡圖「兩檔共享概念」統計（2026-08-09）；非脈絡圖或無兩檔可比較時為 null。 */
+	sharedConceptCount: CompareCount | null;
 	colorMode: ColorMode;
 	onColorModeChange: (mode: ColorMode) => void;
 	unit: Unit;
@@ -80,8 +90,11 @@ interface Props {
 	onLayerToggle: (type: NodeType) => void;
 	onCommunityToggle: (id: number) => void;
 	onNodeFocus: (nodeId: string) => void;
-	onNodeSelect: (node: GraphNode | null) => void;
-	onEdgeClose: () => void;
+	/** 固定搜尋列的選取，一律指向左側主檢視。 */
+	onSearchNodeSelect: (node: GraphNode) => void;
+	/** inspector 內相鄰節點的選取，保留目前 inspector 的來源。 */
+	onInspectorNodeSelect: (node: GraphNode) => void;
+	onInspectorClose: () => void;
 	onMinSupportChange: (value: number) => void;
 	/** 重設所有篩選條件（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
 	onResetFilters: () => void;
@@ -147,6 +160,193 @@ function Section({
 }
 
 /** 目前的篩選條件有幾項生效（供標題計數與重設按鈕用）。 */
+interface InspectorProps {
+	selectedNode: GraphNode | null;
+	selectedEdge: GraphEdge | null;
+	inspectionNodes: GraphNode[];
+	inspectionEdges: GraphEdge[];
+	inspectionLookupNodes: GraphNode[];
+	inspectionCommunities: Community[];
+	methodology: GraphMethodology;
+	onClose: () => void;
+	onNodeSelect: (node: GraphNode) => void;
+	onNodeFocus: (nodeId: string) => void;
+}
+
+/** 底部獨立 inspector：新選取時由呼叫端 key remount，預設展開且內容獨立捲動。 */
+function Inspector({
+	selectedNode,
+	selectedEdge,
+	inspectionNodes,
+	inspectionEdges,
+	inspectionLookupNodes,
+	inspectionCommunities,
+	methodology,
+	onClose,
+	onNodeSelect,
+	onNodeFocus,
+}: InspectorProps) {
+	const [open, setOpen] = useState(true);
+	const title = selectedEdge ? "關係資訊" : "節點資訊";
+
+	return (
+		<section
+			className="shrink-0 border-t border-border bg-background"
+			aria-label="節點與關係詳細資訊"
+		>
+			<Collapsible open={open} onOpenChange={setOpen}>
+				<CollapsibleTrigger
+					aria-label={`${open ? "收合" : "展開"}${title}`}
+					className="group flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+				>
+					<Network
+						size={13}
+						className="shrink-0 text-muted-foreground"
+						aria-hidden
+					/>
+					<span className="flex-1 text-xs font-semibold tracking-wide text-foreground">
+						{title}
+					</span>
+					<span className="text-[0.7rem] text-muted-foreground group-data-[state=open]:hidden">
+						展開
+					</span>
+					<ChevronDown
+						size={13}
+						className="shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+						aria-hidden
+					/>
+				</CollapsibleTrigger>
+				<CollapsibleContent>
+					<ScrollArea
+						className="max-h-[40svh] border-t border-border"
+						aria-label={`${title}內容`}
+					>
+						<div className="p-3">
+							<div className="rounded-lg border border-border bg-muted/30 p-3">
+								{selectedEdge ? (
+									<EdgeInfo
+										edge={selectedEdge}
+										nodes={inspectionLookupNodes}
+										methodology={methodology}
+										onClose={onClose}
+									/>
+								) : selectedNode ? (
+									<NodeInfo
+										node={selectedNode}
+										edges={inspectionEdges}
+										nodes={inspectionNodes}
+										communities={inspectionCommunities}
+										onClose={onClose}
+										onNodeSelect={onNodeSelect}
+										onNodeFocus={onNodeFocus}
+									/>
+								) : null}
+							</div>
+						</div>
+					</ScrollArea>
+				</CollapsibleContent>
+			</Collapsible>
+		</section>
+	);
+}
+
+/** IPC 層級 slider ＋ 樹狀多選篩選（P5 S8；2026-08-09 起概念與脈絡圖共用）。 */
+function IpcFilterSection({
+	ipcLevel,
+	onIpcLevelChange,
+	ipcFilter,
+	onIpcFilterChange,
+	ipcTree,
+}: {
+	ipcLevel: IpcLevel;
+	onIpcLevelChange: (level: IpcLevel) => void;
+	ipcFilter: string[];
+	onIpcFilterChange: (keys: string[]) => void;
+	ipcTree: IpcTreeNode[];
+}) {
+	return (
+		<div>
+			<div className="flex items-center justify-between">
+				<p className="text-xs text-foreground font-medium mb-2">IPC 層級</p>
+				<span className="font-mono text-primary tabular-nums">L{ipcLevel}</span>
+			</div>
+			<input
+				type="range"
+				min={1}
+				max={5}
+				value={ipcLevel}
+				onChange={(event) =>
+					onIpcLevelChange(Number(event.target.value) as IpcLevel)
+				}
+				className="w-full accent-primary"
+				aria-label="IPC 層級"
+			/>
+			<p className="text-[0.7rem] text-muted-foreground leading-relaxed">
+				{ipcLevel} 級（{["L1 部", "L2 類", "L3 次類", "L4 主類", "L5 次目"][ipcLevel - 1]}）。
+				<br />
+				切換層級會清空 IPC 篩選。
+			</p>
+			<p className="mt-3 text-xs text-foreground font-medium mb-1.5">IPC 分類篩選</p>
+			<IpcTree
+				nodes={ipcTree}
+				level={ipcLevel}
+				selected={ipcFilter}
+				onToggle={(key) =>
+					onIpcFilterChange(
+						ipcFilter.includes(key)
+							? ipcFilter.filter((k) => k !== key)
+							: [...ipcFilter, key],
+					)
+				}
+			/>
+			<div className="mt-2 flex gap-1.5">
+				<button
+					type="button"
+					onClick={() => onIpcFilterChange([])}
+					className="rounded border border-border px-2 py-1 text-[0.7rem] text-muted-foreground hover:bg-accent"
+				>
+					全部 IPC
+				</button>
+				<p className="text-[0.7rem] text-muted-foreground self-center">
+					{ipcFilter.length === 0
+						? "未篩選（顯示全圖）"
+						: `篩選 ${ipcFilter.length} 個 IPC（任一命中即保留）`}
+				</p>
+			</div>
+		</div>
+	);
+}
+
+/** 最低支持度 slider（概念視圖與脈絡圖共用；2026-08-09）。 */
+function MinSupportControl({
+	label,
+	value,
+	max,
+	onChange,
+}: {
+	label: string;
+	value: number;
+	max: number;
+	onChange: (value: number) => void;
+}) {
+	return (
+		<label className="block text-xs text-foreground">
+			<span className="flex justify-between mb-2">
+				<span className="font-medium">{label}</span>
+				<span className="font-mono text-primary tabular-nums">{value}</span>
+			</span>
+			<input
+				type="range"
+				min={1}
+				max={Math.max(1, max)}
+				value={Math.min(value, Math.max(1, max))}
+				onChange={(event) => onChange(Number(event.target.value))}
+				className="w-full accent-primary"
+			/>
+		</label>
+	);
+}
+
 function countActiveFilters(props: {
 	mode: GraphMode;
 	yearRange: [number, number];
@@ -186,9 +386,12 @@ function countActiveFilters(props: {
 
 export default function Sidebar({
 	nodes,
-	allNodes,
-	edges,
 	communities,
+	inspectionKey,
+	inspectionNodes,
+	inspectionEdges,
+	inspectionLookupNodes,
+	inspectionCommunities,
 	aiReport,
 	yearRange,
 	fullYearRange,
@@ -196,6 +399,7 @@ export default function Sidebar({
 	selectedEdge,
 	methodology,
 	mode,
+	sharedConceptCount,
 	colorMode,
 	onColorModeChange,
 	unit,
@@ -222,8 +426,9 @@ export default function Sidebar({
 	onLayerToggle,
 	onCommunityToggle,
 	onNodeFocus,
-	onNodeSelect,
-	onEdgeClose,
+	onSearchNodeSelect,
+	onInspectorNodeSelect,
+	onInspectorClose,
 	onMinSupportChange,
 	onResetFilters,
 	showCitations,
@@ -254,60 +459,12 @@ export default function Sidebar({
 				<SearchBox
 					nodes={nodes}
 					onNodeFocus={onNodeFocus}
-					onNodeSelect={(n) => onNodeSelect(n)}
+					onNodeSelect={onSearchNodeSelect}
 				/>
 			</div>
 
-			<ScrollArea className="flex-1">
+			<ScrollArea className="min-h-0 flex-1">
 				<div className="px-3 pt-2 space-y-0.5 pb-4">
-					{/* ── 節點／關係資訊 ── */}
-					<Section
-						title="節點／關係資訊"
-						icon={<Network size={13} />}
-						active={selectedNode !== null || selectedEdge !== null}
-					>
-						{selectedEdge ? (
-							<div className="rounded-lg border border-border bg-muted/30 p-3">
-								<EdgeInfo
-									edge={selectedEdge}
-									nodes={allNodes}
-									methodology={methodology}
-									onClose={onEdgeClose}
-								/>
-							</div>
-						) : selectedNode ? (
-							<div className="rounded-lg border border-border bg-muted/30 p-3">
-								<NodeInfo
-									node={selectedNode}
-									edges={edges}
-									nodes={nodes}
-									communities={communities}
-									onClose={() => onNodeSelect(null)}
-									onNodeSelect={(n) => {
-										onNodeSelect(n);
-										onNodeFocus(n.id);
-									}}
-									onNodeFocus={onNodeFocus}
-								/>
-							</div>
-						) : (
-							<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
-								<MousePointerClick
-									size={18}
-									className="text-muted-foreground/70"
-									aria-hidden
-								/>
-								<p className="text-xs text-muted-foreground leading-relaxed">
-									點擊圖譜中的節點或線條
-									<br />
-									在此查看詳細資訊與關聯指標
-								</p>
-							</div>
-						)}
-					</Section>
-
-					<Separator className="bg-border" />
-
 					{/* ── 篩選器 ── */}
 					<div className="flex items-start gap-1">
 						<Section
@@ -320,10 +477,40 @@ export default function Sidebar({
 							<div className="space-y-4">
 								{mode === "context" ? (
 									<>
+										{sharedConceptCount && (
+											<div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+												<p className="text-xs text-foreground font-medium mb-1.5">
+													兩檔共享概念
+												</p>
+												<dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-xs">
+													<dt className="text-muted-foreground">僅 A</dt>
+													<dd className="font-mono tabular-nums text-right">
+														{sharedConceptCount.aOnly}
+													</dd>
+													<dt className="text-muted-foreground">僅 B</dt>
+													<dd className="font-mono tabular-nums text-right">
+														{sharedConceptCount.bOnly}
+													</dd>
+													<dt className="text-red-600 font-medium">共有</dt>
+													<dd className="font-mono tabular-nums text-right text-red-600">
+														{sharedConceptCount.counts[1]}
+													</dd>
+													<dt className="text-muted-foreground">聯集</dt>
+													<dd className="font-mono tabular-nums text-right">
+														{sharedConceptCount.union}
+													</dd>
+													<dt className="text-muted-foreground">Jaccard</dt>
+													<dd className="font-mono tabular-nums text-right">
+														{sharedConceptCount.jaccard.toFixed(3)}
+													</dd>
+												</dl>
+												<p className="text-[0.65rem] text-muted-foreground mt-1.5">
+													隨年份／IPC／最低支持度篩選重算。
+												</p>
+											</div>
+										)}
 										<div>
-											<p className="text-xs text-foreground font-medium mb-2">
-												年份範圍
-											</p>
+											<p className="text-xs text-foreground font-medium mb-2">年份範圍</p>
 											<YearFilter
 												value={yearRange}
 												fullRange={fullYearRange}
@@ -331,9 +518,28 @@ export default function Sidebar({
 											/>
 										</div>
 										<div>
-											<p className="text-xs text-foreground font-medium mb-2">
-												節點層
+											<p className="text-xs text-foreground font-medium mb-2">最低支持度</p>
+											<MinSupportControl
+												label="概念至少出現在 N 篇專利才顯示"
+												value={minSupport}
+												max={maxSupport}
+												onChange={onMinSupportChange}
+											/>
+											<p className="text-[0.7rem] text-muted-foreground mt-1.5 leading-relaxed">
+												概念頻率由目前年份／IPC 子集重算；門檻只過濾顯示。
 											</p>
+										</div>
+										{hasIpcData && (
+											<IpcFilterSection
+												ipcLevel={ipcLevel}
+												onIpcLevelChange={onIpcLevelChange}
+												ipcFilter={ipcFilter}
+												onIpcFilterChange={onIpcFilterChange}
+												ipcTree={ipcTree}
+											/>
+										)}
+										<div>
+											<p className="text-xs text-foreground font-medium mb-2">節點層</p>
 											<LayerToggle
 												visibleLayers={visibleLayers}
 												onToggle={onLayerToggle}
@@ -555,69 +761,13 @@ export default function Sidebar({
 											)}
 										</div>
 										{hasIpcData && (
-											<div>
-												<div className="flex items-center justify-between">
-													<p className="text-xs text-foreground font-medium mb-2">
-														IPC 層級
-													</p>
-													<span className="font-mono text-primary tabular-nums">
-														L{ipcLevel}
-													</span>
-												</div>
-												<input
-													type="range"
-													min={1}
-													max={5}
-													value={ipcLevel}
-													onChange={(event) =>
-														onIpcLevelChange(
-															Number(event.target.value) as IpcLevel,
-														)
-													}
-													className="w-full accent-primary"
-													aria-label="IPC 層級"
-												/>
-												<p className="text-[0.7rem] text-muted-foreground leading-relaxed">
-													{ipcLevel} 級（
-													{
-														["L1 部", "L2 類", "L3 次類", "L4 主類", "L5 次目"][
-															ipcLevel - 1
-														]
-													}
-													）。
-													<br />
-													切換層級會清空 IPC 篩選。
-												</p>
-												<p className="mt-3 text-xs text-foreground font-medium mb-1.5">
-													IPC 分類篩選
-												</p>
-												<IpcTree
-													nodes={ipcTree}
-													level={ipcLevel}
-													selected={ipcFilter}
-													onToggle={(key) =>
-														onIpcFilterChange(
-															ipcFilter.includes(key)
-																? ipcFilter.filter((k) => k !== key)
-																: [...ipcFilter, key],
-														)
-													}
-												/>
-												<div className="mt-2 flex gap-1.5">
-													<button
-														type="button"
-														onClick={() => onIpcFilterChange([])}
-														className="rounded border border-border px-2 py-1 text-[0.7rem] text-muted-foreground hover:bg-accent"
-													>
-														全部 IPC
-													</button>
-													<p className="text-[0.7rem] text-muted-foreground self-center">
-														{ipcFilter.length === 0
-															? "未篩選（顯示全圖）"
-															: `篩選 ${ipcFilter.length} 個 IPC（任一命中即保留）`}
-													</p>
-												</div>
-											</div>
+											<IpcFilterSection
+												ipcLevel={ipcLevel}
+												onIpcLevelChange={onIpcLevelChange}
+												ipcFilter={ipcFilter}
+												onIpcFilterChange={onIpcFilterChange}
+												ipcTree={ipcTree}
+											/>
 										)}
 										<label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
 											<input
@@ -635,28 +785,14 @@ export default function Sidebar({
 												</span>
 											</span>
 										</label>
-										<label className="block text-xs text-foreground">
-											<span className="flex justify-between mb-2">
-												<span className="font-medium">
-													{unit === "applicant"
-														? "最低共同家數"
-														: "最低共同專利數"}
-												</span>
-												<span className="font-mono text-primary tabular-nums">
-													{minSupport}
-												</span>
-											</span>
-											<input
-												type="range"
-												min={1}
-												max={Math.max(1, maxSupport)}
-												value={Math.min(minSupport, Math.max(1, maxSupport))}
-												onChange={(event) =>
-													onMinSupportChange(Number(event.target.value))
-												}
-												className="w-full accent-primary"
-											/>
-										</label>
+										<MinSupportControl
+											label={
+												unit === "applicant" ? "最低共同家數" : "最低共同專利數"
+											}
+											value={minSupport}
+											max={maxSupport}
+											onChange={onMinSupportChange}
+										/>
 										<p className="text-[0.7rem] text-muted-foreground leading-relaxed">
 											概念統計與關係指標由選定的年份／來源檔／IPC
 											子集重新計算；門檻只過濾顯示。
@@ -711,6 +847,22 @@ export default function Sidebar({
 					)}
 				</div>
 			</ScrollArea>
+
+			{selectedEdge || selectedNode ? (
+				<Inspector
+					key={inspectionKey}
+					selectedNode={selectedNode}
+					selectedEdge={selectedEdge}
+					inspectionNodes={inspectionNodes}
+					inspectionEdges={inspectionEdges}
+					inspectionLookupNodes={inspectionLookupNodes}
+					inspectionCommunities={inspectionCommunities}
+					methodology={methodology}
+					onClose={onInspectorClose}
+					onNodeSelect={onInspectorNodeSelect}
+					onNodeFocus={onNodeFocus}
+				/>
+			) : null}
 		</aside>
 	);
 }

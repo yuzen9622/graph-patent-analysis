@@ -803,6 +803,8 @@ interface Props {
 	hiddenCommunities?: Set<number>;
 	focusNodeId?: string;
 	onEdgeSelect?: (edge: GraphEdge | null) => void;
+	/** 點擊畫布空白處時通知父層取消目前選取。 */
+	onSelectionClear?: () => void;
 	positionSnapshotKey: string;
 	onPositionSnapshotProvider?: (
 		provider: PositionSnapshotProvider | null,
@@ -833,6 +835,7 @@ export default function GraphViewer({
 	hiddenCommunities,
 	focusNodeId,
 	onEdgeSelect,
+	onSelectionClear,
 	positionSnapshotKey,
 	onPositionSnapshotProvider,
 	onCaptureReady,
@@ -867,6 +870,7 @@ export default function GraphViewer({
 		hiddenCommunities,
 		focusNodeId,
 		onEdgeSelect,
+		onSelectionClear,
 		positionSnapshotKey,
 		onPositionSnapshotProvider,
 		onCaptureReady,
@@ -890,6 +894,7 @@ export default function GraphViewer({
 		hiddenCommunities,
 		focusNodeId,
 		onEdgeSelect,
+		onSelectionClear,
 		positionSnapshotKey,
 		onPositionSnapshotProvider,
 		onCaptureReady,
@@ -1427,6 +1432,7 @@ export default function GraphViewer({
 				} else {
 					latest.onNodeSelect?.(null);
 					latest.onEdgeSelect?.(null);
+					latest.onSelectionClear?.();
 					clearHighlight();
 				}
 			});

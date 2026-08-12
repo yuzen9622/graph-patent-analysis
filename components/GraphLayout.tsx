@@ -36,6 +36,7 @@ import {
 import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import {
 	buildDifferenceView,
+	countSharedConcepts,
 	membershipHiddenIds,
 	panelScopesDistinct,
 	suggestNewPanelScope,
@@ -58,6 +59,10 @@ import { subgraphNodeIds } from "@/lib/publication-export";
 import { TEMPORAL_OPACITY_LINE } from "@/lib/temporal";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { composeCompareImage } from "@/lib/compare-image";
+import {
+	resolveInspectionView,
+	type InspectionViewSource,
+} from "@/lib/inspection-view";
 import type { ImageCapture, PublicationCapture } from "./GraphViewer";
 import type {
 	GraphData,
@@ -117,6 +122,36 @@ type CompareUiState = "off" | "setup" | "active";
 export default function GraphLayout({ graph, jobId }: Props) {
 	const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 	const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
+	const [inspectionSource, setInspectionSource] =
+		useState<InspectionViewSource | null>(null);
+	/** 每次實際選取都遞增，使 inspector 即使選到相同 id 也會回到預設展開／收合狀態。 */
+	const [inspectionVersion, setInspectionVersion] = useState(0);
+	const clearInspection = useCallback(() => {
+		setSelectedNode(null);
+		setSelectedEdge(null);
+		setInspectionSource(null);
+	}, []);
+	/** GraphViewer 會在同一次點擊對另一種選取送出 null；忽略它以保留剛設定的來源。 */
+	const selectInspectionNode = useCallback(
+		(node: GraphNode | null, source: InspectionViewSource) => {
+			if (!node) return;
+			setSelectedNode(node);
+			setSelectedEdge(null);
+			setInspectionSource(source);
+			setInspectionVersion((version) => version + 1);
+		},
+		[],
+	);
+	const selectInspectionEdge = useCallback(
+		(edge: GraphEdge | null, source: InspectionViewSource) => {
+			if (!edge) return;
+			setSelectedEdge(edge);
+			setSelectedNode(null);
+			setInspectionSource(source);
+			setInspectionVersion((version) => version + 1);
+		},
+		[],
+	);
 	const [mode, setMode] = useState<GraphMode>("concept");
 	// LLM 語意虛線已停用（幾乎不會被勾選，且在論文中難以說明）；固定關閉。
 	const showSemantic = false;
@@ -409,6 +444,38 @@ export default function GraphLayout({ graph, jobId }: Props) {
 			difference ? membershipHiddenIds(difference, hiddenMemberships) : null,
 		[difference, hiddenMemberships],
 	);
+	// 脈絡圖「兩檔共享概念」統計（2026-08-09）：比較模式取 A/B 兩面板檢視節點的聯集；
+	// 否則分析恰有兩來源檔時，取目前脈絡圖檢視——隨年份／IPC／最低支持度子集重算。
+	const sharedConceptCount = useMemo(() => {
+		if (mode !== "context") return null;
+		if (compareMode && panelViews && panelViews.length >= 2) {
+			const byId = new Map<string, GraphNode>();
+			for (const node of [...panelViews[0]!.nodes, ...panelViews[1]!.nodes]) {
+				byId.set(node.id, node);
+			}
+			return countSharedConcepts(
+				Array.from(byId.values()),
+				sourceFiles,
+				sourceFilesRight,
+			);
+		}
+		if (allSourceFiles.length === 2) {
+			return countSharedConcepts(
+				view.nodes,
+				[allSourceFiles[0]!],
+				[allSourceFiles[1]!],
+			);
+		}
+		return null;
+	}, [
+		mode,
+		compareMode,
+		panelViews,
+		sourceFiles,
+		sourceFilesRight,
+		allSourceFiles,
+		view.nodes,
+	]);
 	const compareLabels = useMemo(
 		() =>
 			compareMode
@@ -448,6 +515,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	);
 
 	const openCompareSetup = useCallback(() => {
+		clearInspection();
 		const suggestion = suggestPanelScopes(allSourceFiles, [
 			sourceFiles,
 			sourceFilesRight,
@@ -455,7 +523,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		]);
 		setSetupPanels(suggestion);
 		setCompareUi("setup");
-	}, [allSourceFiles, sourceFiles, sourceFilesRight, extraPanels]);
+	}, [
+		allSourceFiles,
+		clearInspection,
+		extraPanels,
+		sourceFiles,
+		sourceFilesRight,
+	]);
 
 	const startCompare = useCallback(() => {
 		// `CompareSetupPanel` 已停用無效按鈕；這層仍守住不變量，避免日後呼叫端略過 UI。
@@ -472,23 +546,26 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		setImageReadyFlags([]);
 		setDiffImageReady(false);
 		setImageExportError(null);
+		clearInspection();
 		setCompareUi("active");
-	}, [allSourceFiles, setupPanels]);
+	}, [allSourceFiles, clearInspection, setupPanels]);
 
 	const exitCompare = useCallback(() => {
+		clearInspection();
 		setCompareUi("off");
 		setCompareViewport(null);
 		setImageReadyFlags([]);
 		setDiffImageReady(false);
 		setImageExportError(null);
-	}, []);
+	}, [clearInspection]);
 
 	const swapCompareScopes = useCallback(() => {
 		// 僅兩面板時的交換語意；三面板以上沒有單一「交換 A/B」可定義。
 		if (panelScopes.length !== 2) return;
+		clearInspection();
 		setSourceFiles(sourceFilesRight);
 		setSourceFilesRight(sourceFiles);
-	}, [panelScopes.length, sourceFiles, sourceFilesRight]);
+	}, [clearInspection, panelScopes.length, sourceFiles, sourceFilesRight]);
 
 	// 活躍比較期間仍可從側欄調整面板 1／2；若任兩面板有效範圍相同，
 	// 就回到設定面板，讓使用者看見並修正，而不是默默顯示兩張相同的圖。
@@ -499,14 +576,22 @@ export default function GraphLayout({ graph, jobId }: Props) {
 					? [next, sourceFilesRight, ...extraPanels]
 					: [sourceFiles, next, ...extraPanels];
 			if (!panelScopesDistinct(nextPanels, allSourceFiles)) {
+				clearInspection();
 				setSetupPanels(nextPanels);
 				setCompareUi("setup");
 				return;
 			}
+			clearInspection();
 			if (side === "left") setSourceFiles(next);
 			else setSourceFilesRight(next);
 		},
-		[allSourceFiles, extraPanels, sourceFiles, sourceFilesRight],
+		[
+			allSourceFiles,
+			clearInspection,
+			extraPanels,
+			sourceFiles,
+			sourceFilesRight,
+		],
 	);
 
 	const swapSetupScopes = useCallback(() => {
@@ -531,16 +616,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		});
 	}, []);
 
-	const changeCompareView = useCallback((tab: CompareViewTab) => {
-		setCompareView(tab);
-		setCompareViewport(null);
-		// 分頁切換會卸載／重掛 viewer；清掉圖片匯出就緒旗標，
-		// 避免拿上一頁的舊 capture 誤導按鈕可用性。
-		setImageReadyFlags([]);
-		setDiffImageReady(false);
-		imageCaptureRefs.current = [];
-		diffImageCaptureRef.current = null;
-	}, []);
+	const changeCompareView = useCallback(
+		(tab: CompareViewTab) => {
+			clearInspection();
+			setCompareView(tab);
+			setCompareViewport(null);
+			// 分頁切換會卸載／重掛 viewer；清掉圖片匯出就緒旗標，
+			// 避免拿上一頁的舊 capture 誤導按鈕可用性。
+			setImageReadyFlags([]);
+			setDiffImageReady(false);
+			imageCaptureRefs.current = [];
+			diffImageCaptureRef.current = null;
+		},
+		[clearInspection],
+	);
 
 	const toggleMembership = useCallback((membership: DiffMembership) => {
 		setHiddenMemberships((prev) => {
@@ -551,18 +640,17 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		});
 	}, []);
 
+	const inspectionView = resolveInspectionView(inspectionSource, {
+		main: view,
+		panels: panelViews,
+		difference: difference?.view,
+	});
 	const selectedViewNode = selectedNode
-		? (view.nodes.find((node) => node.id === selectedNode.id) ??
-			panelViews
-				?.flatMap((panel) => panel.nodes)
-				.find((node) => node.id === selectedNode.id) ??
+		? (inspectionView?.nodes.find((node) => node.id === selectedNode.id) ??
 			null)
 		: null;
 	const selectedViewEdge = selectedEdge
-		? (view.edges.find((edge) => edge.id === selectedEdge.id) ??
-			panelViews
-				?.flatMap((panel) => panel.edges)
-				.find((edge) => edge.id === selectedEdge.id) ??
+		? (inspectionView?.edges.find((edge) => edge.id === selectedEdge.id) ??
 			null)
 		: null;
 
@@ -693,11 +781,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		panelScopes.length,
 	]);
 
-	const selectMode = useCallback((nextMode: GraphMode) => {
-		setMode(nextMode);
-		setSelectedNode(null);
-		setSelectedEdge(null);
-	}, []);
+	const selectMode = useCallback(
+		(nextMode: GraphMode) => {
+			setMode(nextMode);
+			clearInspection();
+		},
+		[clearInspection],
+	);
 
 	// 差異檢視只有一張圖，凍結座標來自那張；其餘情況沿用面板 1。
 	const compareHtmlExport = compareMode && compareView === "difference";
@@ -822,6 +912,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
 	/** 重設所有篩選（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
 	const handleResetFilters = useCallback(() => {
+		clearInspection();
 		setYearRange(graph.stats.year_range);
 		setMinSupport(1);
 		setIpcFilter([]);
@@ -833,7 +924,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		setExtraPanels([]);
 		// 重設後所有面板都回到「全部來源」＝彼此重複，比較失去意義，直接結束比較。
 		if (compareMode) exitCompare();
-	}, [graph.stats.year_range, compareMode, exitCompare]);
+	}, [clearInspection, graph.stats.year_range, compareMode, exitCompare]);
 
 	return (
 		<div className="flex flex-col h-screen bg-background overflow-hidden">
@@ -1052,8 +1143,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 									nodes={difference.view.nodes}
 									edges={difference.view.edges}
 									citationEdges={difference.view.citationEdges}
-									onNodeSelect={setSelectedNode}
-									onEdgeSelect={setSelectedEdge}
+									onNodeSelect={(node) =>
+										selectInspectionNode(node, { kind: "difference" })
+									}
+									onEdgeSelect={(edge) =>
+										selectInspectionEdge(edge, { kind: "difference" })
+									}
+									onSelectionClear={clearInspection}
 									positionSnapshotKey={layoutSnapshotKeyDiff}
 									onPositionSnapshotProvider={handlePositionSnapshotProvider}
 									onImageCaptureReady={handleDiffImageCaptureReady}
@@ -1113,8 +1209,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 											edges={panelView.edges}
 											citationEdges={panelView.citationEdges}
 											analysis={mode === "concept" ? graph.analysis : undefined}
-											onNodeSelect={setSelectedNode}
-											onEdgeSelect={setSelectedEdge}
+											onNodeSelect={(node) =>
+												selectInspectionNode(node, { kind: "panel", index })
+											}
+											onEdgeSelect={(edge) =>
+												selectInspectionEdge(edge, { kind: "panel", index })
+											}
+											onSelectionClear={clearInspection}
 											positionSnapshotKey={layoutSnapshotKeys[index]}
 											onPositionSnapshotProvider={
 												handlePositionSnapshotProvider
@@ -1139,8 +1240,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 									edges={view.edges}
 									citationEdges={view.citationEdges}
 									analysis={mode === "concept" ? graph.analysis : undefined}
-									onNodeSelect={setSelectedNode}
-									onEdgeSelect={setSelectedEdge}
+									onNodeSelect={(node) =>
+										selectInspectionNode(node, { kind: "main" })
+									}
+									onEdgeSelect={(edge) =>
+										selectInspectionEdge(edge, { kind: "main" })
+									}
+									onSelectionClear={clearInspection}
 									positionSnapshotKey={layoutSnapshotKeys[0]}
 									onPositionSnapshotProvider={handlePositionSnapshotProvider}
 									onCaptureReady={handlePublicationCaptureReady}
@@ -1160,9 +1266,16 @@ export default function GraphLayout({ graph, jobId }: Props) {
 				{/* Right sidebar */}
 				<Sidebar
 					nodes={view.nodes}
-					allNodes={graph.nodes}
-					edges={view.edges}
 					communities={view.communities}
+					inspectionKey={`${inspectionVersion}:${inspectionSource?.kind ?? "none"}${
+						inspectionSource?.kind === "panel"
+							? `:${inspectionSource.index}`
+							: ""
+					}`}
+					inspectionNodes={inspectionView?.nodes ?? []}
+					inspectionEdges={inspectionView?.edges ?? []}
+					inspectionLookupNodes={graph.nodes}
+					inspectionCommunities={inspectionView?.communities ?? []}
 					aiReport={graph.ai_report}
 					yearRange={yearRange}
 					fullYearRange={graph.stats.year_range}
@@ -1170,6 +1283,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 					selectedEdge={selectedViewEdge}
 					methodology={graph.methodology}
 					mode={mode}
+					sharedConceptCount={sharedConceptCount}
 					colorMode={colorMode}
 					onColorModeChange={setColorMode}
 					unit={unit}
@@ -1211,11 +1325,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
 					onLayerToggle={toggleLayer}
 					onCommunityToggle={toggleCommunity}
 					onNodeFocus={setFocusNodeId}
-					onNodeSelect={(node) => {
-						setSelectedNode(node);
-						if (node) setSelectedEdge(null);
-					}}
-					onEdgeClose={() => setSelectedEdge(null)}
+					onSearchNodeSelect={(node) =>
+						selectInspectionNode(node, { kind: "main" })
+					}
+					onInspectorNodeSelect={(node) =>
+						selectInspectionNode(node, inspectionSource ?? { kind: "main" })
+					}
+					onInspectorClose={clearInspection}
 					onMinSupportChange={setMinSupport}
 					onResetFilters={handleResetFilters}
 					showCitations={showCitations}
