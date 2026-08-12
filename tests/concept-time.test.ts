@@ -126,6 +126,18 @@ describe('gradientColor', () => {
   it('span=0（全部同一年）→ 全落錨色[0]', () => {
     expect(gradientColor(2020, [2020, 2020])).toBe(RAINBOW_COLORS[0])
   })
+  it('錨點之間是漸變中間色（OKLab 插值，不是任一錨色）', () => {
+    // window [2007,2025] span=18：2011 → t=(2011-2007)/18=0.2222 → pos=1.333
+    // → 在錨色[1]（橙）與錨色[2]（黃）之間；2013 → t=1/3 → pos=2 → 精確命中錨色[2]
+    const between = gradientColor(2011, window)
+    expect(between).not.toBe(RAINBOW_COLORS[1])
+    expect(between).not.toBe(RAINBOW_COLORS[2])
+    expect(gradientColor(2013, window)).toBe(RAINBOW_COLORS[2])
+    // 同一錨點區間內，年份越近中間色越接近錨色（漸變單調）
+    const nearOrange = gradientColor(2008, window)
+    const nearYellow = gradientColor(2012, window)
+    expect(nearOrange).not.toBe(nearYellow)
+  })
   it('純函式：相同輸入兩次結果相同', () => {
     expect(gradientColor(2016, window)).toBe(gradientColor(2016, window))
   })
