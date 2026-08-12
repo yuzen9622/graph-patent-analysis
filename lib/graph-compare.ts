@@ -32,13 +32,13 @@ export function diffMemberships(panelCount: number): readonly DiffMembership[] {
 	return panelCount <= 2 ? DIFF_MEMBERSHIPS : MULTI_MEMBERSHIPS;
 }
 
-/** 差異圖配色（規格指定值）。 */
+/** 差異圖配色。2026-08-09 修訂：shared（兩面板都有）由灰改為紅（老師指定）。 */
 export const DIFF_COLORS: Record<DiffMembership, string> = {
 	a: "#2563eb",
 	b: "#059669",
 	unique: "#f59e0b",
 	partial: "#8b5cf6",
-	shared: "#64748b",
+	shared: "#dc2626",
 };
 
 /** 冗餘編碼：顏色以外再用形狀區分，色覺障礙者也分得出來。 */
@@ -226,6 +226,51 @@ export function compareViews(views: readonly GraphViewData[]): CompareMetrics {
 		edges: countMembership(
 			views.map((view) => new Set(view.edges.map((edge) => edge.id))),
 		),
+	};
+}
+
+/**
+ * 脈絡圖「共享概念數」統計（2026-08-09）：兩批來源檔在概念節點上的重疊計數。
+ * 概念屬於某一側 ⇔ 其涵蓋專利（source_patents）至少一篇屬於該側（依專利節點的
+ * source_files 判定）。只數概念節點；任一側為空回 null。回傳兩面板語意的 CompareCount。
+ */
+export function countSharedConcepts(
+	nodes: readonly GraphNode[],
+	filesA: readonly string[],
+	filesB: readonly string[],
+): CompareCount | null {
+	const setA = new Set(filesA.filter(Boolean));
+	const setB = new Set(filesB.filter(Boolean));
+	if (setA.size === 0 || setB.size === 0) return null;
+	const patentsA = new Set<string>();
+	const patentsB = new Set<string>();
+	for (const node of nodes) {
+		if (node.type !== "patent") continue;
+		const id = node.id.replace(/^patent:/, "");
+		const files = node.source_files ?? [];
+		if (files.some((file) => setA.has(file))) patentsA.add(id);
+		if (files.some((file) => setB.has(file))) patentsB.add(id);
+	}
+	let aOnly = 0;
+	let bOnly = 0;
+	let shared = 0;
+	for (const node of nodes) {
+		if (node.type !== "concept") continue;
+		const sources = node.source_patents ?? [];
+		const inA = sources.some((id) => patentsA.has(id));
+		const inB = sources.some((id) => patentsB.has(id));
+		if (!inA && !inB) continue;
+		if (inA && inB) shared += 1;
+		else if (inA) aOnly += 1;
+		else bOnly += 1;
+	}
+	const union = aOnly + bOnly + shared;
+	return {
+		counts: [aOnly + bOnly, shared],
+		union,
+		jaccard: union === 0 ? 0 : shared / union,
+		aOnly,
+		bOnly,
 	};
 }
 

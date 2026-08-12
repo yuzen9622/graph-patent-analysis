@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildDifferenceView,
 	compareViews,
+	countSharedConcepts,
 	diffMemberships,
 	DIFF_COLORS,
 	DIFF_EDGE_DASHES,
@@ -418,4 +419,66 @@ describe("membershipHiddenIds", () => {
 		expect(hidden.nodes.size).toBe(3);
 		expect(hidden.edges.size).toBe(2);
 	});
+});
+
+describe("countSharedConcepts（脈絡圖兩檔共享概念，2026-08-09）", () => {
+  function patent(id: string, files: string[]): GraphNode {
+    return {
+      id: `patent:${id}`,
+      type: "patent",
+      label: id,
+      color: "#999",
+      size: 18,
+      source_files: files,
+    };
+  }
+  function concept(id: string, sourcePatents: string[]): GraphNode {
+    return node(id, { source_patents: sourcePatents });
+  }
+
+  const nodes: GraphNode[] = [
+    patent("P1", ["a.xlsx"]),
+    patent("P2", ["b.xlsx"]),
+    patent("P3", ["a.xlsx", "b.xlsx"]), // 兩檔都有的專利
+    patent("P4", []), // 無來源檔：不屬任何一側
+    concept("X", ["P1"]), // 僅 A
+    concept("Y", ["P2"]), // 僅 B
+    concept("Z", ["P1", "P2", "P3"]), // 兩檔都有
+    concept("W", ["P4"]), // 只連無來源專利：兩側皆不屬
+    concept("V", []), // 無涵蓋專利
+  ];
+
+  it("兩檔各有獨有與共有概念，回傳兩面板語意的 CompareCount", () => {
+    const c = countSharedConcepts(nodes, ["a.xlsx"], ["b.xlsx"]);
+    expect(c).not.toBeNull();
+    expect(c?.aOnly).toBe(1); // X
+    expect(c?.bOnly).toBe(1); // Y
+    expect(c?.counts[1]).toBe(1); // Z 共有
+    expect(c?.union).toBe(3);
+    expect(c?.jaccard).toBeCloseTo(1 / 3, 5);
+  });
+
+  it("任一側為空 → null（無法比較）", () => {
+    expect(countSharedConcepts(nodes, [], ["b.xlsx"])).toBeNull();
+    expect(countSharedConcepts(nodes, ["a.xlsx"], [])).toBeNull();
+  });
+
+  it("專利 id 前綴剝除：patent: 前綴不影響歸屬", () => {
+    const single: GraphNode[] = [
+      patent("Q1", ["a.xlsx"]),
+      concept("K", ["Q1"]),
+    ];
+    const c = countSharedConcepts(single, ["a.xlsx"], ["b.xlsx"]);
+    expect(c?.aOnly).toBe(1);
+    expect(c?.union).toBe(1);
+  });
+
+  it("非概念節點不計入", () => {
+    const withApplicant: GraphNode[] = [
+      ...nodes,
+      { id: "applicant:X", type: "applicant", label: "X", color: "#00f", size: 30 },
+    ];
+    const c = countSharedConcepts(withApplicant, ["a.xlsx"], ["b.xlsx"]);
+    expect(c?.union).toBe(3);
+  });
 });

@@ -74,10 +74,46 @@ describe("selectGraphView", () => {
     );
     expect(view.edges.every((edge) => edge.kind === "structural")).toBe(true);
     expect(view.nodes.find((node) => node.id === "applicant:X")).toMatchObject({ patent_count: 1, size: 23 });
-    expect(view.nodes.find((node) => node.id === "concept:A")).toMatchObject({ frequency: 1, size: 16, source_patents: ["P1"] });
+    expect(view.nodes.find((node) => node.id === "concept:A")).toMatchObject({ frequency: 1, size: 20, source_patents: ["P1"] });
     expect(view.stats).toMatchObject({ patent_count: 1, concept_count: 2, year_range: [2020, 2020] });
     const ids = new Set(view.nodes.map((node) => node.id));
     expect(view.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to))).toBe(true);
+  });
+
+  it("脈絡圖套用最低支持度：概念至少出現在 N 篇可見專利才保留（2026-08-09）", () => {
+    const view = selectGraphView(graph, {
+      mode: "context", showSemantic: true, minSupport: 2, yearRange: [2020, 2021],
+    });
+    // 全範圍：P1+P2 可見 → A=2 篇、B=1 篇、C=1 篇；minSupport=2 只留 A
+    const conceptIds = view.nodes
+      .filter((node) => node.type === "concept")
+      .map((node) => node.id)
+      .sort();
+    expect(conceptIds).toEqual(["concept:A"]);
+    expect(view.nodes.find((node) => node.id === "concept:A")).toMatchObject({
+      frequency: 2,
+    });
+    // 概念消失後，其結構邊一併移除（edges 兩端都在節點集內）
+    const ids = new Set(view.nodes.map((node) => node.id));
+    expect(view.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to))).toBe(true);
+    expect(view.edges.some((edge) => edge.to === "concept:B")).toBe(false);
+    expect(view.edges.some((edge) => edge.to === "concept:C")).toBe(false);
+    // 專利與申請人不受門檻影響
+    expect(view.nodes.some((node) => node.id === "patent:P2")).toBe(true);
+    expect(view.nodes.some((node) => node.id === "applicant:X")).toBe(true);
+    // maxSupport = 最大概念頻率（不再是寫死的 1）
+    expect(view.maxSupport).toBe(2);
+  });
+
+  it("脈絡圖 minSupport=1（預設）不過濾任何概念（回歸）", () => {
+    const view = selectGraphView(graph, {
+      mode: "context", showSemantic: true, minSupport: 1, yearRange: [2020, 2021],
+    });
+    const conceptIds = view.nodes
+      .filter((node) => node.type === "concept")
+      .map((node) => node.id)
+      .sort();
+    expect(conceptIds).toEqual(["concept:A", "concept:B", "concept:C"]);
   });
 });
 
@@ -115,7 +151,7 @@ describe("PRD v2 / P3：colorMode 純函式切換", () => {
       cooccurrence_data: "native",
       semantic_provenance: "complete",
       time_window: [2007, 2025],
-      time_color_scale: "sequential_blue",
+      time_color_scale: "rainbow",
     },
   };
 
@@ -134,11 +170,11 @@ describe("PRD v2 / P3：colorMode 純函式切換", () => {
       mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025], colorMode: "first_year",
     });
     const gradientColors = Object.fromEntries(n1.nodes.map((n) => [n.id, n.color]));
-    const sequential = ["#EFF6FF", "#DBEAFE", "#BFDBFE", "#93C5FD", "#60A5FA", "#3B82F6", "#2563EB", "#1D4ED8", "#1E3A8A"];
-    // first_year=2007 -> anchor[0]; 2025 -> anchor[8]; 2016 window [2007,2025] -> anchor[4]
-    expect(gradientColors["concept:A"]).toBe(sequential[0]);
-    expect(gradientColors["concept:B"]).toBe(sequential[8]);
-    expect(gradientColors["concept:C"]).toBe(sequential[4]);
+    const rainbow = ["#EF4444", "#F97316", "#EAB308", "#22C55E", "#3B82F6", "#4F46E5", "#8B5CF6"];
+    // first_year=2007 -> anchor[0]; 2025 -> anchor[6]; 2016 window [2007,2025] -> anchor[3]
+    expect(gradientColors["concept:A"]).toBe(rainbow[0]);
+    expect(gradientColors["concept:B"]).toBe(rainbow[6]);
+    expect(gradientColors["concept:C"]).toBe(rainbow[3]);
     // 切回 community 與原 community 結果逐欄相同
     const back = selectGraphView(p3graph, { mode: "concept", showSemantic: false, minSupport: 1, yearRange: [2007, 2025] });
     expect(back.nodes.map((n) => n.color)).toEqual(first.map((n) => n.color));

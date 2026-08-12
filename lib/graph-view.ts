@@ -944,12 +944,21 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
       }
       return { ...node, size: PATENT_NODE_SIZE }
     })
-  const nodeIds = new Set(nodes.map((node) => node.id))
+  // 2026-08-09: 脈絡圖也套用 minSupport 門檻——概念至少出現在 N 篇可見專利才保留
+  // （概念頻率已依可見專利子集重算）。概念被濾掉後，其結構邊由下方 nodeIds 過濾一併消失。
+  const conceptFrequencies = nodes
+    .filter((node) => node.type === 'concept')
+    .map((node) => node.frequency ?? 0)
+  const maxSupport = Math.max(1, ...conceptFrequencies)
+  const activeNodes = nodes.filter(
+    (node) => node.type !== 'concept' || (node.frequency ?? 0) >= options.minSupport,
+  )
+  const nodeIds = new Set(activeNodes.map((node) => node.id))
   const edges = structuralEdges.filter(
     (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
   )
   const activeCommunityIds = new Set(
-    nodes
+    activeNodes
       .filter((node) => node.type === 'concept')
       .map((node) => node.community_id)
       .filter((id): id is number => typeof id === 'number'),
@@ -958,18 +967,18 @@ function selectContextView(graph: GraphData, options: GraphViewOptions): GraphVi
     .filter((community) => activeCommunityIds.has(community.id))
     .map((community) => ({
       ...community,
-      node_count: nodes.filter(
+      node_count: activeNodes.filter(
         (node) => node.type === 'concept' && node.community_id === community.id,
       ).length,
     }))
 
   return {
-    nodes,
+    nodes: activeNodes,
     edges,
     citationEdges: [],
     communities,
-    stats: viewStats(nodes, communities, options.yearRange),
-    maxSupport: 1,
+    stats: viewStats(activeNodes, communities, options.yearRange),
+    maxSupport,
     capabilityWarning: capabilityWarning(graph),
   }
 }
