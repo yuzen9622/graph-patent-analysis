@@ -166,7 +166,7 @@ describe("export route", () => {
 
 		expect(response.status).toBe(400);
 		await expect(response.json()).resolves.toEqual({
-			error: "A、B 兩側的來源檔範圍相同，無法比較。",
+			error: "任兩個面板的來源檔範圍相同，無法比較。",
 		});
 	});
 
@@ -186,6 +186,79 @@ describe("export route", () => {
 		);
 
 		expect(response.status).toBe(400);
+	});
+
+	it("rejects a comparison with fewer than two panels (panel format)", async () => {
+		mocks.loadGraph.mockResolvedValue(compareGraph);
+
+		const response = await POST(
+			new NextRequest(
+				"http://localhost/api/export/job-id?mode=concept&compare=1&panel0=a.xlsx",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ positions: {} }),
+				},
+			),
+			{ params: Promise.resolve({ id: "job-id" }) },
+		);
+
+		expect(response.status).toBe(400);
+		await expect(response.json()).resolves.toEqual({
+			error: "比較至少需要兩個面板。",
+		});
+	});
+
+	it("keeps an empty panel (all sources) in its slot for N>=3 exports", async () => {
+		mocks.loadGraph.mockResolvedValue(compareGraph);
+
+		const response = await POST(
+			new NextRequest(
+				"http://localhost/api/export/job-id?mode=context&compare=1&panel0=a.xlsx&panel1=&panel2=b.xlsx",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						positions: {
+							"patent:p1": { x: 1, y: 2 },
+							"patent:p2": { x: -3, y: 4 },
+						},
+					}),
+				},
+			),
+			{ params: Promise.resolve({ id: "job-id" }) },
+		);
+
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		expect(html).toContain('"panelCount":3');
+		expect(html).toContain("面板 2：全部來源（2 檔）");
+		expect(html).toContain("面板 3：b.xlsx");
+	});
+
+	it("exports a two-panel comparison whose second panel is all sources", async () => {
+		mocks.loadGraph.mockResolvedValue(compareGraph);
+
+		const response = await POST(
+			new NextRequest(
+				"http://localhost/api/export/job-id?mode=context&compare=1&panel0=a.xlsx&panel1=",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						positions: {
+							"patent:p1": { x: 1, y: 2 },
+							"patent:p2": { x: -3, y: 4 },
+						},
+					}),
+				},
+			),
+			{ params: Promise.resolve({ id: "job-id" }) },
+		);
+
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		expect(html).toContain("B（右）：全部來源（2 檔）");
 	});
 
 	it("rejects a comparison on a single-source analysis", async () => {
@@ -256,7 +329,7 @@ describe("export route", () => {
 			/^attachment; filename="patent-graph-compare-diff-job-id-\d{8}\.html"$/,
 		);
 		const html = await response.text();
-		expect(html).toContain("專利知識圖譜 A/B 比較");
+		expect(html).toContain("專利知識圖譜比較");
 		expect(html).toContain("A（左）：a.xlsx");
 		expect(html).toContain("B（右）：b.xlsx");
 		expect(html).toContain(
@@ -265,6 +338,35 @@ describe("export route", () => {
 		expect(html).toContain('"x":1,"y":2');
 		expect(html).toContain('data-membership="shared"');
 		expect(mocks.requireUser).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns the comparison attachment for three panels (panel format)", async () => {
+		mocks.loadGraph.mockResolvedValue(compareGraph);
+
+		const response = await POST(
+			new NextRequest(
+				"http://localhost/api/export/job-id?mode=context&compare=1&panel0=a.xlsx&panel1=b.xlsx&panel2=a.xlsx&panel2=b.xlsx",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						positions: {
+							"patent:p1": { x: 1, y: 2 },
+							"patent:p2": { x: -3, y: 4 },
+						},
+					}),
+				},
+			),
+			{ params: Promise.resolve({ id: "job-id" }) },
+		);
+
+		expect(response.status).toBe(200);
+		const html = await response.text();
+		expect(html).toContain("面板 3：全部來源（2 檔）");
+		expect(html).toContain("僅 2 組 2");
+		expect(html).toContain("全部 3 組共有");
+		expect(html).toContain('"nodePanels":{"patent:p1":[1,3]');
+		expect(html).toContain('"nodeMembership":{"patent:p1":"partial"');
 	});
 
 	it("keeps the canonical POST attachment contract", async () => {

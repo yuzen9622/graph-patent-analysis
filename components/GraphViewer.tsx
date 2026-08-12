@@ -38,9 +38,6 @@ import {
 } from "@/lib/publication-export";
 import { fingerprintTopology, revealSchedule } from "@/lib/graph-render";
 
-/** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
-export type ImageCapture = () => string | null;
-
 /** PRD-Q8 出版整體圖（M1）／局部子圖（M2）共用的匯出選項。 */
 export interface PublicationFigureOptions {
 	/** 缺省 'overview'（M1）；'subgraph'（M2）需另帶 centerNodeId。 */
@@ -66,6 +63,36 @@ export interface PublicationFigureResult {
 export type PublicationCapture = (
 	options: PublicationFigureOptions,
 ) => PublicationFigureResult | null;
+
+/** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
+export type ImageCapture = () => string | null;
+
+/**
+ * 輕量版圖片匯出：直接讀 vis-network 內部畫布，貼到一張不透明白底的畫布上再
+ * 輸出 PNG——不重算佈局、不做標籤分級／碰撞避讓，畫面上有什麼就存什麼
+ * （vis-network 的 canvas 本身透明，論文用圖需要不透明白底；被隱藏的節點／邊
+ * 也不會出現在輸出中）。
+ * `network.canvas` 不在公開型別中，故此處以最小必要的形狀轉型存取。
+ */
+function captureNetworkImage(network: Network): string | null {
+	const rawCanvas = (
+		network as unknown as {
+			canvas?: { frame?: { canvas?: HTMLCanvasElement } };
+		}
+	).canvas?.frame?.canvas;
+	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0)
+		return null;
+
+	const output = document.createElement("canvas");
+	output.width = rawCanvas.width;
+	output.height = rawCanvas.height;
+	const ctx = output.getContext("2d");
+	if (!ctx) return null;
+	ctx.fillStyle = "#ffffff";
+	ctx.fillRect(0, 0, output.width, output.height);
+	ctx.drawImage(rawCanvas, 0, 0);
+	return output.toDataURL("image/png");
+}
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -345,32 +372,6 @@ function edgeColorWithOpacity(
 		...color,
 		opacity: (color.opacity ?? 1) * Math.max(0, Math.min(1, opacity)),
 	};
-}
-
-/**
- * 輕量版圖片匯出：直接讀 vis-network 內部畫布，貼到一張不透明白底的畫布上再
- * 輸出 PNG——不重算佈局、不做標籤分級／碰撞避讓，畫面上有什麼就存什麼
- * （vis-network 的 canvas 本身透明，論文用圖需要不透明白底）。
- * `network.canvas` 不在公開型別中，故此處以最小必要的形狀轉型存取。
- */
-function captureNetworkImage(network: Network): string | null {
-	const rawCanvas = (
-		network as unknown as {
-			canvas?: { frame?: { canvas?: HTMLCanvasElement } };
-		}
-	).canvas?.frame?.canvas;
-	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0)
-		return null;
-
-	const output = document.createElement("canvas");
-	output.width = rawCanvas.width;
-	output.height = rawCanvas.height;
-	const ctx = output.getContext("2d");
-	if (!ctx) return null;
-	ctx.fillStyle = "#ffffff";
-	ctx.fillRect(0, 0, output.width, output.height);
-	ctx.drawImage(rawCanvas, 0, 0);
-	return output.toDataURL("image/png");
 }
 
 const CAPTION_FONT_PX = 30;
@@ -806,10 +807,10 @@ interface Props {
 	onPositionSnapshotProvider?: (
 		provider: PositionSnapshotProvider | null,
 	) => void;
+	/** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
+	onCaptureReady?: (capture: PublicationCapture | null) => void;
 	/** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
 	onImageCaptureReady?: (capture: ImageCapture | null) => void;
-	/** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
-	onPublicationCaptureReady?: (capture: PublicationCapture | null) => void;
 	/** 差異檢視的成員篩選：這些 id 只隱藏、不重算佈局。 */
 	hiddenNodeIds?: Set<string>;
 	hiddenEdgeIds?: Set<string>;
@@ -834,8 +835,8 @@ export default function GraphViewer({
 	onEdgeSelect,
 	positionSnapshotKey,
 	onPositionSnapshotProvider,
+	onCaptureReady,
 	onImageCaptureReady,
-	onPublicationCaptureReady,
 	hiddenNodeIds,
 	hiddenEdgeIds,
 	viewport,
@@ -868,8 +869,8 @@ export default function GraphViewer({
 		onEdgeSelect,
 		positionSnapshotKey,
 		onPositionSnapshotProvider,
+		onCaptureReady,
 		onImageCaptureReady,
-		onPublicationCaptureReady,
 		hiddenNodeIds,
 		hiddenEdgeIds,
 		viewport,
@@ -891,8 +892,8 @@ export default function GraphViewer({
 		onEdgeSelect,
 		positionSnapshotKey,
 		onPositionSnapshotProvider,
+		onCaptureReady,
 		onImageCaptureReady,
-		onPublicationCaptureReady,
 		hiddenNodeIds,
 		hiddenEdgeIds,
 		viewport,
@@ -929,12 +930,17 @@ export default function GraphViewer({
 		lastBuiltTopologyKeyRef.current = topologyKey;
 		highlightRef.current.activeId = null;
 		if (process.env.NODE_ENV !== "production") {
-			console.debug("[graph] rebuild", topologyKey, current.nodes.length, current.edges.length);
+			console.debug(
+				"[graph] rebuild",
+				topologyKey,
+				current.nodes.length,
+				current.edges.length,
+			);
 		}
 		// A parent must not export a completed layout while this instance rebuilds.
 		current.onPositionSnapshotProvider?.(null);
+		current.onCaptureReady?.(null);
 		current.onImageCaptureReady?.(null);
-		current.onPublicationCaptureReady?.(null);
 		if (!containerRef.current) return;
 		let cancelled = false;
 		let builtNetwork: Network | null = null;
@@ -963,7 +969,10 @@ export default function GraphViewer({
 				(buildProps.analysis?.god_nodes ?? []).map((g) => [g.id, g]),
 			);
 			const surprisingEdgeMap = new Map(
-				(buildProps.analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
+				(buildProps.analysis?.surprising_connections ?? []).map((c) => [
+					c.edge_id,
+					c,
+				]),
 			);
 			const nodeDataSet = new DataSet(
 				buildProps.nodes.map((node) => {
@@ -1054,12 +1063,17 @@ export default function GraphViewer({
 						return positions;
 					},
 				});
-				latest.onImageCaptureReady?.(() => captureNetworkImage(network));
-				latest.onPublicationCaptureReady?.((options) =>
+				latest.onCaptureReady?.((options) =>
 					networkRef.current === network
-						? renderPublicationFigure(network, latest.nodes, latest.edges, options)
+						? renderPublicationFigure(
+								network,
+								latest.nodes,
+								latest.edges,
+								options,
+							)
 						: null,
 				);
+				latest.onImageCaptureReady?.(() => captureNetworkImage(network));
 			};
 
 			const startReveal = (short: boolean) => {
@@ -1119,10 +1133,9 @@ export default function GraphViewer({
 						}),
 					);
 					const surprisingEdges = new Map(
-						(latest.analysis?.surprising_connections ?? []).map((connection) => [
-							connection.edge_id,
-							connection,
-						]),
+						(latest.analysis?.surprising_connections ?? []).map(
+							(connection) => [connection.edge_id, connection],
+						),
 					);
 					edgeDataSet.update([
 						...latest.edges.map((edge) => ({
@@ -1284,7 +1297,8 @@ export default function GraphViewer({
 					scale: network.getScale(),
 				};
 				if (!isValidGraphViewport(currentViewport)) return;
-				if (graphViewportsEqual(currentViewport, syncedViewportRef.current)) return;
+				if (graphViewportsEqual(currentViewport, syncedViewportRef.current))
+					return;
 				syncedViewportRef.current = currentViewport;
 				onViewportChangeRef.current?.(currentViewport);
 			};
@@ -1451,10 +1465,10 @@ export default function GraphViewer({
 
 		void init();
 
-			return () => {
-				cancelled = true;
-				finishRevealRef.current();
-				if (networkRef.current === builtNetwork && builtNetwork) {
+		return () => {
+			cancelled = true;
+			finishRevealRef.current();
+			if (networkRef.current === builtNetwork && builtNetwork) {
 				const viewport = {
 					position: builtNetwork.getViewPosition(),
 					scale: builtNetwork.getScale(),
@@ -1483,7 +1497,12 @@ export default function GraphViewer({
 		);
 		nodeDataSet.update(
 			nodes.map((node) => {
-				const visual = toVisNode(node, unit, undefined, godNodeMap.get(node.id));
+				const visual = toVisNode(
+					node,
+					unit,
+					undefined,
+					godNodeMap.get(node.id),
+				);
 				return {
 					id: visual.id,
 					label: visual.label,
@@ -1506,12 +1525,7 @@ export default function GraphViewer({
 		edgeDataSet.update(
 			edges.map((edge) => {
 				const visual: EdgeUpdate = {
-					...toVisEdge(
-						edge,
-						surprisingEdgeMap.get(edge.id),
-						edgeWeight,
-						unit,
-					),
+					...toVisEdge(edge, surprisingEdgeMap.get(edge.id), edgeWeight, unit),
 				};
 				delete visual.from;
 				delete visual.to;
@@ -1554,12 +1568,17 @@ export default function GraphViewer({
 				return positions;
 			},
 		});
-		current.onImageCaptureReady?.(() => captureNetworkImage(network));
-		current.onPublicationCaptureReady?.((options) =>
+		current.onCaptureReady?.((options) =>
 			networkRef.current === network
-				? renderPublicationFigure(network, current.nodes, current.edges, options)
+				? renderPublicationFigure(
+						network,
+						current.nodes,
+						current.edges,
+						options,
+					)
 				: null,
 		);
+		current.onImageCaptureReady?.(() => captureNetworkImage(network));
 	}, [positionSnapshotKey, stabilized]);
 
 	// ── 比較模式：套用外部下達的視窗。已經在同一個位置就不動，避免兩側互推。

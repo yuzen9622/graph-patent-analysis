@@ -65,7 +65,7 @@ const viewB = view(
 	[node("n2", MALICIOUS), node("n3")],
 	[edge("e2", "n2", "n3")],
 );
-const difference = buildDifferenceView(viewA, viewB);
+const difference = buildDifferenceView([viewA, viewB]);
 
 const positions = {
 	n1: { x: 12.5, y: -4 },
@@ -81,8 +81,7 @@ function html(
 			jobId: "job-1234abcd",
 			difference,
 			positions,
-			aLabel: scopeLabel(["a.xlsx"], ALL),
-			bLabel: scopeLabel(["b.xlsx"], ALL),
+			labels: [scopeLabel(["a.xlsx"], ALL), scopeLabel(["b.xlsx"], ALL)],
 			metrics: difference.metrics,
 			tab: "difference",
 			mode: "concept",
@@ -143,8 +142,7 @@ describe("compare-export 文案", () => {
 
 	it("註記含 A/B 標籤與節點、邊指標", () => {
 		const lines = compareAnnotationLines({
-			aLabel: "a.xlsx",
-			bLabel: "b.xlsx",
+			labels: ["a.xlsx", "b.xlsx"],
 			metrics: difference.metrics,
 			tab: "difference",
 			mode: "concept",
@@ -161,8 +159,27 @@ describe("compare-export 文案", () => {
 		expect(lines[lines.length - 1]).toContain("三角形節點");
 	});
 
+	it("三面板註記改用「面板 N」與層級指標", () => {
+		const three = buildDifferenceView([viewA, viewB, viewA]);
+		const lines = compareAnnotationLines({
+			labels: ["a.xlsx", "b.xlsx", "a.xlsx"],
+			metrics: three.metrics,
+			tab: "difference",
+			mode: "concept",
+			unit: "patent",
+			colorMode: "community",
+			edgeWeight: "jaccard",
+			minSupport: 1,
+			yearRange: [2010, 2020],
+		});
+		expect(lines[0]).toBe("面板 1：a.xlsx");
+		expect(lines[2]).toBe("面板 3：a.xlsx");
+		expect(lines.some((line) => line.startsWith("節點：僅 1 組"))).toBe(true);
+		expect(lines[lines.length - 1]).toContain("全部 3 組共有");
+	});
+
 	it("圖例為三組、附形狀說明", () => {
-		const legend = compareLegendItems();
+		const legend = compareLegendItems(2);
 		expect(legend.map((item) => item.membership)).toEqual(["a", "b", "shared"]);
 		expect(legend.map((item) => item.color)).toEqual([
 			DIFF_COLORS.a,
@@ -170,6 +187,21 @@ describe("compare-export 文案", () => {
 			DIFF_COLORS.shared,
 		]);
 		expect(legend[2].encoding).toContain("實線");
+	});
+
+	it("三面板圖例為 unique／partial／shared，shared 帶面板數", () => {
+		const legend = compareLegendItems(3);
+		expect(legend.map((item) => item.membership)).toEqual([
+			"unique",
+			"partial",
+			"shared",
+		]);
+		expect(legend[2].label).toBe("全部 3 組共有");
+		expect(legend.map((item) => item.color)).toEqual([
+			DIFF_COLORS.unique,
+			DIFF_COLORS.partial,
+			DIFF_COLORS.shared,
+		]);
 	});
 
 	it("檔名帶檢視別與日期，並過濾非法字元", () => {
@@ -187,12 +219,47 @@ describe("buildCompareExportHtml", () => {
 	it("產生完整 HTML，含標題、A/B 摘要與指標", () => {
 		const out = html();
 		expect(out.startsWith("<!DOCTYPE html>")).toBe(true);
-		expect(out).toContain("專利知識圖譜 A/B 比較");
+		expect(out).toContain("專利知識圖譜比較");
 		expect(out).toContain("Job job-1234abcd");
 		expect(out).toContain("A（左）：a.xlsx");
 		expect(out).toContain("B（右）：b.xlsx");
 		expect(out).toContain("節點：僅 A 1");
 		expect(out).toContain("關係邊：僅 A 1");
+		// 兩面板以 panelCount 為閘門，不套用「見於面板」tooltip（舊版行為保留）
+		expect(out).toContain("var manyPanels = payload.panelCount > 2;");
+		expect(out).toContain('"panelCount":2');
+	});
+
+	it("三面板 HTML：面板標籤、層級圖例與見於面板的 tooltip", () => {
+		const three = buildDifferenceView([viewA, viewB, viewA]);
+		const out = buildCompareExportHtml(
+			{
+				jobId: "job-1234abcd",
+				difference: three,
+				positions,
+				labels: ["a.xlsx", "b.xlsx", "a.xlsx"],
+				metrics: three.metrics,
+				tab: "difference",
+				mode: "concept",
+				unit: "patent",
+				colorMode: "community",
+				edgeWeight: "jaccard",
+				minSupport: 2,
+				yearRange: [2010, 2020],
+				showCitations: false,
+			},
+			"window.vis = {};",
+		);
+		expect(out).toContain("面板 3：a.xlsx");
+		expect(out).toContain("全部 3 組共有");
+		expect(out).toContain('data-membership="unique"');
+		expect(out).toContain('data-membership="partial"');
+		// 節點 n1 在面板 1、3 都出現 → partial；n2 三面板全有 → shared；n3 僅面板 2 → unique
+		expect(out).toContain(
+			'"nodeMembership":{"n1":"partial","n2":"shared","n3":"unique"}',
+		);
+		expect(out).toContain('"nodePanels":{"n1":[1,3],"n2":[1,2,3],"n3":[2]}');
+		expect(out).toContain("見於：面板");
 	});
 
 	it("圖例三組皆可切換顯示，且帶冗餘編碼說明", () => {
@@ -213,20 +280,19 @@ describe("buildCompareExportHtml", () => {
 	});
 
 	it("保留圖譜關係語意：結構／時間邊有箭頭，線寬依選定指標推導", () => {
-		const temporal = buildDifferenceView(
+		const temporal = buildDifferenceView([
 			view(
 				[node("n1"), node("n2")],
 				[{ ...edge("e1", "n1", "n2"), temporal_directed: true, npmi: 0.6 }],
 			),
 			view([], []),
-		);
+		]);
 		const out = buildCompareExportHtml(
 			{
 				jobId: "job-1234abcd",
 				difference: temporal,
 				positions: { n1: { x: 0, y: 0 }, n2: { x: 1, y: 1 } },
-				aLabel: "a.xlsx",
-				bLabel: "b.xlsx",
+				labels: ["a.xlsx", "b.xlsx"],
 				metrics: temporal.metrics,
 				tab: "difference",
 				mode: "context",
@@ -272,7 +338,7 @@ describe("buildCompareExportHtml", () => {
 	});
 
 	it("A/B 標籤中的 HTML 會被跳脫", () => {
-		const out = html({ aLabel: "<b>x</b>", bLabel: '"y"' });
+		const out = html({ labels: ["<b>x</b>", '"y"'] });
 		expect(out).toContain("&lt;b&gt;x&lt;/b&gt;");
 		expect(out).not.toContain("<b>x</b>");
 		expect(out).toContain("&quot;y&quot;");

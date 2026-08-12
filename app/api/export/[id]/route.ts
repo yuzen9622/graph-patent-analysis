@@ -11,7 +11,7 @@ import {
 	type ExportOptions,
 } from "@/lib/export-html";
 import { buildCompareExportHtml } from "@/lib/export-compare-html";
-import { buildDifferenceView, scopesEqual } from "@/lib/graph-compare";
+import { buildDifferenceView, panelScopesDistinct } from "@/lib/graph-compare";
 import { compareExportFilename, scopeLabel } from "@/lib/compare-export";
 import { selectGraphView, sourceFilesOf } from "@/lib/graph-view";
 import {
@@ -96,12 +96,13 @@ async function loadExportContext(
 }
 
 /**
- * `compare=1` 專用分支：`source` 是 A 側範圍（沿用 parseExportOptions），
- * `rightSource` 是 B 側。兩側有效範圍相同就沒有東西可比，回 400。
+ * `compare=1` 專用分支：面板範圍由 `panel0`..`panel5` 多值參數給定
+ * （每個面板一份來源檔清單）；缺 `panelN` 時退回舊格式 `source`（面板 1）＋
+ * `rightSource`（面板 2），舊匯出連結相容。任兩面板有效範圍相同就沒有東西可比，回 400。
  */
 function compareAttachment(
 	{ id, graph, options }: ExportContext,
-	rightSourceFiles: string[],
+	panelScopes: string[][],
 	body: unknown,
 ): NextResponse {
 	const allSourceFiles = sourceFilesOf(graph);
@@ -111,20 +112,27 @@ function compareAttachment(
 			{ status: 400 },
 		);
 	}
-	if (scopesEqual(options.sourceFiles, rightSourceFiles, allSourceFiles)) {
+	if (panelScopes.length < 2) {
 		return NextResponse.json(
-			{ error: "A、B 兩側的來源檔範圍相同，無法比較。" },
+			{ error: "比較至少需要兩個面板。" },
+			{ status: 400 },
+		);
+	}
+	if (!panelScopesDistinct(panelScopes, allSourceFiles)) {
+		return NextResponse.json(
+			{ error: "任兩個面板的來源檔範圍相同，無法比較。" },
 			{ status: 400 },
 		);
 	}
 
-	const viewA = selectGraphView(graph, { ...options, showCitations: true });
-	const viewB = selectGraphView(graph, {
-		...options,
-		sourceFiles: rightSourceFiles.length > 0 ? rightSourceFiles : undefined,
-		showCitations: true,
-	});
-	const difference = buildDifferenceView(viewA, viewB);
+	const views = panelScopes.map((scope) =>
+		selectGraphView(graph, {
+			...options,
+			sourceFiles: scope.length > 0 ? scope : undefined,
+			showCitations: true,
+		}),
+	);
+	const difference = buildDifferenceView(views);
 	const positions = parseExportPositions(
 		body,
 		difference.view.nodes.map((node) => node.id),
@@ -135,8 +143,7 @@ function compareAttachment(
 			jobId: id,
 			difference,
 			positions,
-			aLabel: scopeLabel(options.sourceFiles, allSourceFiles),
-			bLabel: scopeLabel(rightSourceFiles, allSourceFiles),
+			labels: panelScopes.map((scope) => scopeLabel(scope, allSourceFiles)),
 			metrics: difference.metrics,
 			tab: "difference",
 			mode: options.mode,
@@ -159,6 +166,28 @@ function compareAttachment(
 			"Content-Disposition": `attachment; filename="${compareExportFilename(id, "html", "difference")}"`,
 		},
 	});
+}
+
+/** 面板範圍參數：`panel0`..`panel5` 多值；缺省時退回舊 `source`／`rightSource`。
+ * 面板存在但為空值（`panel1=`）＝該面板為全部來源，索引必須保留，
+ * 因此以「key 是否存在」判斷，而非「是否有值」。 */
+function parseComparePanelScopes(
+	searchParams: URLSearchParams,
+	legacy: { source: string[]; rightSource: string[] },
+): string[][] {
+	const panels: string[][] = [];
+	let hasPanelKeys = false;
+	for (let index = 0; index <= 5; index += 1) {
+		const key = `panel${index}`;
+		if (!searchParams.has(key)) continue;
+		hasPanelKeys = true;
+		panels.push(searchParams.getAll(key).filter(Boolean));
+	}
+	if (hasPanelKeys) return panels;
+	if (legacy.source.length > 0 || legacy.rightSource.length > 0) {
+		return [legacy.source, legacy.rightSource];
+	}
+	return [];
 }
 
 function exportAttachment(
@@ -219,7 +248,12 @@ export async function POST(
 		if (request.nextUrl.searchParams.get("compare") === "1") {
 			return compareAttachment(
 				loaded.context,
-				request.nextUrl.searchParams.getAll("rightSource").filter(Boolean),
+				parseComparePanelScopes(request.nextUrl.searchParams, {
+					source: request.nextUrl.searchParams.getAll("source").filter(Boolean),
+					rightSource: request.nextUrl.searchParams
+						.getAll("rightSource")
+						.filter(Boolean),
+				}),
 				body,
 			);
 		}

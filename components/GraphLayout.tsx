@@ -6,15 +6,13 @@ import {
 	Copy,
 	Check,
 	Download,
-	FileText,
-	ImageDown,
 	GitCompare,
+	ImageDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Sidebar from "./Sidebar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
-import GraphLegend from "./GraphLegend";
 import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
@@ -39,25 +37,27 @@ import { parseViewQuery, toViewQueryString } from "@/lib/view-url";
 import {
 	buildDifferenceView,
 	membershipHiddenIds,
-	scopesEqual,
-	suggestCompareScopes,
+	panelScopesDistinct,
+	suggestNewPanelScope,
+	suggestPanelScopes,
 	type DiffMembership,
 } from "@/lib/graph-compare";
 import {
 	compareAnnotationLines,
 	compareExportFilename,
 	compareLegendItems,
-	scopeLabel,
 	COMPARE_TITLE,
+	panelLabel,
+	scopeLabel,
 	type CommonFilterInput,
 	type CompareViewTab,
 } from "@/lib/compare-export";
-import { composeCompareImage } from "@/lib/compare-image";
 import type { GraphViewport } from "@/lib/graph-viewport";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
 import { subgraphNodeIds } from "@/lib/publication-export";
 import { TEMPORAL_OPACITY_LINE } from "@/lib/temporal";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { composeCompareImage } from "@/lib/compare-image";
 import type { ImageCapture, PublicationCapture } from "./GraphViewer";
 import type {
 	GraphData,
@@ -111,7 +111,7 @@ function downloadDataUrl(dataUrl: string, filename: string): void {
 	link.remove();
 }
 
-/** 比較工作區：off（單一檢視）→ setup（選 A/B 範圍）→ active（比較中）。 */
+/** 比較工作區：off（單一檢視）→ setup（選面板範圍）→ active（比較中）。 */
 type CompareUiState = "off" | "setup" | "active";
 
 export default function GraphLayout({ graph, jobId }: Props) {
@@ -125,28 +125,37 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
 	const [unit, setUnit] = useState<Unit>("patent");
 	const [sourceFiles, setSourceFiles] = useState<string[]>([]);
-	// A/B 比較工作區：同一份分析裡，A（左）、B（右）各自選來源檔子集；
+	// N 面板比較工作區：同一份分析裡，每個面板各自選來源檔子集；
 	// 其餘篩選條件（年份/單位/顏色/IPC…）共用，只有來源檔各自獨立。
 	const [compareUi, setCompareUi] = useState<CompareUiState>("off");
 	const compareMode = compareUi === "active";
 	const [compareView, setCompareView] =
 		useState<CompareViewTab>("side-by-side");
+	// 面板 0／1 沿用既有 sourceFiles／sourceFilesRight（側欄可直接編輯），
+	// 面板 2..5 放在 extraPanels（由設定面板管理）。
 	const [sourceFilesRight, setSourceFilesRight] = useState<string[]>([]);
-	const [setupLeft, setSetupLeft] = useState<string[]>([]);
-	const [setupRight, setSetupRight] = useState<string[]>([]);
+	const [extraPanels, setExtraPanels] = useState<string[][]>([]);
+	const [setupPanels, setSetupPanels] = useState<string[][]>([]);
 	const [hiddenMemberships, setHiddenMemberships] = useState<
 		Set<DiffMembership>
 	>(new Set());
-	// 並排時兩側共用的視窗；GraphViewer 內部會把等價的更新回彈掉，不會互推。
+	// 並排時各面板共用的視窗；GraphViewer 內部會把等價的更新回彈掉，不會互推。
 	const [compareViewport, setCompareViewport] = useState<GraphViewport | null>(
 		null,
 	);
+	// 圖片（PNG）匯出：輕量版 ImageCapture 逐面板註冊（並排）與差異檢視各一；
+	// ready flags 存 state，capture 就緒／卸載時才會觸發重繪更新按鈕可用性。
+	const imageCaptureRefs = useRef<(ImageCapture | null)[]>([]);
+	const diffImageCaptureRef = useRef<ImageCapture | null>(null);
+	const [imageReadyFlags, setImageReadyFlags] = useState<boolean[]>([]);
+	const [diffImageReady, setDiffImageReady] = useState(false);
+	const [imageExporting, setImageExporting] = useState(false);
+	const [imageExportError, setImageExportError] = useState<string | null>(null);
 	const [ipcLevel, setIpcLevel] = useState<IpcLevel>(DEFAULT_IPC_LEVEL);
 	const [ipcFilter, setIpcFilter] = useState<string[]>([]);
 	// 分析範圍中位年／全史中位年切換已移除（PRD：時序 UI mode 未實作，畫面幾乎無變化）；固定用分析範圍。
 	const temporalReference = "active" as const;
 	const [showCitations, setShowCitations] = useState(false);
-	const [paperMode, setPaperMode] = useState(false);
 	const [yearRange, setYearRange] = useState<[number, number]>(
 		graph.stats.year_range,
 	);
@@ -169,16 +178,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		useState(false);
 	const [exporting, setExporting] = useState(false);
 	const [exportError, setExportError] = useState<string | null>(null);
-	const imageCaptureLeftRef = useRef<ImageCapture | null>(null);
-	const imageCaptureRightRef = useRef<ImageCapture | null>(null);
-	const [imageLeftReady, setImageLeftReady] = useState(false);
-	const [imageRightReady, setImageRightReady] = useState(false);
-	const [imageExporting, setImageExporting] = useState(false);
-	const [imageExportError, setImageExportError] = useState<string | null>(null);
-	const imageExportReady =
-		compareMode && compareView === "side-by-side"
-			? imageLeftReady && imageRightReady
-			: imageLeftReady;
 	const publicationCaptureRef = useRef<PublicationCapture | null>(null);
 	const [publicationReady, setPublicationReady] = useState(false);
 	const [publicationError, setPublicationError] = useState<string | null>(null);
@@ -192,22 +191,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
 			setReadyKey(provider?.key ?? null);
 			setHasPositionSnapshotProvider(provider !== null);
 			setExportError(null);
-		},
-		[],
-	);
-
-	const handleImageCaptureReadyLeft = useCallback(
-		(capture: ImageCapture | null) => {
-			imageCaptureLeftRef.current = capture;
-			setImageLeftReady(capture !== null);
-		},
-		[],
-	);
-
-	const handleImageCaptureReadyRight = useCallback(
-		(capture: ImageCapture | null) => {
-			imageCaptureRightRef.current = capture;
-			setImageRightReady(capture !== null);
 		},
 		[],
 	);
@@ -251,24 +234,30 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		],
 	);
 
-	const layoutSnapshotKey = useMemo(
-		() => JSON.stringify({ ...sharedViewOptions, sourceFiles }),
-		[sharedViewOptions, sourceFiles],
+	// 面板範圍：面板 0／1 沿用既有 state（側欄可直接編輯），面板 2..5 在 extraPanels。
+	const panelScopes = useMemo(
+		() => [sourceFiles, sourceFilesRight, ...extraPanels],
+		[sourceFiles, sourceFilesRight, extraPanels],
 	);
-	const layoutSnapshotKeyRight = useMemo(
+	const layoutSnapshotKeys = useMemo(
 		() =>
-			JSON.stringify({ ...sharedViewOptions, sourceFiles: sourceFilesRight }),
-		[sharedViewOptions, sourceFilesRight],
+			panelScopes.map((scope, index) =>
+				JSON.stringify({
+					...sharedViewOptions,
+					panel: index,
+					sourceFiles: scope,
+				}),
+			),
+		[sharedViewOptions, panelScopes],
 	);
 	const layoutSnapshotKeyDiff = useMemo(
 		() =>
 			JSON.stringify({
 				...sharedViewOptions,
 				compare: "difference",
-				sourceFiles,
-				sourceFilesRight,
+				panelScopes,
 			}),
-		[sharedViewOptions, sourceFiles, sourceFilesRight],
+		[sharedViewOptions, panelScopes],
 	);
 
 	// PRD v2 / P2: 可用來源檔清單（供「依來源檔著色」與「來源檔篩選」）。
@@ -314,15 +303,27 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		if (parsed.showCitations !== undefined)
 			setShowCitations(parsed.showCitations);
 		if (parsed.minSupport !== undefined) setMinSupport(parsed.minSupport);
-		if (parsed.paperMode) setPaperMode(parsed.paperMode);
 		if (parsed.yearRange) setYearRange(parsed.yearRange);
-		if (parsed.sourceFilesRight) setSourceFilesRight(parsed.sourceFilesRight);
 		if (parsed.compareView) setCompareView(parsed.compareView);
-		// 只有一個來源檔（或兩側有效範圍相同）時比較無意義，這時就回到一般檢視。
+		if (parsed.panelScopes && parsed.panelScopes.length >= 2) {
+			// 新格式：面板範圍全部來自 panelN 參數。
+			setSourceFiles(parsed.panelScopes[0]);
+			setSourceFilesRight(parsed.panelScopes[1]);
+			setExtraPanels(parsed.panelScopes.slice(2));
+		} else {
+			// 舊格式：source／rsource 兩側（比較已由 compare=1 啟用時）。
+			if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
+			if (parsed.sourceFilesRight) setSourceFilesRight(parsed.sourceFilesRight);
+		}
+		// 只有一個來源檔（或面板範圍重複）時比較無意義，這時就回到一般檢視。
+		const hydratedPanels = parsed.panelScopes
+			? parsed.panelScopes
+			: [parsed.sourceFiles ?? [], parsed.sourceFilesRight ?? []];
 		if (
 			parsed.compare &&
 			allSourceFiles.length > 1 &&
-			!scopesEqual(parsed.sourceFiles, parsed.sourceFilesRight, allSourceFiles)
+			hydratedPanels.length >= 2 &&
+			panelScopesDistinct(hydratedPanels, allSourceFiles)
 		) {
 			setCompareUi("active");
 		}
@@ -342,7 +343,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		const query = toViewQueryString({
 			mode,
 			showSemantic,
-			paperMode,
 			colorMode,
 			minSupport,
 			yearRange,
@@ -355,7 +355,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 			showCitations,
 			compare: compareMode,
 			compareView,
-			sourceFilesRight,
+			panelScopes: compareMode ? panelScopes : undefined,
 		});
 		window.history.replaceState(
 			null,
@@ -367,7 +367,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		colorMode,
 		showSemantic,
 		minSupport,
-		paperMode,
 		yearRange,
 		edgeWeight,
 		unit,
@@ -378,28 +377,32 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		showCitations,
 		compareMode,
 		compareView,
-		sourceFilesRight,
+		panelScopes,
 	]);
 
+	const panelViews = useMemo(
+		() =>
+			compareMode
+				? panelScopes.map((scope) =>
+						selectGraphView(graph, {
+							...sharedViewOptions,
+							sourceFiles: scope,
+						}),
+					)
+				: null,
+		[compareMode, graph, sharedViewOptions, panelScopes],
+	);
 	const view = useMemo(
 		() => selectGraphView(graph, { ...sharedViewOptions, sourceFiles }),
 		[graph, sharedViewOptions, sourceFiles],
 	);
-	const viewRight = useMemo(
-		() =>
-			compareMode
-				? selectGraphView(graph, {
-						...sharedViewOptions,
-						sourceFiles: sourceFilesRight,
-					})
-				: null,
-		[compareMode, graph, sharedViewOptions, sourceFilesRight],
-	);
-	// 差異（聯集）檢視：節點⁃邊都是複本，不會動到 view / viewRight 本身。
+	// 差異（聯集）檢視：節點⁃邊都是複本，不會動到各面板檢視本身。
 	const difference = useMemo(
 		() =>
-			compareMode && viewRight ? buildDifferenceView(view, viewRight) : null,
-		[compareMode, view, viewRight],
+			compareMode && panelViews && panelViews.length >= 2
+				? buildDifferenceView(panelViews)
+				: null,
+		[compareMode, panelViews],
 	);
 	const membershipHidden = useMemo(
 		() =>
@@ -407,11 +410,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		[difference, hiddenMemberships],
 	);
 	const compareLabels = useMemo(
-		() => ({
-			a: scopeLabel(sourceFiles, allSourceFiles),
-			b: scopeLabel(sourceFilesRight, allSourceFiles),
-		}),
-		[allSourceFiles, sourceFiles, sourceFilesRight],
+		() =>
+			compareMode
+				? panelScopes.map((scope) => scopeLabel(scope, allSourceFiles))
+				: [],
+		[allSourceFiles, compareMode, panelScopes],
 	);
 	const commonFilters = useMemo<CommonFilterInput>(
 		() => ({
@@ -445,68 +448,98 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	);
 
 	const openCompareSetup = useCallback(() => {
-		const suggestion = suggestCompareScopes(
-			allSourceFiles,
+		const suggestion = suggestPanelScopes(allSourceFiles, [
 			sourceFiles,
 			sourceFilesRight,
-		);
-		setSetupLeft(suggestion.left);
-		setSetupRight(suggestion.right);
+			...extraPanels,
+		]);
+		setSetupPanels(suggestion);
 		setCompareUi("setup");
-	}, [allSourceFiles, sourceFiles, sourceFilesRight]);
+	}, [allSourceFiles, sourceFiles, sourceFilesRight, extraPanels]);
 
 	const startCompare = useCallback(() => {
 		// `CompareSetupPanel` 已停用無效按鈕；這層仍守住不變量，避免日後呼叫端略過 UI。
-		if (scopesEqual(setupLeft, setupRight, allSourceFiles)) return;
-		setSourceFiles(setupLeft);
-		setSourceFilesRight(setupRight);
+		if (
+			setupPanels.length < 2 ||
+			!panelScopesDistinct(setupPanels, allSourceFiles)
+		)
+			return;
+		setSourceFiles(setupPanels[0]);
+		setSourceFilesRight(setupPanels[1]);
+		setExtraPanels(setupPanels.slice(2));
 		setHiddenMemberships(new Set());
 		setCompareViewport(null);
-		setImageRightReady(false);
+		setImageReadyFlags([]);
+		setDiffImageReady(false);
 		setImageExportError(null);
 		setCompareUi("active");
-	}, [allSourceFiles, setupLeft, setupRight]);
+	}, [allSourceFiles, setupPanels]);
 
 	const exitCompare = useCallback(() => {
 		setCompareUi("off");
 		setCompareViewport(null);
-		setImageRightReady(false);
+		setImageReadyFlags([]);
+		setDiffImageReady(false);
 		setImageExportError(null);
 	}, []);
 
 	const swapCompareScopes = useCallback(() => {
+		// 僅兩面板時的交換語意；三面板以上沒有單一「交換 A/B」可定義。
+		if (panelScopes.length !== 2) return;
 		setSourceFiles(sourceFilesRight);
 		setSourceFilesRight(sourceFiles);
-	}, [sourceFiles, sourceFilesRight]);
+	}, [panelScopes.length, sourceFiles, sourceFilesRight]);
 
-	// 活躍比較期間仍可從側欄調整 A/B；若調成同一有效範圍，就回到設定面板，
-	// 讓使用者看見並修正，而不是默默顯示兩張相同的圖。
+	// 活躍比較期間仍可從側欄調整面板 1／2；若任兩面板有效範圍相同，
+	// 就回到設定面板，讓使用者看見並修正，而不是默默顯示兩張相同的圖。
 	const updateActiveCompareScope = useCallback(
 		(side: "left" | "right", next: string[]) => {
-			const nextLeft = side === "left" ? next : sourceFiles;
-			const nextRight = side === "right" ? next : sourceFilesRight;
-			if (scopesEqual(nextLeft, nextRight, allSourceFiles)) {
-				setSetupLeft(nextLeft);
-				setSetupRight(nextRight);
+			const nextPanels =
+				side === "left"
+					? [next, sourceFilesRight, ...extraPanels]
+					: [sourceFiles, next, ...extraPanels];
+			if (!panelScopesDistinct(nextPanels, allSourceFiles)) {
+				setSetupPanels(nextPanels);
 				setCompareUi("setup");
 				return;
 			}
 			if (side === "left") setSourceFiles(next);
 			else setSourceFilesRight(next);
 		},
-		[allSourceFiles, sourceFiles, sourceFilesRight],
+		[allSourceFiles, extraPanels, sourceFiles, sourceFilesRight],
 	);
 
 	const swapSetupScopes = useCallback(() => {
-		setSetupLeft(setupRight);
-		setSetupRight(setupLeft);
-	}, [setupLeft, setupRight]);
+		setSetupPanels((prev) => {
+			if (prev.length !== 2) return prev;
+			return [prev[1], prev[0]];
+		});
+	}, []);
+
+	// 設定面板中新增一個面板：預設範圍是第一個沒被用到的來源檔。
+	const addSetupPanel = useCallback(() => {
+		setSetupPanels((prev) => {
+			if (prev.length >= 6) return prev;
+			return [...prev, suggestNewPanelScope(prev, allSourceFiles)];
+		});
+	}, [allSourceFiles]);
+
+	const removeSetupPanel = useCallback((index: number) => {
+		setSetupPanels((prev) => {
+			if (prev.length <= 2) return prev;
+			return prev.filter((_, i) => i !== index);
+		});
+	}, []);
 
 	const changeCompareView = useCallback((tab: CompareViewTab) => {
 		setCompareView(tab);
 		setCompareViewport(null);
-		setImageRightReady(false);
-		setImageExportError(null);
+		// 分頁切換會卸載／重掛 viewer；清掉圖片匯出就緒旗標，
+		// 避免拿上一頁的舊 capture 誤導按鈕可用性。
+		setImageReadyFlags([]);
+		setDiffImageReady(false);
+		imageCaptureRefs.current = [];
+		diffImageCaptureRef.current = null;
 	}, []);
 
 	const toggleMembership = useCallback((membership: DiffMembership) => {
@@ -518,63 +551,18 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		});
 	}, []);
 
-	const handleExportImage = useCallback(async () => {
-		const left = imageCaptureLeftRef.current?.();
-		if (!left) return;
-		setImageExporting(true);
-		setImageExportError(null);
-		try {
-			if (!compareMode || !difference) {
-				downloadDataUrl(left, `patent-graph-${jobId.slice(0, 8)}.png`);
-				return;
-			}
-			const panels =
-				compareView === "difference"
-					? [{ label: "差異（聯集）檢視", dataUrl: left }]
-					: [{ label: `A（左）· ${compareLabels.a}`, dataUrl: left }];
-			if (compareView === "side-by-side") {
-				const right = imageCaptureRightRef.current?.();
-				if (!right) throw new Error("右圖尚未就緒");
-				panels.push({ label: `B（右）· ${compareLabels.b}`, dataUrl: right });
-			}
-			const dataUrl = await composeCompareImage({
-				title: COMPARE_TITLE,
-				annotationLines: compareAnnotationLines({
-					...commonFilters,
-					aLabel: compareLabels.a,
-					bLabel: compareLabels.b,
-					metrics: difference.metrics,
-					tab: compareView,
-				}),
-				legend: compareLegendItems(),
-				panels,
-			});
-			downloadDataUrl(
-				dataUrl,
-				compareExportFilename(jobId, "png", compareView),
-			);
-		} catch {
-			setImageExportError("圖片匯出失敗，請重試。");
-		} finally {
-			setImageExporting(false);
-		}
-	}, [
-		commonFilters,
-		compareLabels,
-		compareMode,
-		compareView,
-		difference,
-		jobId,
-	]);
-
 	const selectedViewNode = selectedNode
 		? (view.nodes.find((node) => node.id === selectedNode.id) ??
-			viewRight?.nodes.find((node) => node.id === selectedNode.id) ??
+			panelViews
+				?.flatMap((panel) => panel.nodes)
+				.find((node) => node.id === selectedNode.id) ??
 			null)
 		: null;
 	const selectedViewEdge = selectedEdge
 		? (view.edges.find((edge) => edge.id === selectedEdge.id) ??
-			viewRight?.edges.find((edge) => edge.id === selectedEdge.id) ??
+			panelViews
+				?.flatMap((panel) => panel.edges)
+				.find((edge) => edge.id === selectedEdge.id) ??
 			null)
 		: null;
 
@@ -620,17 +608,102 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		[graph.methodology.community_algorithm, jobId, unit, view.stats],
 	);
 
+	const handleImageCaptureReady = useCallback((index: number) => {
+		return (capture: ImageCapture | null) => {
+			imageCaptureRefs.current[index] = capture;
+			setImageReadyFlags((prev) => {
+				const next = [...prev];
+				while (next.length <= index) next.push(false);
+				next[index] = capture !== null;
+				return next;
+			});
+		};
+	}, []);
+
+	const handleDiffImageCaptureReady = useCallback(
+		(capture: ImageCapture | null) => {
+			diffImageCaptureRef.current = capture;
+			setDiffImageReady(capture !== null);
+		},
+		[],
+	);
+
+	// 圖片（PNG）匯出：非比較模式＝目前畫面單張；比較模式＝逐面板擷取後
+	// 組合成帶標題、指標與圖例的白底圖（並排 N 面板／差異單張聯集圖）。
+	const imageExportReady = !compareMode
+		? imageReadyFlags[0] === true
+		: compareView === "difference"
+			? diffImageReady
+			: imageReadyFlags.slice(0, panelScopes.length).every(Boolean);
+
+	const handleExportImage = useCallback(async () => {
+		const panelCount = panelScopes.length;
+		const captures =
+			compareMode && compareView === "difference"
+				? [diffImageCaptureRef.current]
+				: compareMode
+					? imageCaptureRefs.current.slice(0, panelCount)
+					: [imageCaptureRefs.current[0]];
+		const dataUrls = captures.map((capture) => capture?.() ?? null);
+		if (dataUrls.some((dataUrl) => dataUrl === null)) return;
+		setImageExporting(true);
+		setImageExportError(null);
+		try {
+			if (!compareMode) {
+				downloadDataUrl(dataUrls[0]!, `patent-graph-${jobId.slice(0, 8)}.png`);
+				return;
+			}
+			if (!difference) return;
+			const panels = dataUrls.map((dataUrl, index) => ({
+				label:
+					compareView === "difference"
+						? "差異（聯集）檢視"
+						: panelCount <= 2
+							? `${panelLabel(index, panelCount)}${index === 0 ? "（左）" : "（右）"}· ${compareLabels[index]}`
+							: `面板 ${index + 1}：${compareLabels[index]}`,
+				dataUrl: dataUrl!,
+			}));
+			const composed = await composeCompareImage({
+				title: COMPARE_TITLE,
+				annotationLines: compareAnnotationLines({
+					labels: compareLabels,
+					metrics: difference.metrics,
+					tab: compareView,
+					...commonFilters,
+				}),
+				legend: compareLegendItems(panelCount),
+				panels,
+			});
+			downloadDataUrl(
+				composed,
+				compareExportFilename(jobId, "png", compareView),
+			);
+		} catch {
+			setImageExportError("圖片匯出失敗，請重試。");
+		} finally {
+			setImageExporting(false);
+		}
+	}, [
+		commonFilters,
+		compareLabels,
+		compareMode,
+		compareView,
+		difference,
+		jobId,
+		panelScopes.length,
+	]);
+
 	const selectMode = useCallback((nextMode: GraphMode) => {
 		setMode(nextMode);
 		setSelectedNode(null);
 		setSelectedEdge(null);
 	}, []);
 
-	// 差異檢視只有一張圖，凍結座標來自那張；其餘情況沿用左圖。
+	// 差異檢視只有一張圖，凍結座標來自那張；其餘情況沿用面板 1。
 	const compareHtmlExport = compareMode && compareView === "difference";
 	const activeSnapshotKey = compareHtmlExport
 		? layoutSnapshotKeyDiff
-		: layoutSnapshotKey;
+		: layoutSnapshotKeys[0];
 	const offlineExportBlocked = compareMode && !compareHtmlExport;
 	const exportReady =
 		hasPositionSnapshotProvider && readyKey === activeSnapshotKey;
@@ -638,7 +711,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	const exportQuery = new URLSearchParams({
 		mode,
 		llm: "0",
-		paper: paperMode ? "1" : "0",
 		colorMode,
 		minSupport: String(minSupport),
 		yearStart: String(yearRange[0]),
@@ -646,15 +718,17 @@ export default function GraphLayout({ graph, jobId }: Props) {
 	});
 	if (edgeWeight && edgeWeight !== "jaccard") exportQuery.set("el", edgeWeight);
 	if (unit && unit !== "patent") exportQuery.set("unit", unit);
-	for (const source of sourceFiles) exportQuery.append("source", source);
 	if (showCitations) exportQuery.set("citations", "1");
 	if (ipcLevel !== DEFAULT_IPC_LEVEL)
 		exportQuery.set("ipcLevel", String(ipcLevel));
 	for (const key of ipcFilter) exportQuery.append("ipc", key);
 	if (compareHtmlExport) {
 		exportQuery.set("compare", "1");
-		for (const source of sourceFilesRight)
-			exportQuery.append("rightSource", source);
+		for (const [index, scope] of panelScopes.entries()) {
+			for (const source of scope) exportQuery.append(`panel${index}`, source);
+		}
+	} else {
+		for (const source of sourceFiles) exportQuery.append("source", source);
 	}
 	const exportQueryString = exportQuery.toString();
 
@@ -756,7 +830,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		setHiddenCommunities(new Set());
 		setSourceFiles([]);
 		setSourceFilesRight([]);
-	}, [graph.stats.year_range]);
+		setExtraPanels([]);
+		// 重設後所有面板都回到「全部來源」＝彼此重複，比較失去意義，直接結束比較。
+		if (compareMode) exitCompare();
+	}, [graph.stats.year_range, compareMode, exitCompare]);
 
 	return (
 		<div className="flex flex-col h-screen bg-background overflow-hidden">
@@ -814,7 +891,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						title={
 							allSourceFiles.length <= 1
 								? "此分析只有一個來源檔，無法比較"
-								: "設定 A/B 來源檔範圍並比較"
+								: "設定多面板來源檔範圍並比較"
 						}
 						className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
 							compareUi !== "off"
@@ -823,40 +900,25 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						}`}
 					>
 						<GitCompare size={12} />
-						A/B 比較
+						比較
 					</button>
 					<button
-						type="button"
-						onClick={() => setPaperMode((value) => !value)}
-						aria-pressed={paperMode}
-						className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors ${
-							paperMode
-								? "bg-primary text-primary-foreground border-primary"
-								: "bg-background border-border text-foreground hover:bg-accent"
-						}`}
+						onClick={handleCopy}
+						className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
+						aria-label="複製分享連結"
 					>
-						<FileText size={12} />
-						論文檢視
+						{copied ? (
+							<>
+								<Check size={12} className="text-success" />
+								已複製
+							</>
+						) : (
+							<>
+								<Copy size={12} />
+								複製連結
+							</>
+						)}
 					</button>
-					{!paperMode && (
-						<button
-							onClick={handleCopy}
-							className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
-							aria-label="複製分享連結"
-						>
-							{copied ? (
-								<>
-									<Check size={12} className="text-success" />
-									已複製
-								</>
-							) : (
-								<>
-									<Copy size={12} />
-									複製連結
-								</>
-							)}
-						</button>
-					)}
 					<button
 						type="button"
 						onClick={() => void handleOfflineExport()}
@@ -888,7 +950,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						title={
 							imageExportReady
 								? compareMode
-									? "下載帶標題、A/B 來源、共用篩選與指標的比較 PNG"
+									? "下載帶標題、面板來源、共用篩選與指標的比較 PNG"
 									: "下載目前畫面的 PNG 圖片"
 								: "等待圖譜佈局完成"
 						}
@@ -921,36 +983,33 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						}
 						onGenerate={handleGeneratePublicationFigure}
 					/>
-					{(exportError || imageExportError || publicationError) && (
+					{(exportError || publicationError || imageExportError) && (
 						<span
 							role="status"
 							title={
-								exportError ?? imageExportError ?? publicationError ?? undefined
+								exportError ?? publicationError ?? imageExportError ?? undefined
 							}
 							className="max-w-28 truncate text-xs text-destructive"
 						>
-							{exportError ?? imageExportError ?? publicationError}
+							{exportError ?? publicationError ?? imageExportError}
 						</span>
 					)}
-					{!exportError &&
-						!imageExportError &&
-						!publicationError &&
-						publicationNotice && (
-							<span
-								role="status"
-								title={publicationNotice}
-								className="max-w-40 truncate text-xs text-muted-foreground"
-							>
-								{publicationNotice}
-							</span>
-						)}
+					{!exportError && !publicationError && publicationNotice && (
+						<span
+							role="status"
+							title={publicationNotice}
+							className="max-w-40 truncate text-xs text-muted-foreground"
+						>
+							{publicationNotice}
+						</span>
+					)}
 				</div>
 			</header>
 
 			{/* ── Main area: graph + sidebar ── */}
 			<div className="flex flex-1 overflow-hidden min-h-0">
 				{/* History sidebar — hidden on mobile */}
-				<div className={`${paperMode ? "hidden" : "hidden md:flex"} shrink-0`}>
+				<div className="hidden md:flex shrink-0">
 					<AnalysisHistorySidebar
 						collapsed={sidebarCollapsed}
 						onToggle={() => setSidebarCollapsed((c) => !c)}
@@ -961,27 +1020,27 @@ export default function GraphLayout({ graph, jobId }: Props) {
 				<div className="relative flex flex-1 min-w-0 flex-col overflow-hidden">
 					{compareMode && difference && (
 						<CompareSummary
-							aLabel={compareLabels.a}
-							bLabel={compareLabels.b}
+							labels={compareLabels}
 							filters={commonFilters}
 							metrics={difference.metrics}
 							tab={compareView}
 							onTabChange={changeCompareView}
-							onSwap={swapCompareScopes}
+							onSwap={panelScopes.length === 2 ? swapCompareScopes : undefined}
 							onExit={exitCompare}
+							onEditScope={openCompareSetup}
 						/>
 					)}
 					<div className="relative flex flex-1 min-w-0 overflow-hidden">
 						{compareUi === "setup" && (
 							<CompareSetupPanel
 								allSourceFiles={allSourceFiles}
-								left={setupLeft}
-								right={setupRight}
-								onLeftChange={setSetupLeft}
-								onRightChange={setSetupRight}
+								panels={setupPanels}
+								onPanelsChange={setSetupPanels}
 								onSwap={swapSetupScopes}
 								onCancel={exitCompare}
 								onStart={startCompare}
+								onAddPanel={addSetupPanel}
+								onRemovePanel={removeSetupPanel}
 							/>
 						)}
 						{compareMode &&
@@ -997,7 +1056,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 									onEdgeSelect={setSelectedEdge}
 									positionSnapshotKey={layoutSnapshotKeyDiff}
 									onPositionSnapshotProvider={handlePositionSnapshotProvider}
-									onImageCaptureReady={handleImageCaptureReadyLeft}
+									onImageCaptureReady={handleDiffImageCaptureReady}
 									yearRange={yearRange}
 									edgeWeight={edgeWeight}
 									unit={unit}
@@ -1014,86 +1073,53 @@ export default function GraphLayout({ graph, jobId }: Props) {
 										difference.view.nodes.length - membershipHidden.nodes.size
 									}
 									totalNodeCount={difference.view.nodes.length}
+									panelCount={panelScopes.length}
 								/>
 							</div>
-						) : (
-							<>
-								<div
-									className={`relative min-w-0 overflow-hidden flex-1 ${
-										compareMode ? "border-r border-border" : ""
-									}`}
-								>
-									{compareMode && (
+						) : compareMode && panelViews ? (
+							<div
+								className={`flex min-w-0 flex-1 overflow-hidden ${
+									panelViews.length > 2 ? "overflow-x-auto" : ""
+								}`}
+							>
+								{panelViews.map((panelView, index) => (
+									<div
+										key={index}
+										className={`relative min-w-0 overflow-hidden ${
+											index < panelViews.length - 1
+												? "border-r border-border"
+												: ""
+										} ${
+											panelViews.length > 2 ? "min-w-[28rem] flex-1" : "flex-1"
+										}`}
+									>
 										<div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[0.65rem] text-muted-foreground backdrop-blur-sm">
 											<span className="font-medium text-foreground">
-												A（左）
+												{panelLabel(index, panelViews.length)}
+												{panelViews.length <= 2
+													? index === 0
+														? "（左）"
+														: "（右）"
+													: ""}
 											</span>
 											{" · "}
-											{compareLabels.a}
+											{compareLabels[index]}
 											{" · "}
-											{view.stats.applicant_count} 家 ·{" "}
-											{view.stats.patent_count} 篇
-										</div>
-									)}
-									<GraphViewer
-										nodes={view.nodes}
-										edges={view.edges}
-										citationEdges={view.citationEdges}
-										analysis={mode === "concept" ? graph.analysis : undefined}
-										onNodeSelect={setSelectedNode}
-										onEdgeSelect={setSelectedEdge}
-										positionSnapshotKey={layoutSnapshotKey}
-										onPositionSnapshotProvider={handlePositionSnapshotProvider}
-										onImageCaptureReady={handleImageCaptureReadyLeft}
-										onPublicationCaptureReady={handlePublicationCaptureReady}
-										viewport={compareMode ? compareViewport : undefined}
-										onViewportChange={
-											compareMode ? setCompareViewport : undefined
-										}
-										yearRange={yearRange}
-										edgeWeight={edgeWeight}
-										unit={unit}
-										visibleLayers={viewerLayers}
-										hiddenCommunities={viewerHiddenCommunities}
-										focusNodeId={focusNodeId}
-									/>
-									<GraphLegend
-										mode={mode}
-										minSupport={minSupport}
-										colorMode={colorMode}
-										unit={unit}
-										sourceFiles={sourceFiles}
-										allSourceFiles={allSourceFiles}
-										methodology={graph.methodology}
-										capabilityWarning={view.capabilityWarning}
-										stats={view.stats}
-										paperMode={paperMode}
-										ipcLevel={ipcLevel}
-										ipcLegend={ipcLegend}
-									/>
-								</div>
-
-								{compareMode && viewRight && (
-									<div className="relative min-w-0 overflow-hidden flex-1">
-										<div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[0.65rem] text-muted-foreground backdrop-blur-sm">
-											<span className="font-medium text-foreground">
-												B（右）
-											</span>
-											{" · "}
-											{compareLabels.b}
-											{" · "}
-											{viewRight.stats.applicant_count} 家 ·{" "}
-											{viewRight.stats.patent_count} 篇
+											{panelView.stats.applicant_count} 家 ·{" "}
+											{panelView.stats.patent_count} 篇
 										</div>
 										<GraphViewer
-											nodes={viewRight.nodes}
-											edges={viewRight.edges}
-											citationEdges={viewRight.citationEdges}
+											nodes={panelView.nodes}
+											edges={panelView.edges}
+											citationEdges={panelView.citationEdges}
 											analysis={mode === "concept" ? graph.analysis : undefined}
 											onNodeSelect={setSelectedNode}
 											onEdgeSelect={setSelectedEdge}
-											positionSnapshotKey={layoutSnapshotKeyRight}
-											onImageCaptureReady={handleImageCaptureReadyRight}
+											positionSnapshotKey={layoutSnapshotKeys[index]}
+											onPositionSnapshotProvider={
+												handlePositionSnapshotProvider
+											}
+											onImageCaptureReady={handleImageCaptureReady(index)}
 											viewport={compareViewport}
 											onViewportChange={setCompareViewport}
 											yearRange={yearRange}
@@ -1104,75 +1130,97 @@ export default function GraphLayout({ graph, jobId }: Props) {
 											focusNodeId={focusNodeId}
 										/>
 									</div>
-								)}
-							</>
+								))}
+							</div>
+						) : (
+							<div className="relative min-w-0 flex-1 overflow-hidden">
+								<GraphViewer
+									nodes={view.nodes}
+									edges={view.edges}
+									citationEdges={view.citationEdges}
+									analysis={mode === "concept" ? graph.analysis : undefined}
+									onNodeSelect={setSelectedNode}
+									onEdgeSelect={setSelectedEdge}
+									positionSnapshotKey={layoutSnapshotKeys[0]}
+									onPositionSnapshotProvider={handlePositionSnapshotProvider}
+									onCaptureReady={handlePublicationCaptureReady}
+									onImageCaptureReady={handleImageCaptureReady(0)}
+									yearRange={yearRange}
+									edgeWeight={edgeWeight}
+									unit={unit}
+									visibleLayers={viewerLayers}
+									hiddenCommunities={viewerHiddenCommunities}
+									focusNodeId={focusNodeId}
+								/>
+							</div>
 						)}
 					</div>
 				</div>
 
 				{/* Right sidebar */}
-				{!paperMode && (
-					<Sidebar
-						nodes={view.nodes}
-						allNodes={graph.nodes}
-						edges={view.edges}
-						communities={view.communities}
-						aiReport={graph.ai_report}
-						yearRange={yearRange}
-						fullYearRange={graph.stats.year_range}
-						selectedNode={selectedViewNode}
-						selectedEdge={selectedViewEdge}
-						methodology={graph.methodology}
-						mode={mode}
-						colorMode={colorMode}
-						onColorModeChange={setColorMode}
-						unit={unit}
-						onUnitChange={setUnit}
-						allSourceFiles={allSourceFiles}
-						sourceFiles={sourceFiles}
-						onSourceFilesChange={
-							compareMode
-								? (next) => updateActiveCompareScope("left", next)
-								: setSourceFiles
-						}
-						compareMode={compareMode}
-						sourceFilesRight={sourceFilesRight}
-						onSourceFilesRightChange={(next) =>
-							updateActiveCompareScope("right", next)
-						}
-						ipcLevel={ipcLevel}
-						onIpcLevelChange={(level) => {
-							setIpcLevel(level);
-							setIpcFilter([]);
-						}}
-						ipcFilter={ipcFilter}
-						onIpcFilterChange={setIpcFilter}
-						ipcTree={ipcTree}
-						hasIpcData={hasIpcData}
-						applicantAvailability={applicantDataAvailability}
-						minSupport={minSupport}
-						maxSupport={
-							viewRight
-								? Math.max(view.maxSupport, viewRight.maxSupport)
-								: view.maxSupport
-						}
-						visibleLayers={visibleLayers}
-						hiddenCommunities={hiddenCommunities}
-						onYearChange={setYearRange}
-						onLayerToggle={toggleLayer}
-						onCommunityToggle={toggleCommunity}
-						onNodeFocus={setFocusNodeId}
-						onNodeSelect={(node) => {
-							setSelectedNode(node);
-							if (node) setSelectedEdge(null);
-						}}
-						onEdgeClose={() => setSelectedEdge(null)}
-						onMinSupportChange={setMinSupport}
-						onResetFilters={handleResetFilters}
-						showCitations={showCitations}
-						onCitationsChange={setShowCitations}
-					/>
-				)}
+				<Sidebar
+					nodes={view.nodes}
+					allNodes={graph.nodes}
+					edges={view.edges}
+					communities={view.communities}
+					aiReport={graph.ai_report}
+					yearRange={yearRange}
+					fullYearRange={graph.stats.year_range}
+					selectedNode={selectedViewNode}
+					selectedEdge={selectedViewEdge}
+					methodology={graph.methodology}
+					mode={mode}
+					colorMode={colorMode}
+					onColorModeChange={setColorMode}
+					unit={unit}
+					onUnitChange={setUnit}
+					allSourceFiles={allSourceFiles}
+					sourceFiles={sourceFiles}
+					onSourceFilesChange={
+						compareMode
+							? (next) => updateActiveCompareScope("left", next)
+							: setSourceFiles
+					}
+					compareMode={compareMode}
+					sourceFilesRight={sourceFilesRight}
+					onSourceFilesRightChange={(next) =>
+						updateActiveCompareScope("right", next)
+					}
+					extraPanelCount={
+						extraPanels.filter((scope) => scope.length > 0).length
+					}
+					ipcLevel={ipcLevel}
+					onIpcLevelChange={(level) => {
+						setIpcLevel(level);
+						setIpcFilter([]);
+					}}
+					ipcFilter={ipcFilter}
+					onIpcFilterChange={setIpcFilter}
+					ipcTree={ipcTree}
+					hasIpcData={hasIpcData}
+					applicantAvailability={applicantDataAvailability}
+					minSupport={minSupport}
+					maxSupport={
+						panelViews && panelViews.length > 0
+							? Math.max(...panelViews.map((panel) => panel.maxSupport))
+							: view.maxSupport
+					}
+					visibleLayers={visibleLayers}
+					hiddenCommunities={hiddenCommunities}
+					onYearChange={setYearRange}
+					onLayerToggle={toggleLayer}
+					onCommunityToggle={toggleCommunity}
+					onNodeFocus={setFocusNodeId}
+					onNodeSelect={(node) => {
+						setSelectedNode(node);
+						if (node) setSelectedEdge(null);
+					}}
+					onEdgeClose={() => setSelectedEdge(null)}
+					onMinSupportChange={setMinSupport}
+					onResetFilters={handleResetFilters}
+					showCitations={showCitations}
+					onCitationsChange={setShowCitations}
+				/>
 			</div>
 		</div>
 	);

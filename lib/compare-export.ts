@@ -1,13 +1,16 @@
 /**
- * A/B 比較匯出（PNG 註記與離線 HTML）共用的文案、統計行與檔名規則。
+ * N 面板比較匯出（PNG 註記與離線 HTML）共用的文案、統計行與檔名規則。
  * 純字串組裝，讓瀏覽器端畫布與伺服器端 HTML 兩條路徑不會漂移。
+ *
+ * 兩面板沿用 A／B 語意（文案逐字與舊版相同）；三面板以上改用
+ * 「僅 1 組…僅 N 組＋聯集＋共有比例」的層級表述。
  */
 import { DEFAULT_IPC_LEVEL, type IpcLevel } from "./ipc-filter";
 import {
 	DIFF_COLORS,
 	DIFF_LABELS,
-	DIFF_MEMBERSHIPS,
 	DIFF_SHAPE_LABELS,
+	diffMemberships,
 	effectiveScope,
 	type CompareCount,
 	type CompareMetrics,
@@ -16,7 +19,7 @@ import {
 import type { ColorMode, EdgeWeightMetric, Unit } from "./graph-view";
 import type { GraphMode } from "../types/graph";
 
-export const COMPARE_TITLE = "專利知識圖譜 A/B 比較";
+export const COMPARE_TITLE = "專利知識圖譜比較";
 
 export type CompareViewTab = "side-by-side" | "difference";
 
@@ -24,6 +27,12 @@ export const COMPARE_TAB_LABELS: Record<CompareViewTab, string> = {
 	"side-by-side": "並排檢視",
 	difference: "差異檢視",
 };
+
+/** 面板的顯示名稱：兩面板沿用 A／B，三面板以上用「面板 N」。 */
+export function panelLabel(index: number, panelCount: number): string {
+	if (panelCount <= 2) return index === 0 ? "A" : "B";
+	return `面板 ${index + 1}`;
+}
 
 /** A／B 範圍的顯示文字；空選擇＝全部來源檔。 */
 export function scopeLabel(
@@ -64,7 +73,7 @@ export interface CommonFilterInput {
 }
 
 /**
- * 共用篩選摘要：來源檔以外的條件左右兩側完全一致，這幾行就是「比較的前提」。
+ * 共用篩選摘要：來源檔以外的條件各面板完全一致，這幾行就是「比較的前提」。
  */
 export function commonFilterSummary(input: CommonFilterInput): string[] {
 	const lines = [
@@ -86,7 +95,15 @@ export function formatJaccard(value: number): string {
 }
 
 function metricLine(prefix: string, count: CompareCount): string {
-	return `${prefix}：僅 A ${count.aOnly}｜僅 B ${count.bOnly}｜共有 ${count.shared}｜聯集 ${count.union}｜Jaccard ${formatJaccard(count.jaccard)}`;
+	const panelCount = count.counts.length;
+	if (panelCount <= 2) {
+		// 兩面板：與舊版 A/B 文案逐字相同。
+		return `${prefix}：僅 A ${count.aOnly ?? 0}｜僅 B ${count.bOnly ?? 0}｜共有 ${count.counts[1] ?? 0}｜聯集 ${count.union}｜Jaccard ${formatJaccard(count.jaccard)}`;
+	}
+	const layers = count.counts
+		.map((value, index) => `僅 ${index + 1} 組 ${value}`)
+		.join("｜");
+	return `${prefix}：${layers}｜聯集 ${count.union}｜共有比例 ${formatJaccard(count.jaccard)}`;
 }
 
 /** 匯出檔要印的指標行（節點一行、邊一行）。 */
@@ -105,18 +122,27 @@ export interface CompareLegendItem {
 }
 
 /** 差異圖圖例：顏色以外一律附上形狀／線型說明（冗餘編碼）。 */
-export function compareLegendItems(): CompareLegendItem[] {
-	return DIFF_MEMBERSHIPS.map((membership) => ({
+export function compareLegendItems(panelCount: number): CompareLegendItem[] {
+	return diffMemberships(panelCount).map((membership) => ({
 		membership,
 		color: DIFF_COLORS[membership],
-		label: DIFF_LABELS[membership],
+		label: diffMembershipLabels(panelCount)[membership],
 		encoding: DIFF_SHAPE_LABELS[membership],
 	}));
 }
 
+/** 依面板數產生各歸屬的顯示文字（shared 在三面板以上帶面板數）。 */
+export function diffMembershipLabels(
+	panelCount: number,
+): Record<DiffMembership, string> {
+	const labels = { ...DIFF_LABELS };
+	if (panelCount > 2) labels.shared = `全部 ${panelCount} 組共有`;
+	return labels;
+}
+
 export interface CompareAnnotationInput extends CommonFilterInput {
-	aLabel: string;
-	bLabel: string;
+	/** 每個面板的範圍標籤（scopeLabel 輸出），長度＝面板數。 */
+	labels: string[];
 	metrics: CompareMetrics;
 	tab: CompareViewTab;
 }
@@ -127,13 +153,20 @@ export interface CompareAnnotationInput extends CommonFilterInput {
 export function compareAnnotationLines(
 	input: CompareAnnotationInput,
 ): string[] {
+	const panelCount = input.labels.length;
+	const scopeLines =
+		panelCount <= 2
+			? [
+					`A（左）：${input.labels[0] ?? ""}`,
+					`B（右）：${input.labels[1] ?? ""}`,
+				]
+			: input.labels.map((label, index) => `面板 ${index + 1}：${label}`);
 	return [
-		`A（左）：${input.aLabel}`,
-		`B（右）：${input.bLabel}`,
+		...scopeLines,
 		`檢視：${COMPARE_TAB_LABELS[input.tab]}｜共用篩選如下`,
 		...commonFilterSummary(input),
 		...compareMetricLines(input.metrics),
-		`圖例：${compareLegendItems()
+		`圖例：${compareLegendItems(panelCount)
 			.map((item) => `${item.label}（${item.encoding}）`)
 			.join("｜")}`,
 	];

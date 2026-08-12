@@ -8,7 +8,6 @@ import {
 const FULL: ViewState = {
 	mode: "concept",
 	showSemantic: true,
-	paperMode: false,
 	colorMode: "first_year",
 	minSupport: 3,
 	yearRange: [2010, 2020],
@@ -34,7 +33,7 @@ describe("parseViewQuery 與 toViewQueryString 互逆", () => {
 	it("可解析含前導 ? 的完整查詢字串", () => {
 		expect(
 			parseViewQuery(
-				"?mode=context&colorMode=first_year&llm=0&minSupport=2&yearStart=2007&yearEnd=2025&paper=1",
+				"?mode=context&colorMode=first_year&llm=0&minSupport=2&yearStart=2007&yearEnd=2025",
 			),
 		).toEqual({
 			mode: "context",
@@ -42,7 +41,6 @@ describe("parseViewQuery 與 toViewQueryString 互逆", () => {
 			colorMode: "first_year",
 			minSupport: 2,
 			yearRange: [2007, 2025],
-			paperMode: true,
 		});
 	});
 });
@@ -73,10 +71,10 @@ describe("parseViewQuery 容錯", () => {
 			yearRange: [2020, 2025],
 		});
 	});
-	it("llm／paper 只接受明確 1／0", () => {
+	it("llm 只接受明確 1／0；已移除的 paper 參數被忽略（舊連結相容）", () => {
 		expect(parseViewQuery("?llm=yes")).toEqual({});
 		expect(parseViewQuery("?llm=1")).toEqual({ showSemantic: true });
-		expect(parseViewQuery("?paper=1")).toEqual({ paperMode: true });
+		expect(parseViewQuery("?paper=1")).toEqual({});
 	});
 });
 describe("edgeWeight（線寬指標）", () => {
@@ -103,7 +101,6 @@ function fullDefaults(): import("./../lib/view-url").ViewState {
 	return {
 		mode: "concept",
 		showSemantic: false,
-		paperMode: true,
 		colorMode: "community",
 		minSupport: 2,
 		yearRange: [2007, 2025],
@@ -224,6 +221,117 @@ describe("A/B 比較（compare / compareView / rsource）", () => {
 		expect(parseViewQuery("?rsource=b.xlsx")).toEqual({
 			sourceFilesRight: ["b.xlsx"],
 		});
+	});
+});
+
+describe("N 面板比較（panel0..panelN 新格式）", () => {
+	it("兩面板維持舊格式：panelScopes 寫成 source／rsource（連結契約不變）", () => {
+		const q = toViewQueryString({
+			...fullDefaults(),
+			compare: true,
+			panelScopes: [["a.xlsx"], ["b.xlsx", "c.xlsx"]],
+		});
+		expect(q).toContain("compare=1");
+		expect(q).toContain("source=a.xlsx");
+		expect(q).toContain("rsource=b.xlsx");
+		expect(q).toContain("rsource=c.xlsx");
+		expect(q).not.toContain("panel0=");
+		expect(q).not.toContain("panel1=");
+		// 舊格式解析回舊欄位（GraphLayout 兩者皆可還原面板）。
+		const parsed = parseViewQuery(`?${q}`);
+		expect(parsed.sourceFiles).toEqual(["a.xlsx"]);
+		expect(parsed.sourceFilesRight).toEqual(["b.xlsx", "c.xlsx"]);
+	});
+
+	it("空面板（全部來源）不因無值而錯位", () => {
+		const parsed = parseViewQuery(
+			"?compare=1&panel0=a.xlsx&panel1=&panel2=c.xlsx",
+		);
+		expect(parsed.panelScopes).toEqual([["a.xlsx"], [], ["c.xlsx"]]);
+	});
+
+	it("空面板 round-trip：寫入掛 panelN= 空值，解析後索引不變", () => {
+		const q = toViewQueryString({
+			...fullDefaults(),
+			compare: true,
+			panelScopes: [["a.xlsx"], [], ["c.xlsx"]],
+		});
+		expect(q).toContain("panel0=a.xlsx");
+		expect(q).toContain("panel1=");
+		expect(q).toContain("panel2=c.xlsx");
+		expect(parseViewQuery(`?${q}`).panelScopes).toEqual([
+			["a.xlsx"],
+			[],
+			["c.xlsx"],
+		]);
+	});
+
+	it("panelScopes 逐面板 round-trip（多值保留順序）", () => {
+		const q = toViewQueryString({
+			...fullDefaults(),
+			compare: true,
+			compareView: "difference",
+			panelScopes: [["a.xlsx"], ["b.xlsx", "c.xlsx"], ["d.xlsx"]],
+		});
+		expect(q).toContain("compare=1");
+		expect(q).toContain("panel0=a.xlsx");
+		expect(q).toContain("panel1=b.xlsx");
+		expect(q).toContain("panel1=c.xlsx");
+		expect(q).toContain("panel2=d.xlsx");
+		expect(q).not.toContain("source=");
+		expect(q).not.toContain("rsource=");
+		const parsed = parseViewQuery(`?${q}`);
+		expect(parsed.compare).toBe(true);
+		expect(parsed.compareView).toBe("difference");
+		expect(parsed.panelScopes).toEqual([
+			["a.xlsx"],
+			["b.xlsx", "c.xlsx"],
+			["d.xlsx"],
+		]);
+	});
+
+	it("panelN 存在時優先於舊 source／rsource", () => {
+		const parsed = parseViewQuery(
+			"?compare=1&source=oldA&rsource=oldB&panel0=newA&panel1=newB&panel1=newC",
+		);
+		expect(parsed.panelScopes).toEqual([["newA"], ["newB", "newC"]]);
+		expect(parsed.sourceFiles).toBeUndefined();
+		expect(parsed.sourceFilesRight).toBeUndefined();
+	});
+
+	it("panel5 以上忽略（上限 6 面板）", () => {
+		const parsed = parseViewQuery(
+			"?compare=1&panel0=a&panel1=b&panel2=c&panel3=d&panel4=e&panel5=f&panel6=g",
+		);
+		expect(parsed.panelScopes).toEqual([
+			["a"],
+			["b"],
+			["c"],
+			["d"],
+			["e"],
+			["f"],
+		]);
+	});
+
+	it("舊格式 source／rsource 仍可解析（相容）", () => {
+		const parsed = parseViewQuery(
+			"?compare=1&compareView=difference&source=a.xlsx&rsource=b.xlsx",
+		);
+		expect(parsed.compare).toBe(true);
+		expect(parsed.compareView).toBe("difference");
+		expect(parsed.sourceFiles).toEqual(["a.xlsx"]);
+		expect(parsed.sourceFilesRight).toEqual(["b.xlsx"]);
+		expect(parsed.panelScopes).toBeUndefined();
+	});
+
+	it("未啟用比較時 panelScopes 不掛 URL", () => {
+		const q = toViewQueryString({
+			...fullDefaults(),
+			compare: false,
+			panelScopes: [["a.xlsx"], ["b.xlsx"]],
+		});
+		expect(q).not.toContain("panel0=");
+		expect(parseViewQuery(`?${q}`)).toEqual(fullDefaults());
 	});
 });
 

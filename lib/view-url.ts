@@ -15,7 +15,6 @@ import type { GraphMode } from "../types/graph";
 export interface ViewState {
 	mode: GraphMode;
 	showSemantic: boolean;
-	paperMode: boolean;
 	colorMode: ColorMode;
 	minSupport: number;
 	yearRange: [number, number];
@@ -37,6 +36,11 @@ export interface ViewState {
 	compare?: boolean;
 	/** 比較工作區的分頁（缺省並排，不掛 URL）。 */
 	compareView?: CompareViewTab;
+	/**
+	 * 比較工作區的面板範圍（新格式，逐面板一組來源檔）。
+	 * 缺省時退回舊格式 sourceFiles（面板 1）＋ sourceFilesRight（面板 2）。
+	 */
+	panelScopes?: string[][];
 	/** B（右）側的來源檔範圍；空＝全部來源。 */
 	sourceFilesRight?: string[];
 }
@@ -78,9 +82,22 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 	const unit = p.get("unit");
 	if (isUnit(unit)) out.unit = unit;
 
+	// 比較工作區：panel0..panel5（新格式，逐面板多值）。任一存在就優先於舊 source/rsource。
+	// 參數存在即保留該面板（空值＝該面板為全部來源），不能因空值而跳過，否則面板索引會錯位。
+	const panelScopes: string[][] = [];
+	let hasPanelParams = false;
+	for (let index = 0; index <= 5; index += 1) {
+		const key = `panel${index}`;
+		if (!p.has(key)) continue;
+		hasPanelParams = true;
+		panelScopes.push(p.getAll(key).filter(Boolean));
+	}
+	if (hasPanelParams) out.panelScopes = panelScopes;
+
 	// PRD v2 / P2: 來源檔可重複（多檔）。空／缺省＝不篩。
+	// 新格式面板存在時，舊 source／rsource 不再單獨解析（避免雙重來源）。
 	const sources = p.getAll("source").filter(Boolean);
-	if (sources.length > 0) out.sourceFiles = sources;
+	if (sources.length > 0 && !hasPanelParams) out.sourceFiles = sources;
 
 	// PRD v2 / P5: IPC 層級與篩選（多值）。非法層級忽略（缺省 3）。
 	const levelRaw = p.get("ipcLevel");
@@ -105,7 +122,8 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 		out.compareView = compareView;
 	}
 	const rightSources = p.getAll("rsource").filter(Boolean);
-	if (rightSources.length > 0) out.sourceFilesRight = rightSources;
+	if (rightSources.length > 0 && !hasPanelParams)
+		out.sourceFilesRight = rightSources;
 
 	const temporalReference = p.get("temporal_ref");
 	if (temporalReference === "active" || temporalReference === "full")
@@ -121,10 +139,6 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 	const minSupport = Number(p.get("minSupport"));
 	if (Number.isInteger(minSupport) && minSupport >= 1)
 		out.minSupport = minSupport;
-
-	const paper = p.get("paper");
-	if (paper === "1") out.paperMode = true;
-	else if (paper === "0") out.paperMode = false;
 
 	// Number(null) is 0, so guard on the raw value before coercing: an ABSENT
 	// year parameter must not be read as year 0.
@@ -144,7 +158,6 @@ export function toViewQueryString(state: ViewState): string {
 	const params: Record<string, string> = {
 		mode: state.mode,
 		llm: state.showSemantic ? "1" : "0",
-		paper: state.paperMode ? "1" : "0",
 		colorMode: state.colorMode,
 		minSupport: String(state.minSupport),
 		yearStart: String(state.yearRange[0]),
@@ -165,11 +178,32 @@ export function toViewQueryString(state: ViewState): string {
 		params["ipcLevel"] = String(state.ipcLevel);
 	}
 	const searchParams = new URLSearchParams(params);
-	for (const source of state.sourceFiles ?? [])
-		searchParams.append("source", source);
-	if (state.compare) {
-		for (const source of state.sourceFilesRight ?? [])
-			searchParams.append("rsource", source);
+	const panelScopes = state.panelScopes ?? [];
+	if (state.compare && panelScopes.length >= 2) {
+		if (panelScopes.length === 2) {
+			// 兩面板維持舊格式（source／rsource），既有連結語意與長度不變。
+			// 空面板＝全部來源＝不掛任何值，解析端缺省為空。
+			for (const source of panelScopes[0])
+				searchParams.append("source", source);
+			for (const source of panelScopes[1])
+				searchParams.append("rsource", source);
+		} else {
+			// 三面板以上用 panelN 新格式；空面板（全部來源）也要掛 `panelN=`
+			// 空值，否則解析端無法分辨「面板存在但空」與「沒有這個面板」。
+			for (const [index, scope] of panelScopes.entries()) {
+				for (const source of scope) {
+					searchParams.append(`panel${index}`, source);
+				}
+				if (scope.length === 0) searchParams.append(`panel${index}`, "");
+			}
+		}
+	} else {
+		for (const source of state.sourceFiles ?? [])
+			searchParams.append("source", source);
+		if (state.compare) {
+			for (const source of state.sourceFilesRight ?? [])
+				searchParams.append("rsource", source);
+		}
 	}
 	for (const key of state.ipcFilter ?? []) searchParams.append("ipc", key);
 	return searchParams.toString();

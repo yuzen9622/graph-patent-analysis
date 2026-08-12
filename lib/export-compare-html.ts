@@ -1,5 +1,5 @@
 /**
- * A/B 比較的離線 HTML 匯出：把差異（聯集）圖、成員歸屬、指標與凍結座標
+ * N 面板比較的離線 HTML 匯出：把差異（聯集）圖、成員歸屬、指標與凍結座標
  * 一起內嵌成一份可離線互動的檔案。vis-network 原始碼同樣內嵌，沒有任何外部相依。
  *
  * 所有由資料帶入的字串都經過跳脫：顯示在 HTML 的走 escapeHtml，
@@ -10,10 +10,11 @@ import { escapeHtml, safeSerializeForInlineScript } from "./export-html";
 import {
 	compareAnnotationLines,
 	compareLegendItems,
+	diffMembershipLabels,
 	COMPARE_TITLE,
 	type CompareAnnotationInput,
 } from "./compare-export";
-import { DIFF_LABELS, type DifferenceView } from "./graph-compare";
+import type { DifferenceView } from "./graph-compare";
 import type { FrozenPositions } from "./export-positions";
 import { nodeTooltipLines } from "./node-tooltip";
 import type { Unit } from "./graph-view";
@@ -69,14 +70,17 @@ export function buildCompareExportHtml(
 			: [],
 		nodeMembership: input.difference.nodeMembership,
 		edgeMembership: input.difference.edgeMembership,
+		nodePanels: input.difference.nodePanels,
+		edgePanels: input.difference.edgePanels,
 		positions: input.positions,
-		membershipLabels: DIFF_LABELS,
+		panelCount: input.labels.length,
+		membershipLabels: diffMembershipLabels(input.labels.length),
 		unit,
 		edgeWeight: input.edgeWeight,
 	});
 
 	const annotation = compareAnnotationLines(input);
-	const legend = compareLegendItems();
+	const legend = compareLegendItems(input.labels.length);
 	const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString("base64")}`;
 	const escapedJobId = escapeHtml(input.jobId);
 
@@ -243,11 +247,22 @@ ${legend
         tooltip.style.display = 'block';
       }
       function fmt(v) { return (v === undefined || v === null) ? '—' : Number(v).toFixed(3); }
+      function panelsText(panels) {
+        if (!panels || panels.length === 0) return '';
+        return '見於：面板 ' + panels.join('、面板 ');
+      }
+      function membershipLine(membership, panels, many) {
+        var base = '歸屬：' + payload.membershipLabels[membership];
+        if (!many) return base;
+        var extra = panelsText(panels);
+        return extra ? base + '｜' + extra : base;
+      }
+      var manyPanels = payload.panelCount > 2;
       network.on('hoverNode', function (params) {
         var node = nodesById.get(params.node);
         if (!node) return;
         var lines = (node.tip && node.tip.length) ? node.tip.slice() : [node.label];
-        lines.push('歸屬：' + payload.membershipLabels[payload.nodeMembership[node.id]]);
+        lines.push(membershipLine(payload.nodeMembership[node.id], payload.nodePanels[node.id], manyPanels));
         showText(lines);
       });
       network.on('hoverEdge', function (params) {
@@ -258,7 +273,7 @@ ${legend
           lines.push('共同出現（篇）：' + (edge.support_count || 0) + ' 篇 ｜（家）：' + (edge.support_applicants || 0) + ' 家');
           lines.push('Jaccard：篇 ' + fmt(edge.jaccard) + ' ｜ 家 ' + fmt(edge.jaccard_applicants));
         }
-        lines.push('歸屬：' + payload.membershipLabels[payload.edgeMembership[edge.id]]);
+        lines.push(membershipLine(payload.edgeMembership[edge.id], payload.edgePanels[edge.id], manyPanels));
         showText(lines);
       });
       network.on('blurNode', function () { tooltip.style.display = 'none'; });

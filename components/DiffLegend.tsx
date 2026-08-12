@@ -8,6 +8,7 @@ interface Props {
 	onToggle: (membership: DiffMembership) => void;
 	visibleNodeCount: number;
 	totalNodeCount: number;
+	panelCount: number;
 }
 
 export default function DiffLegend({
@@ -15,6 +16,7 @@ export default function DiffLegend({
 	onToggle,
 	visibleNodeCount,
 	totalNodeCount,
+	panelCount,
 }: Props) {
 	return (
 		<aside
@@ -25,7 +27,7 @@ export default function DiffLegend({
 				差異圖例（可切換顯示）
 			</p>
 			<div className="flex flex-col gap-0.5">
-				{compareLegendItems().map((item) => (
+				{compareLegendItems(panelCount).map((item) => (
 					<label
 						key={item.membership}
 						className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-1 hover:bg-accent"
