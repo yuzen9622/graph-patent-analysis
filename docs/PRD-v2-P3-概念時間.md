@@ -100,7 +100,7 @@ interface GraphNode {
 interface GraphMethodology {
   // …既有 15 欄（不動）
   time_window?: [number, number] | null   // 漸層窗 = [min first_year, max first_year]（資料事實）
-  time_color_scale?: 'sequential_blue'    // 漸層色盤名稱（方法圖例要印）
+  time_color_scale?: 'sequential_blue' | 'rainbow'    // 漸層色盤名稱（方法圖例要印）
 }
 ```
 
@@ -164,17 +164,21 @@ time_window = [ min(所有有 first_year 概念), max(…概念 first_year) ]
 
 ### 3.3 色與映射（B4）
 
-**色盤 `sequential_blue`（9 錨色，值為常數）**：
+> **2026-08-09 修訂**：色盤由 `sequential_blue`（9 錨）改為 **`rainbow`（彩虹 7 錨，紅橙黃綠藍靛紫）**（老師指定）。
+> 圖例由左（紅＝最早）至右（紫＝最近）；灰 `#BAB0AC`＝年份未知不變；插值公式與 clamp 規則不變。
+> `methodology.time_color_scale` 一律寫 `'rainbow'`；舊資料的 `'sequential_blue'` 在 normalize 時正規化為 `'rainbow'`（圖例不印舊名）。
+
+**色盤 `rainbow`（7 錨色，值為常數）**：
 
 ```
-["#EFF6FF","#DBEAFE","#BFDBFE","#93C5FD","#60A5FA","#3B82F6","#2563EB","#1D4ED8","#1E3A8A"]
+["#EF4444","#F97316","#EAB308","#22C55E","#3B82F6","#4F46E5","#8B5CF6"]
 ```
 
 映射公式（寫進 methodology 並可重現；**純函式**）：
 
 ```
 t   = clamp((first_year - window[0]) / max(1, window[1] - window[0]), 0, 1)
-pos = t * (N - 1)                  // N = 錨色個數（此為 9）
+pos = t * (N - 1)                  // N = 錨色個數（此為 7）
 lo  = floor(pos)                   // hi = min(N-1, lo+1)
 f   = pos - lo                     // 0 ≤ f < 1
 color = sRGB 逐通道線性插值(锚[lo], 锚[hi], f)，每通道 Math.round，輸出 #RRGGBB
@@ -263,8 +267,8 @@ Sidebar，狀態走 `GraphViewOptions.colorMode`（`lib/graph-view.ts`），由 
    - P1 合併後 source_patents 聯集時間；
    - 有效年份過濾：`1990` 與 `今年+1` 之**外**的年份不參與（B5）；全無有效年份 → `null`。
 3. **窗與映射純函式**（`lib/concept-time.ts`，可測、不靠 DOM）：
-   - `window=[2007,2025]`：`first_year=2007 → 錨色[0]`、`2025 → 錨色[8]`、
-     `2016 → 錨色[4]`；`t` 越界 clamp；span=0 全落錨色[0]；浮點落在錨點仍命中；
+   - `window=[2007,2025]`：`first_year=2007 → 錨色[0]`、`2025 → 錨色[6]`、
+     `2016 → 錨色[3]`；`t` 越界 clamp；span=0 全落錨色[0]；浮點落在錨點仍命中；
    - 換一組年份 fixture → window 隨之改變（不寫死）；`null` 時切換鍵停（function-level）。
 4. **著色模式純函式 switch**（`selectGraphView`，不依 DOM）：
    同一 graph 分別以 `community` 與 `first_year` 呼叫，比對概念節點 color 陣列：

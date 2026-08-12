@@ -281,7 +281,7 @@ LLM 回傳 JSON 陣列，每個元素含 `index`、`keywords`、`relations`，�
 | -------- | ------------------ | ------------------ | -------------------------- |
 | 申請人   | `star` 或 `square` | `clamp(18 + 5 × √patent_count, 18, 52)` | 每家機構一個固定色 |
 | 專利     | `dot`              | 固定 18；不表示重要性 | 繼承申請人顏色，透明度 70% |
-| 技術概念 | `dot`              | `clamp(10 + 6 × √frequency, 10, 52)` | 依社群分色 |
+| 技術概念 | `dot`              | `clamp(10 + 10 × √frequency, 10, 72)` | 依社群分色 |
 
 - 節點 label 顯示規則：申請人節點永遠顯示；專利節點 hover 才顯示完整名稱；技術概念節點 degree > 3 才顯示 label
 - `frequency` 與 `patent_count` 均以不同專利 ID 去重後計數
