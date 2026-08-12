@@ -4,6 +4,10 @@
  * Multi-file uploads are partitioned into one mutually exclusive stratum per
  * source file before sampling. This preserves one analysis unit per patent even
  * when a merged row lists more than one source file.
+ *
+ * `sampleSize` is a per-source-file cap, not a total: every source samples
+ * `min(sampleSize, its unique candidates)` and a short source's unused quota is
+ * never handed to another source.
  */
 
 import type { PatentRow } from "@/types/graph";
@@ -28,6 +32,7 @@ export interface PatentSampleAllocation {
 }
 
 export interface PatentSamplePlan {
+	/** Summed allocations — what the sample will actually contain. */
 	target: number;
 	stratified: boolean;
 	allocations: PatentSampleAllocation[];
@@ -68,37 +73,21 @@ function normalizedSampleSize(sampleSize: number, total: number): number {
 	return Math.min(Math.floor(sampleSize), total);
 }
 
-/**
- * Fix short strata at capacity first, then recompute the equal split among
- * those that remain. This keeps the redistributed allocation fair instead of
- * preserving an earlier odd-row advantage after a stratum fills.
- */
-function allocateStrata(strata: SampleStratum[], target: number): void {
-	let remaining = target;
-	let active = [...strata];
+function normalizedSourceCap(sampleSize: number): number {
+	if (!Number.isFinite(sampleSize) || sampleSize <= 0) return 0;
+	return Math.floor(sampleSize);
+}
 
-	while (active.length > 0) {
-		const base = Math.floor(remaining / active.length);
-		const extra = remaining % active.length;
-		const intended = active.map((_, index) => base + (index < extra ? 1 : 0));
-		const short = active.filter(
-			(stratum, index) => stratum.patents.length < intended[index],
-		);
+/** Caps every stratum independently and returns the summed allocation. */
+function allocateStrata(strata: SampleStratum[], sourceCap: number): number {
+	let target = 0;
 
-		if (short.length === 0) {
-			for (const [index, stratum] of active.entries()) {
-				stratum.allocated = intended[index];
-			}
-			return;
-		}
-
-		const shortSet = new Set(short);
-		for (const stratum of short) {
-			stratum.allocated = stratum.patents.length;
-			remaining -= stratum.allocated;
-		}
-		active = active.filter((stratum) => !shortSet.has(stratum));
+	for (const stratum of strata) {
+		stratum.allocated = Math.min(sourceCap, stratum.patents.length);
+		target += stratum.allocated;
 	}
+
+	return target;
 }
 
 function partialFisherYates<T>(
@@ -140,7 +129,7 @@ function globalPlan(
 
 function stratifiedPlan(
 	patents: readonly PatentRow[],
-	target: number,
+	sourceCap: number,
 	filenames: string[],
 ): InternalSamplePlan {
 	const namedSources = new Set(filenames);
@@ -190,7 +179,7 @@ function stratifiedPlan(
 	if (unknown.length > 0)
 		strata.push({ sourceFile: null, patents: unknown, allocated: 0 });
 
-	allocateStrata(strata, target);
+	const target = allocateStrata(strata, sourceCap);
 
 	return {
 		target,
@@ -209,16 +198,19 @@ function buildSamplePlan(
 	sampleSize: number,
 	filenames: readonly string[],
 ): InternalSamplePlan {
-	const target = normalizedSampleSize(sampleSize, patents.length);
 	const sources = uploadedSources(filenames);
 
 	// A one-file upload (or an old/unknown caller without filenames) has no
 	// cross-file balance to preserve, so one partial shuffle is the true global
 	// random sample.
 	if (sources.length <= 1)
-		return globalPlan(patents, target, sources[0] ?? null);
+		return globalPlan(
+			patents,
+			normalizedSampleSize(sampleSize, patents.length),
+			sources[0] ?? null,
+		);
 
-	return stratifiedPlan(patents, target, sources);
+	return stratifiedPlan(patents, normalizedSourceCap(sampleSize), sources);
 }
 
 /** Returns the auditable, deterministic per-source allocation without sampling. */

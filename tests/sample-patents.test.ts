@@ -19,7 +19,7 @@ function patentsFrom(sourceFile: string, count: number): PatentRow[] {
 }
 
 describe("samplePatents", () => {
-	it("allocates an equal 50/50 sample across two source files", () => {
+	it("samples the full per-file cap from every source file", () => {
 		const patents = [
 			...patentsFrom("first.xlsx", 100),
 			...patentsFrom("second.xlsx", 100),
@@ -37,18 +37,41 @@ describe("samplePatents", () => {
 		});
 
 		expect(plan.allocations).toEqual([
-			{ sourceFile: "first.xlsx", available: 100, allocated: 50 },
-			{ sourceFile: "second.xlsx", available: 100, allocated: 50 },
+			{ sourceFile: "first.xlsx", available: 100, allocated: 100 },
+			{ sourceFile: "second.xlsx", available: 100, allocated: 100 },
 		]);
+		expect(plan.target).toBe(200);
 		expect(
 			sampled.patents.filter((row) => row.id.startsWith("first.xlsx-")),
-		).toHaveLength(50);
+		).toHaveLength(100);
 		expect(
 			sampled.patents.filter((row) => row.id.startsWith("second.xlsx-")),
-		).toHaveLength(50);
+		).toHaveLength(100);
 	});
 
-	it("includes a short stratum and redistributes its allocation fairly", () => {
+	it("caps each source file at the per-file size instead of the total", () => {
+		const patents = [
+			...patentsFrom("first.xlsx", 100),
+			...patentsFrom("second.xlsx", 100),
+			...patentsFrom("third.xlsx", 100),
+		];
+		const sampled = samplePatents({
+			patents,
+			filenames: ["first.xlsx", "second.xlsx", "third.xlsx"],
+			sampleSize: 30,
+			rng: () => 0,
+		});
+
+		expect(sampled.allocations).toEqual([
+			{ sourceFile: "first.xlsx", available: 100, allocated: 30 },
+			{ sourceFile: "second.xlsx", available: 100, allocated: 30 },
+			{ sourceFile: "third.xlsx", available: 100, allocated: 30 },
+		]);
+		expect(sampled.target).toBe(90);
+		expect(sampled.patents).toHaveLength(90);
+	});
+
+	it("never hands an undersized file's unused quota to another file", () => {
 		const patents = [
 			...patentsFrom("short.xlsx", 10),
 			...patentsFrom("long.xlsx", 90),
@@ -56,51 +79,64 @@ describe("samplePatents", () => {
 		const sampled = samplePatents({
 			patents,
 			filenames: ["short.xlsx", "long.xlsx"],
-			sampleSize: 100,
+			sampleSize: 50,
 			rng: () => 0,
 		});
 
 		expect(sampled.allocations).toEqual([
 			{ sourceFile: "short.xlsx", available: 10, allocated: 10 },
-			{ sourceFile: "long.xlsx", available: 90, allocated: 90 },
+			{ sourceFile: "long.xlsx", available: 90, allocated: 50 },
 		]);
-		expect(sampled.patents).toHaveLength(100);
+		expect(sampled.target).toBe(60);
+		expect(sampled.patents).toHaveLength(60);
 	});
 
-	it("rebalances a short stratum without favoring an earlier long stratum", () => {
+	it("reports a target equal to the summed allocations", () => {
 		const plan = planPatentSample({
 			patents: [
 				...patentsFrom("short.xlsx", 1),
 				...patentsFrom("first.xlsx", 100),
 				...patentsFrom("second.xlsx", 100),
-				...patentsFrom("third.xlsx", 100),
 			],
-			filenames: ["short.xlsx", "first.xlsx", "second.xlsx", "third.xlsx"],
+			filenames: ["short.xlsx", "first.xlsx", "second.xlsx"],
 			sampleSize: 11,
 		});
 
 		expect(plan.allocations).toEqual([
 			{ sourceFile: "short.xlsx", available: 1, allocated: 1 },
-			{ sourceFile: "first.xlsx", available: 100, allocated: 4 },
-			{ sourceFile: "second.xlsx", available: 100, allocated: 3 },
-			{ sourceFile: "third.xlsx", available: 100, allocated: 3 },
+			{ sourceFile: "first.xlsx", available: 100, allocated: 11 },
+			{ sourceFile: "second.xlsx", available: 100, allocated: 11 },
 		]);
+		expect(plan.target).toBe(
+			plan.allocations.reduce(
+				(sum, allocation) => sum + allocation.allocated,
+				0,
+			),
+		);
 	});
 
-	it("splits an odd target deterministically in uploaded-file order", () => {
-		const plan = planPatentSample({
-			patents: [
-				...patentsFrom("first.xlsx", 200),
-				...patentsFrom("second.xlsx", 200),
-			],
+	it("counts a duplicated patent only against its first uploaded source", () => {
+		const patents = [
+			...patentsFrom("first.xlsx", 5),
+			...patentsFrom("second.xlsx", 5),
+			patent("shared-1", ["first.xlsx", "second.xlsx"]),
+			patent("shared-2", ["second.xlsx", "first.xlsx"]),
+		];
+		const sampled = samplePatents({
+			patents,
 			filenames: ["first.xlsx", "second.xlsx"],
-			sampleSize: 101,
+			sampleSize: 6,
+			rng: () => 0,
 		});
 
-		expect(plan.allocations).toEqual([
-			{ sourceFile: "first.xlsx", available: 200, allocated: 51 },
-			{ sourceFile: "second.xlsx", available: 200, allocated: 50 },
+		expect(sampled.allocations).toEqual([
+			{ sourceFile: "first.xlsx", available: 7, allocated: 6 },
+			{ sourceFile: "second.xlsx", available: 5, allocated: 5 },
 		]);
+		expect(sampled.target).toBe(11);
+		expect(new Set(sampled.patents.map((row) => row.id)).size).toBe(
+			sampled.patents.length,
+		);
 	});
 
 	it("assigns an overlap once to its first uploaded source and orders extra sources lexically", () => {
