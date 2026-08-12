@@ -97,6 +97,8 @@ export default function UploadZone({
 }: UploadZoneProps) {
 	const [state, setState] = useState<UploadState>("idle");
 	const [filenames, setFilenames] = useState<string[]>([]);
+	/** The actual files, kept so a single file can be removed and the rest re-parsed. */
+	const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	/** Field mappings of the first file — the per-field checklist stays single-file. */
 	const [mappings, setMappings] = useState<FieldMapping[] | null>(null);
@@ -132,6 +134,8 @@ export default function UploadZone({
 				onError(failure.error);
 				return;
 			}
+
+			setUploadedFiles(files);
 
 			// Do not leave the previous parsed data available while a replacement is
 			// being parsed; otherwise it could be analysed after the user selected a
@@ -202,8 +206,8 @@ export default function UploadZone({
 	// ── Reset ────────────────────────────────────────────────────────────────
 
 	const handleReset = useCallback(
-		(e: React.MouseEvent) => {
-			e.stopPropagation();
+		(e?: React.MouseEvent) => {
+			e?.stopPropagation();
 			setState("idle");
 			setFilenames([]);
 			setErrorMsg(null);
@@ -215,6 +219,23 @@ export default function UploadZone({
 			onClear();
 		},
 		[onClear],
+	);
+
+	// ── Per-file removal ──────────────────────────────────────────────────────
+
+	/** Removes one file and re-parses the rest so counts, warnings and the
+	 *  parent's parsed state stay consistent; falls back to a full reset when
+	 *  the last file is removed. Index-based so duplicate filenames work. */
+	const handleRemoveFile = useCallback(
+		(index: number) => {
+			const remaining = uploadedFiles.filter((_, i) => i !== index);
+			if (remaining.length === 0) {
+				handleReset();
+				return;
+			}
+			void processFiles(remaining);
+		},
+		[uploadedFiles, processFiles, handleReset],
 	);
 
 	// ── Drag ─────────────────────────────────────────────────────────────────
@@ -469,18 +490,34 @@ export default function UploadZone({
 						aria-label="每個檔案的解析結果"
 						className="mt-4 bg-black/[0.01] dark:bg-white/[0.03] border border-black/5 dark:border-white/8 rounded-xl p-4 backdrop-blur-sm"
 					>
-						<p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-							檔案解析結果 — 共 {summaries.length} 個檔
-						</p>
+						<div className="flex items-baseline justify-between gap-2 mb-3">
+							<p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+								檔案解析結果 — 共 {summaries.length} 個檔
+							</p>
+							<p className="text-[0.65rem] text-muted-foreground shrink-0">
+								可個別移除
+							</p>
+						</div>
 						<ul role="list" className="space-y-3">
 							{summaries.map((summary, index) => (
 								<li
 									key={`${summary.filename}-${index}`}
 									className="text-sm border-b border-black/5 dark:border-white/8 last:border-b-0 pb-3 last:pb-0"
 								>
-									<p className="font-medium text-foreground break-all">
-										{summary.filename}
-									</p>
+									<div className="flex items-start justify-between gap-3">
+										<p className="font-medium text-foreground break-all">
+											{summary.filename}
+										</p>
+										<button
+											type="button"
+											onClick={() => handleRemoveFile(index)}
+											aria-label={`移除檔案 ${summary.filename}`}
+											title="移除這個檔案，其餘檔案會重新解析"
+											className="-m-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 cursor-pointer"
+										>
+											<X size={15} aria-hidden />
+										</button>
+									</div>
 									<dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
 										<dt>判定格式</dt>
 										<dd className="text-foreground">{summary.formatLabel}</dd>
