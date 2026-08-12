@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Network } from "vis-network";
 import type {
 	GraphNode,
@@ -36,6 +36,7 @@ import {
 	type PublicationLabelMode,
 	type PublicationWidthMm,
 } from "@/lib/publication-export";
+import { fingerprintTopology, revealSchedule } from "@/lib/graph-render";
 
 /** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
 export type ImageCapture = () => string | null;
@@ -76,15 +77,16 @@ const HUGE_GRAPH = 350;
 
 type NodeUpdate = {
 	id: string;
-	hidden?: boolean;
-	opacity?: number;
-	color?: string;
-	label?: string;
+	[key: string]: unknown;
 };
 type EdgeColorProp = { inherit: "from"; opacity?: number };
-type EdgeUpdate = { id: string; hidden?: boolean; color?: EdgeColorProp };
+type EdgeUpdate = { id: string; [key: string]: unknown };
 type NodeDataSet = { update: (items: NodeUpdate[]) => void };
-type EdgeDataSet = { update: (items: EdgeUpdate[]) => void };
+type EdgeDataSet = {
+	update: (items: EdgeUpdate[]) => void;
+	getIds: () => string[];
+	remove: (ids: string[]) => void;
+};
 
 // ── vis-network helpers ───────────────────────────────────────────────────────
 
@@ -292,6 +294,56 @@ function toVisCitationEdge(edge: CitationEdge) {
 		},
 		arrows: { to: { enabled: true, scaleFactor: 0.35 } },
 		physics: false,
+	};
+}
+
+function fontColorWithOpacity(color: string, opacity: number): string {
+	const clampedOpacity = Math.max(0, Math.min(1, opacity));
+	if (clampedOpacity === 1) return color;
+	const rawHex = color.trim().replace(/^#/, "");
+	if (/^[0-9a-f]{3,4}$/i.test(rawHex)) {
+		const expanded = rawHex
+			.split("")
+			.map((part) => `${part}${part}`)
+			.join("");
+		const red = Number.parseInt(expanded.slice(0, 2), 16);
+		const green = Number.parseInt(expanded.slice(2, 4), 16);
+		const blue = Number.parseInt(expanded.slice(4, 6), 16);
+		const alpha =
+			(expanded.length === 8
+				? Number.parseInt(expanded.slice(6, 8), 16) / 255
+				: 1) * clampedOpacity;
+		return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+	}
+	if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(rawHex)) {
+		const red = Number.parseInt(rawHex.slice(0, 2), 16);
+		const green = Number.parseInt(rawHex.slice(2, 4), 16);
+		const blue = Number.parseInt(rawHex.slice(4, 6), 16);
+		const alpha =
+			(rawHex.length === 8
+				? Number.parseInt(rawHex.slice(6, 8), 16) / 255
+				: 1) * clampedOpacity;
+		return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+	}
+	const rgb = color.match(
+		/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i,
+	);
+	if (rgb) {
+		const alpha = (rgb[4] ? Number(rgb[4]) : 1) * clampedOpacity;
+		return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
+	}
+	// The app's current font colours are hex/RGB. Keep a safe transparent fallback
+	// for any future CSS colour syntax and restore the original at completion.
+	return `rgba(0, 0, 0, ${clampedOpacity})`;
+}
+
+function edgeColorWithOpacity(
+	color: { color: string; opacity?: number },
+	opacity: number,
+) {
+	return {
+		...color,
+		opacity: (color.opacity ?? 1) * Math.max(0, Math.min(1, opacity)),
 	};
 }
 
@@ -801,6 +853,62 @@ export default function GraphViewer({
 	// 不能把使用者已隱藏的成員重新顯示。
 	const baseHiddenNodeIdsRef = useRef<ReadonlySet<string>>(new Set());
 	const onViewportChangeRef = useRef(onViewportChange);
+	const propsRef = useRef({
+		nodes,
+		edges,
+		citationEdges,
+		analysis,
+		onNodeSelect,
+		yearRange,
+		edgeWeight,
+		unit,
+		visibleLayers,
+		hiddenCommunities,
+		focusNodeId,
+		onEdgeSelect,
+		positionSnapshotKey,
+		onPositionSnapshotProvider,
+		onImageCaptureReady,
+		onPublicationCaptureReady,
+		hiddenNodeIds,
+		hiddenEdgeIds,
+		viewport,
+		onViewportChange,
+	});
+	// eslint-disable-next-line react-hooks/refs -- event handlers must always read the latest props.
+	propsRef.current = {
+		nodes,
+		edges,
+		citationEdges,
+		analysis,
+		onNodeSelect,
+		yearRange,
+		edgeWeight,
+		unit,
+		visibleLayers,
+		hiddenCommunities,
+		focusNodeId,
+		onEdgeSelect,
+		positionSnapshotKey,
+		onPositionSnapshotProvider,
+		onImageCaptureReady,
+		onPublicationCaptureReady,
+		hiddenNodeIds,
+		hiddenEdgeIds,
+		viewport,
+		onViewportChange,
+	};
+	const topologyKey = useMemo(
+		() => fingerprintTopology(nodes, edges),
+		[nodes, edges],
+	);
+	const lastBuiltTopologyKeyRef = useRef<string | null>(null);
+	const positionsCacheRef = useRef(new Map<string, FrozenPositions>());
+	const revealAnimationFrameRef = useRef<number | null>(null);
+	const finishRevealRef = useRef<() => void>(() => {});
+	const highlightRef = useRef<{ activeId: string | null }>({ activeId: null });
+	const applyHighlightRef = useRef<(nodeId: string) => void>(() => {});
+	const clearHighlightRef = useRef<() => void>(() => {});
 	const [stabilized, setStabilized] = useState(false);
 	const [stabProgress, setStabProgress] = useState(0);
 
@@ -814,38 +922,84 @@ export default function GraphViewer({
 		});
 	}, []);
 
-	// ── Build / rebuild network when nodes or edges change ──
+	// ── Build / rebuild only when the graph topology changes ─────────────────
 	useEffect(() => {
+		finishRevealRef.current();
+		const current = propsRef.current;
+		lastBuiltTopologyKeyRef.current = topologyKey;
+		highlightRef.current.activeId = null;
+		if (process.env.NODE_ENV !== "production") {
+			console.debug("[graph] rebuild", topologyKey, current.nodes.length, current.edges.length);
+		}
 		// A parent must not export a completed layout while this instance rebuilds.
-		onPositionSnapshotProvider?.(null);
-		onImageCaptureReady?.(null);
-		onPublicationCaptureReady?.(null);
+		current.onPositionSnapshotProvider?.(null);
+		current.onImageCaptureReady?.(null);
+		current.onPublicationCaptureReady?.(null);
 		if (!containerRef.current) return;
 		let cancelled = false;
+		let builtNetwork: Network | null = null;
 
 		const init = async () => {
 			const { Network } = await import("vis-network");
 			const { DataSet } = await import("vis-data");
 			if (cancelled || !containerRef.current) return;
 
-			const initPos = buildInitialPositions(nodes, edges);
+			const buildProps = propsRef.current;
+			const cachedPositions = positionsCacheRef.current.get(topologyKey);
+			if (cachedPositions) {
+				// Refresh insertion order so this small cache behaves as LRU.
+				positionsCacheRef.current.delete(topologyKey);
+				positionsCacheRef.current.set(topologyKey, cachedPositions);
+			}
+			const initPos = cachedPositions
+				? new Map(
+						Object.entries(cachedPositions).map(([id, position]) => [
+							id,
+							{ x: position.x, y: position.y },
+						]),
+					)
+				: buildInitialPositions(buildProps.nodes, buildProps.edges);
 			const godNodeMap = new Map(
-				(analysis?.god_nodes ?? []).map((g) => [g.id, g]),
+				(buildProps.analysis?.god_nodes ?? []).map((g) => [g.id, g]),
 			);
 			const surprisingEdgeMap = new Map(
-				(analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
+				(buildProps.analysis?.surprising_connections ?? []).map((c) => [c.edge_id, c]),
 			);
 			const nodeDataSet = new DataSet(
-				nodes.map((n) =>
-					toVisNode(n, unit, initPos.get(n.id), godNodeMap.get(n.id)),
-				),
+				buildProps.nodes.map((node) => {
+					const visual = toVisNode(
+						node,
+						buildProps.unit,
+						initPos.get(node.id),
+						godNodeMap.get(node.id),
+					);
+					return {
+						...visual,
+						opacity: 0,
+						font: {
+							...visual.font,
+							color: fontColorWithOpacity(visual.font.color, 0),
+						},
+					};
+				}),
 			);
-			const edgeDataSet = new DataSet([
-				...edges.map((e) =>
-					toVisEdge(e, surprisingEdgeMap.get(e.id), edgeWeight, unit),
+			const edgeVisuals = [
+				...buildProps.edges.map((edge) =>
+					toVisEdge(
+						edge,
+						surprisingEdgeMap.get(edge.id),
+						buildProps.edgeWeight,
+						buildProps.unit,
+					),
 				),
-				...citationEdges.map(toVisCitationEdge),
-			]);
+				...buildProps.citationEdges.map(toVisCitationEdge),
+			];
+			const edgeDataSet = new DataSet(
+				edgeVisuals.map((edge) => ({
+					...edge,
+					color: edgeColorWithOpacity(edge.color, 0),
+				})),
+			);
 			nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
 			edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 
@@ -859,11 +1013,19 @@ export default function GraphViewer({
 				networkRef.current = null;
 			}
 
+			const baseNetworkOptions = buildOptions(buildProps.nodes.length);
+			const networkOptions = cachedPositions
+				? {
+						...baseNetworkOptions,
+						physics: { ...baseNetworkOptions.physics, enabled: false },
+					}
+				: baseNetworkOptions;
 			const network = new Network(
 				containerRef.current,
 				{ nodes: nodeDataSet, edges: edgeDataSet },
-				buildOptions(nodes.length),
+				networkOptions,
 			);
+			builtNetwork = network;
 			networkRef.current = network;
 
 			if (isValidGraphViewport(viewportRef.current)) {
@@ -877,49 +1039,254 @@ export default function GraphViewer({
 			setStabilized(false);
 			setStabProgress(0);
 
+			const registerCaptureProviders = () => {
+				const latest = propsRef.current;
+				latest.onPositionSnapshotProvider?.({
+					key: latest.positionSnapshotKey,
+					getPositions: () => {
+						if (cancelled || networkRef.current !== network) return null;
+						const positions: FrozenPositions = Object.fromEntries(
+							Object.entries(network.getPositions()).map(([id, position]) => [
+								id,
+								{ x: position.x, y: position.y },
+							]),
+						);
+						return positions;
+					},
+				});
+				latest.onImageCaptureReady?.(() => captureNetworkImage(network));
+				latest.onPublicationCaptureReady?.((options) =>
+					networkRef.current === network
+						? renderPublicationFigure(network, latest.nodes, latest.edges, options)
+						: null,
+				);
+			};
+
+			const startReveal = (short: boolean) => {
+				const initial = propsRef.current;
+				const degreeById = new Map<string, number>(
+					initial.nodes.map((node) => [node.id, 0]),
+				);
+				initial.edges.forEach((edge) => {
+					degreeById.set(edge.from, (degreeById.get(edge.from) ?? 0) + 1);
+					degreeById.set(edge.to, (degreeById.get(edge.to) ?? 0) + 1);
+				});
+				const plan = revealSchedule(
+					initial.nodes.map((node) => node.id),
+					(id) => degreeById.get(id) ?? 0,
+					short || initial.nodes.length >= HUGE_GRAPH
+						? { waves: 4, fadeMs: 160 }
+						: undefined,
+				);
+				const completeNodeIds = new Set<string>();
+				const edgeStartMs = plan.totalMs * 0.6;
+				const edgeFadeMs = Math.max(1, plan.totalMs - edgeStartMs);
+				let edgeStep = 0;
+				let completed = false;
+
+				const finishReveal = () => {
+					if (completed) return;
+					completed = true;
+					if (revealAnimationFrameRef.current !== null) {
+						cancelAnimationFrame(revealAnimationFrameRef.current);
+						revealAnimationFrameRef.current = null;
+					}
+					if (finishRevealRef.current === finishReveal) {
+						finishRevealRef.current = () => {};
+					}
+					if (networkRef.current !== network) return;
+					const currentProps = propsRef.current;
+					const latest =
+						fingerprintTopology(currentProps.nodes, currentProps.edges) ===
+						topologyKey
+							? currentProps
+							: buildProps;
+					const godNodes = new Map(
+						(latest.analysis?.god_nodes ?? []).map((godNode) => [
+							godNode.id,
+							godNode,
+						]),
+					);
+					nodeDataSet.update(
+						latest.nodes.map((node) => {
+							const visual = toVisNode(
+								node,
+								latest.unit,
+								undefined,
+								godNodes.get(node.id),
+							);
+							return { id: node.id, opacity: 1, font: visual.font };
+						}),
+					);
+					const surprisingEdges = new Map(
+						(latest.analysis?.surprising_connections ?? []).map((connection) => [
+							connection.edge_id,
+							connection,
+						]),
+					);
+					edgeDataSet.update([
+						...latest.edges.map((edge) => ({
+							id: edge.id,
+							color: toVisEdge(
+								edge,
+								surprisingEdges.get(edge.id),
+								latest.edgeWeight,
+								latest.unit,
+							).color,
+						})),
+						...latest.citationEdges.map((edge) => ({
+							id: `citation:${edge.id}`,
+							color: toVisCitationEdge(edge).color,
+						})),
+					]);
+				};
+				finishRevealRef.current = finishReveal;
+
+				const reduceMotion =
+					typeof window !== "undefined" &&
+					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+						false);
+				if (reduceMotion || initial.nodes.length === 0) {
+					finishReveal();
+					return;
+				}
+
+				const startedAt = performance.now();
+				const frame = (now: number) => {
+					if (completed || networkRef.current !== network) return;
+					const latest = propsRef.current;
+					const elapsed = Math.max(0, now - startedAt);
+					const latestNodes = new Map(
+						latest.nodes.map((node) => [node.id, node]),
+					);
+					const godNodes = new Map(
+						(latest.analysis?.god_nodes ?? []).map((godNode) => [
+							godNode.id,
+							godNode,
+						]),
+					);
+					const nodeUpdates: NodeUpdate[] = [];
+					for (const [id, startMs] of plan.startMs) {
+						const node = latestNodes.get(id);
+						if (!node || completeNodeIds.has(id)) continue;
+						const opacity = Math.max(
+							0,
+							Math.min(1, (elapsed - startMs) / (short ? 160 : 240)),
+						);
+						if (opacity === 0) continue;
+						const visual = toVisNode(
+							node,
+							latest.unit,
+							undefined,
+							godNodes.get(node.id),
+						);
+						nodeUpdates.push({
+							id,
+							opacity,
+							font: {
+								...visual.font,
+								color: fontColorWithOpacity(visual.font.color, opacity),
+							},
+						});
+						if (opacity === 1) completeNodeIds.add(id);
+					}
+					if (nodeUpdates.length > 0) nodeDataSet.update(nodeUpdates);
+
+					if (elapsed >= edgeStartMs) {
+						const nextStep = Math.min(
+							10,
+							Math.ceil(((elapsed - edgeStartMs) / edgeFadeMs) * 10),
+						);
+						if (nextStep > edgeStep) {
+							edgeStep = nextStep;
+							const surprisingEdges = new Map(
+								(latest.analysis?.surprising_connections ?? []).map(
+									(connection) => [connection.edge_id, connection],
+								),
+							);
+							const edgeOpacity = edgeStep / 10;
+							edgeDataSet.update([
+								...latest.edges.map((edge) => ({
+									id: edge.id,
+									color: edgeColorWithOpacity(
+										toVisEdge(
+											edge,
+											surprisingEdges.get(edge.id),
+											latest.edgeWeight,
+											latest.unit,
+										).color,
+										edgeOpacity,
+									),
+								})),
+								...latest.citationEdges.map((edge) => ({
+									id: `citation:${edge.id}`,
+									color: edgeColorWithOpacity(
+										toVisCitationEdge(edge).color,
+										edgeOpacity,
+									),
+								})),
+							]);
+						}
+					}
+
+					if (elapsed >= plan.totalMs) {
+						finishReveal();
+						return;
+					}
+					revealAnimationFrameRef.current = requestAnimationFrame(frame);
+				};
+				revealAnimationFrameRef.current = requestAnimationFrame(frame);
+			};
+
+			const finishStabilization = (shouldCachePositions: boolean) => {
+				if (cancelled || networkRef.current !== network) return;
+				if (shouldCachePositions) {
+					const positions: FrozenPositions = Object.fromEntries(
+						Object.entries(network.getPositions()).map(([id, position]) => [
+							id,
+							{ x: position.x, y: position.y },
+						]),
+					);
+					const cache = positionsCacheRef.current;
+					cache.delete(topologyKey);
+					cache.set(topologyKey, positions);
+					while (cache.size > 8) {
+						const oldestKey = cache.keys().next().value;
+						if (oldestKey === undefined) break;
+						cache.delete(oldestKey);
+					}
+				}
+				network.setOptions({ physics: { enabled: false } });
+				registerCaptureProviders();
+				setStabilized(true);
+				setStabProgress(100);
+				startReveal(!shouldCachePositions);
+			};
+
 			network.on("stabilizationProgress", (params) => {
 				if (!cancelled)
 					setStabProgress(Math.round((params.iterations / params.total) * 100));
 			});
 
-			network.once("stabilizationIterationsDone", () => {
-				if (!cancelled && networkRef.current === network) {
-					network.setOptions({ physics: { enabled: false } });
-					onPositionSnapshotProvider?.({
-						key: positionSnapshotKey,
-						getPositions: () => {
-							if (cancelled || networkRef.current !== network) return null;
-							const positions: FrozenPositions = Object.fromEntries(
-								Object.entries(network.getPositions()).map(([id, position]) => [
-									id,
-									{ x: position.x, y: position.y },
-								]),
-							);
-							return positions;
-						},
-					});
-					onImageCaptureReady?.(() => captureNetworkImage(network));
-					onPublicationCaptureReady?.((options) =>
-						networkRef.current === network
-							? renderPublicationFigure(network, nodes, edges, options)
-							: null,
-					);
-					setStabilized(true);
-					setStabProgress(100);
-				}
-			});
+			if (cachedPositions) {
+				finishStabilization(false);
+			} else {
+				network.once("stabilizationIterationsDone", () => {
+					finishStabilization(true);
+				});
+			}
 
 			// ── 比較模式視窗同步：使用者拖曳⁃縮放後向上回報 ───────────────
 			const emitViewport = () => {
 				if (cancelled || networkRef.current !== network) return;
-				const current: GraphViewport = {
+				const currentViewport: GraphViewport = {
 					position: network.getViewPosition(),
 					scale: network.getScale(),
 				};
-				if (!isValidGraphViewport(current)) return;
-				if (graphViewportsEqual(current, syncedViewportRef.current)) return;
-				syncedViewportRef.current = current;
-				onViewportChangeRef.current?.(current);
+				if (!isValidGraphViewport(currentViewport)) return;
+				if (graphViewportsEqual(currentViewport, syncedViewportRef.current)) return;
+				syncedViewportRef.current = currentViewport;
+				onViewportChangeRef.current?.(currentViewport);
 			};
 			network.on("dragEnd", emitViewport);
 			network.on("zoom", emitViewport);
@@ -928,87 +1295,86 @@ export default function GraphViewer({
 			network.on("animationFinished", emitViewport);
 
 			// ── Highlight: Neighbourhood Highlight (1st & 2nd degree) ───────────
-			let highlightActive = false;
 			const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.05 };
 			const DIM_NODE_COLOR = "rgba(200,200,200,0.3)";
 
 			const applyHighlight = (clickedId: string) => {
+				if (networkRef.current !== network) return;
+				const latest = propsRef.current;
 				const degree1 = new Set<string>([clickedId]);
 				const degree2 = new Set<string>();
 				const activeEdges = new Set<string>();
 
 				// Find 1st degree connections
-				edges.forEach((e) => {
-					if (e.from === clickedId) {
-						degree1.add(e.to);
-						activeEdges.add(e.id);
-					} else if (e.to === clickedId) {
-						degree1.add(e.from);
-						activeEdges.add(e.id);
+				latest.edges.forEach((edge) => {
+					if (edge.from === clickedId) {
+						degree1.add(edge.to);
+						activeEdges.add(edge.id);
+					} else if (edge.to === clickedId) {
+						degree1.add(edge.from);
+						activeEdges.add(edge.id);
 					}
 				});
 
 				// Find 2nd degree connections
-				edges.forEach((e) => {
-					if (degree1.has(e.from) && !degree1.has(e.to)) {
-						degree2.add(e.to);
-						activeEdges.add(e.id);
-					} else if (degree1.has(e.to) && !degree1.has(e.from)) {
-						degree2.add(e.from);
-						activeEdges.add(e.id);
+				latest.edges.forEach((edge) => {
+					if (degree1.has(edge.from) && !degree1.has(edge.to)) {
+						degree2.add(edge.to);
+						activeEdges.add(edge.id);
+					} else if (degree1.has(edge.to) && !degree1.has(edge.from)) {
+						degree2.add(edge.from);
+						activeEdges.add(edge.id);
 					}
 				});
 
 				nodeDataSet.update(
-					nodes.map((n) => {
-						const original = toVisNode(n, unit);
-						if (degree1.has(n.id)) {
-							// 1st degree & selected: Original color, Original label, Fully opaque
+					latest.nodes.map((node) => {
+						const original = toVisNode(node, latest.unit);
+						if (degree1.has(node.id)) {
 							return {
-								id: n.id,
+								id: node.id,
 								color: original.color,
 								label: original.label,
 								opacity: 1,
 							};
-						} else if (degree2.has(n.id)) {
-							// 2nd degree: Original color, Original label, Slightly dimmed
+						}
+						if (degree2.has(node.id)) {
 							return {
-								id: n.id,
+								id: node.id,
 								color: original.color,
 								label: original.label,
 								opacity: 0.5,
 							};
-						} else {
-							// Non-connected: Grey out, highly dimmed, hide label (unless it's an applicant)
-							// We hide concept and patent labels to reduce clutter. Applicant labels are usually kept but we can hide them too if we want a clean view.
-							return {
-								id: n.id,
-								color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR },
-								label: "",
-								opacity: 0.2,
-							};
 						}
+						return {
+							id: node.id,
+							color: { background: DIM_NODE_COLOR, border: DIM_NODE_COLOR },
+							label: "",
+							opacity: 0.2,
+						};
 					}),
 				);
 
 				edgeDataSet.update(
-					edges.map((e) => ({
-						id: e.id,
-						color: activeEdges.has(e.id)
-							? toVisEdge(e, undefined, edgeWeight, unit).color
+					latest.edges.map((edge) => ({
+						id: edge.id,
+						color: activeEdges.has(edge.id)
+							? toVisEdge(edge, undefined, latest.edgeWeight, latest.unit).color
 							: DIM_EDGE,
 					})),
 				);
-				highlightActive = true;
+				highlightRef.current.activeId = clickedId;
 			};
 
 			const clearHighlight = () => {
-				if (!highlightActive) return;
+				if (!highlightRef.current.activeId || networkRef.current !== network)
+					return;
+				const latest = propsRef.current;
 				nodeDataSet.update(
-					nodes.map((n) => {
-						const original = toVisNode(n, unit);
+					latest.nodes.map((node) => {
+						const original = toVisNode(node, latest.unit);
 						return {
-							id: n.id,
+							id: node.id,
 							color: original.color,
 							label: original.label,
 							opacity: 1,
@@ -1016,28 +1382,37 @@ export default function GraphViewer({
 					}),
 				);
 				edgeDataSet.update(
-					edges.map((e) => ({
-						id: e.id,
-						color: toVisEdge(e, undefined, edgeWeight, unit).color,
+					latest.edges.map((edge) => ({
+						id: edge.id,
+						color: toVisEdge(edge, undefined, latest.edgeWeight, latest.unit)
+							.color,
 					})),
 				);
-				highlightActive = false;
+				highlightRef.current.activeId = null;
 			};
+			applyHighlightRef.current = applyHighlight;
+			clearHighlightRef.current = clearHighlight;
 
 			network.on("click", (params) => {
+				finishRevealRef.current();
+				const latest = propsRef.current;
 				if (params.nodes.length > 0) {
 					const nodeId = params.nodes[0] as string;
-					onNodeSelect?.(nodes.find((n) => n.id === nodeId) ?? null);
-					onEdgeSelect?.(null);
+					latest.onNodeSelect?.(
+						latest.nodes.find((node) => node.id === nodeId) ?? null,
+					);
+					latest.onEdgeSelect?.(null);
 					applyHighlight(nodeId);
 				} else if (params.edges.length > 0) {
 					const edgeId = params.edges[0] as string;
-					onNodeSelect?.(null);
-					onEdgeSelect?.(edges.find((edge) => edge.id === edgeId) ?? null);
+					latest.onNodeSelect?.(null);
+					latest.onEdgeSelect?.(
+						latest.edges.find((edge) => edge.id === edgeId) ?? null,
+					);
 					clearHighlight();
 				} else {
-					onNodeSelect?.(null);
-					onEdgeSelect?.(null);
+					latest.onNodeSelect?.(null);
+					latest.onEdgeSelect?.(null);
 					clearHighlight();
 				}
 			});
@@ -1045,25 +1420,30 @@ export default function GraphViewer({
 			// Double-click: focus mode (hide non-adjacent).
 			// Clear opacity-highlight first to avoid stacked visual states.
 			network.on("doubleClick", (params) => {
+				finishRevealRef.current();
 				clearHighlight();
+				const latest = propsRef.current;
 				const baseHidden = baseHiddenNodeIdsRef.current;
 				if (params.nodes.length === 0) {
 					// 退出暫時聚焦時還原篩選結果，而非無條件顯示所有節點。
 					nodeDataSet.update(
-						nodes.map((n) => ({ id: n.id, hidden: baseHidden.has(n.id) })),
+						latest.nodes.map((node) => ({
+							id: node.id,
+							hidden: baseHidden.has(node.id),
+						})),
 					);
 					return;
 				}
 				const clickedId = params.nodes[0] as string;
 				const adjacent = new Set<string>([clickedId]);
-				edges.forEach((e) => {
-					if (e.from === clickedId) adjacent.add(e.to);
-					if (e.to === clickedId) adjacent.add(e.from);
+				latest.edges.forEach((edge) => {
+					if (edge.from === clickedId) adjacent.add(edge.to);
+					if (edge.to === clickedId) adjacent.add(edge.from);
 				});
 				nodeDataSet.update(
-					nodes.map((n) => ({
-						id: n.id,
-						hidden: baseHidden.has(n.id) || !adjacent.has(n.id),
+					latest.nodes.map((node) => ({
+						id: node.id,
+						hidden: baseHidden.has(node.id) || !adjacent.has(node.id),
 					})),
 				);
 			});
@@ -1071,30 +1451,116 @@ export default function GraphViewer({
 
 		void init();
 
-		return () => {
-			cancelled = true;
-			if (networkRef.current) {
+			return () => {
+				cancelled = true;
+				finishRevealRef.current();
+				if (networkRef.current === builtNetwork && builtNetwork) {
 				const viewport = {
-					position: networkRef.current.getViewPosition(),
-					scale: networkRef.current.getScale(),
+					position: builtNetwork.getViewPosition(),
+					scale: builtNetwork.getScale(),
 				};
 				viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
-				networkRef.current.destroy();
+				builtNetwork.destroy();
 				networkRef.current = null;
 			}
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		nodes,
-		edges,
-		citationEdges,
-		edgeWeight,
-		unit,
-		positionSnapshotKey,
-		onPositionSnapshotProvider,
-		onImageCaptureReady,
-		onPublicationCaptureReady,
-	]);
+		// The topology key is deliberately the only rebuild trigger; dynamic
+		// callbacks and appearance props are read through propsRef above.
+	}, [topologyKey]);
+
+	// ── Apply visual-only changes without rebuilding or moving the graph ──────
+	useEffect(() => {
+		if (lastBuiltTopologyKeyRef.current === topologyKey) {
+			lastBuiltTopologyKeyRef.current = null;
+			return;
+		}
+		const nodeDataSet = nodeDataSetRef.current;
+		const edgeDataSet = edgeDataSetRef.current;
+		if (!networkRef.current || !nodeDataSet || !edgeDataSet) return;
+
+		const godNodeMap = new Map(
+			(analysis?.god_nodes ?? []).map((godNode) => [godNode.id, godNode]),
+		);
+		nodeDataSet.update(
+			nodes.map((node) => {
+				const visual = toVisNode(node, unit, undefined, godNodeMap.get(node.id));
+				return {
+					id: visual.id,
+					label: visual.label,
+					title: visual.title,
+					shape: visual.shape,
+					size: visual.size,
+					borderWidth: visual.borderWidth,
+					color: visual.color,
+					font: visual.font,
+				};
+			}),
+		);
+
+		const surprisingEdgeMap = new Map(
+			(analysis?.surprising_connections ?? []).map((connection) => [
+				connection.edge_id,
+				connection,
+			]),
+		);
+		edgeDataSet.update(
+			edges.map((edge) => {
+				const visual: EdgeUpdate = {
+					...toVisEdge(
+						edge,
+						surprisingEdgeMap.get(edge.id),
+						edgeWeight,
+						unit,
+					),
+				};
+				delete visual.from;
+				delete visual.to;
+				return visual;
+			}),
+		);
+
+		const citationVisuals = citationEdges.map(toVisCitationEdge);
+		const currentCitationIds = edgeDataSet
+			.getIds()
+			.filter((id) => id.startsWith("citation:"));
+		const wantedCitationIds = new Set(citationVisuals.map((edge) => edge.id));
+		if (citationVisuals.length > 0) edgeDataSet.update(citationVisuals);
+		const removedCitationIds = currentCitationIds.filter(
+			(id) => !wantedCitationIds.has(id),
+		);
+		if (removedCitationIds.length > 0) edgeDataSet.remove(removedCitationIds);
+
+		if (highlightRef.current.activeId) {
+			applyHighlightRef.current(highlightRef.current.activeId);
+		}
+	}, [nodes, edges, citationEdges, edgeWeight, unit, analysis, topologyKey]);
+
+	// A changed export key must receive the existing stable network, not trigger
+	// another layout run.
+	useEffect(() => {
+		const network = networkRef.current;
+		if (!network || !stabilized) return;
+		const current = propsRef.current;
+		current.onPositionSnapshotProvider?.({
+			key: positionSnapshotKey,
+			getPositions: () => {
+				if (networkRef.current !== network) return null;
+				const positions: FrozenPositions = Object.fromEntries(
+					Object.entries(network.getPositions()).map(([id, position]) => [
+						id,
+						{ x: position.x, y: position.y },
+					]),
+				);
+				return positions;
+			},
+		});
+		current.onImageCaptureReady?.(() => captureNetworkImage(network));
+		current.onPublicationCaptureReady?.((options) =>
+			networkRef.current === network
+				? renderPublicationFigure(network, current.nodes, current.edges, options)
+				: null,
+		);
+	}, [positionSnapshotKey, stabilized]);
 
 	// ── 比較模式：套用外部下達的視窗。已經在同一個位置就不動，避免兩側互推。
 	useEffect(() => {
