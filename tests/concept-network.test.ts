@@ -167,8 +167,8 @@ describe("buildConceptNetwork", () => {
 describe("node size encodings", () => {
   it("使用平方根縮放與固定上下限", () => {
     expect(conceptSize(0)).toBe(10);
-    expect(conceptSize(4)).toBe(22);
-    expect(conceptSize(10_000)).toBe(52);
+    expect(conceptSize(4)).toBe(30);
+    expect(conceptSize(10_000)).toBe(72);
     expect(applicantSize(0)).toBe(18);
     expect(applicantSize(4)).toBe(28);
     expect(applicantSize(10_000)).toBe(52);

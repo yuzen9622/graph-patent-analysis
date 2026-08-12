@@ -6,7 +6,7 @@ import {
   gradientColor,
   isValidYear,
   parseFilingYear,
-  SEQUENTIAL_BLUE,
+  RAINBOW_COLORS,
   UNKNOWN_YEAR_COLOR,
 } from '../lib/concept-time'
 
@@ -110,21 +110,21 @@ describe('computeTimeWindow', () => {
 describe('gradientColor', () => {
   const window: [number, number] = [2007, 2025]
 
-  it('首/尾年精確命中錨色[0]／[8]', () => {
-    expect(gradientColor(2007, window)).toBe(SEQUENTIAL_BLUE[0])
-    expect(gradientColor(2025, window)).toBe(SEQUENTIAL_BLUE[8])
+  it('首/尾年精確命中錨色[0]／[6]', () => {
+    expect(gradientColor(2007, window)).toBe(RAINBOW_COLORS[0])
+    expect(gradientColor(2025, window)).toBe(RAINBOW_COLORS[6])
   })
-  it('first_year=2016 → t=0.5 → 錨色[4]（中間色）', () => {
-    expect(gradientColor(2016, window)).toBe(SEQUENTIAL_BLUE[4])
+  it('first_year=2016 → t=0.5 → 錨色[3]（中間色）', () => {
+    expect(gradientColor(2016, window)).toBe(RAINBOW_COLORS[3])
   })
   it('t 越界 clamp；window null 或無年份 → 灰', () => {
-    expect(gradientColor(1800, window)).toBe(SEQUENTIAL_BLUE[0])
-    expect(gradientColor(3000, window)).toBe(SEQUENTIAL_BLUE[8])
+    expect(gradientColor(1800, window)).toBe(RAINBOW_COLORS[0])
+    expect(gradientColor(3000, window)).toBe(RAINBOW_COLORS[6])
     expect(gradientColor(undefined, window)).toBe(UNKNOWN_YEAR_COLOR)
     expect(gradientColor(2016, null)).toBe(UNKNOWN_YEAR_COLOR)
   })
   it('span=0（全部同一年）→ 全落錨色[0]', () => {
-    expect(gradientColor(2020, [2020, 2020])).toBe(SEQUENTIAL_BLUE[0])
+    expect(gradientColor(2020, [2020, 2020])).toBe(RAINBOW_COLORS[0])
   })
   it('純函式：相同輸入兩次結果相同', () => {
     expect(gradientColor(2016, window)).toBe(gradientColor(2016, window))

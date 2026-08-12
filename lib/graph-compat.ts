@@ -149,7 +149,7 @@ function methodologyDefaults(
   return {
     concept_frequency_metric: 'unique_patent_count',
     cooccurrence_metric: 'unique_patent_support',
-    concept_size_formula: 'clamp(10 + 6 * sqrt(frequency), 10, 52)',
+    concept_size_formula: 'clamp(10 + 10 * sqrt(frequency), 10, 72)',
     applicant_size_formula: 'clamp(18 + 5 * sqrt(patent_count), 18, 52)',
     patent_size: PATENT_NODE_SIZE,
     community_algorithm: 'louvain',
@@ -237,8 +237,10 @@ function normalizeTimeMethodology(
     // Present but invalid, or explicitly null -> "window unknown".
     out.time_window = null
   }
-  if (raw.time_color_scale === 'sequential_blue') {
-    out.time_color_scale = 'sequential_blue'
+  // 2026-08-09: palette 由 sequential_blue 改為 rainbow；舊值視為同一色盤的舊名，
+  // 正規化為新名（舊資料的漸層色在視圖層已用 RAINBOW_COLORS 計算，圖例才不會印舊名）。
+  if (raw.time_color_scale === 'sequential_blue' || raw.time_color_scale === 'rainbow') {
+    out.time_color_scale = 'rainbow'
   }
   return out
 }

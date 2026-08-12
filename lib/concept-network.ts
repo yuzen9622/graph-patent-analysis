@@ -40,7 +40,8 @@ export function applicantSize(patentCount: number): number {
 
 export function conceptSize(frequency: number): number {
   const count = Number.isFinite(frequency) ? Math.max(0, frequency) : 0
-  return Math.min(52, Math.max(10, 10 + 6 * Math.sqrt(count)))
+  // 2026-08-09：斜率 6→10、上限 52→72（老師指定，讓大小區間更明顯）。
+  return Math.min(72, Math.max(10, 10 + 10 * Math.sqrt(count)))
 }
 
 export const PATENT_NODE_SIZE = 18

@@ -531,7 +531,7 @@ export function buildGraph(
   const methodology: GraphMethodology = {
     concept_frequency_metric: 'unique_patent_count',
     cooccurrence_metric: 'unique_patent_support',
-    concept_size_formula: 'clamp(10 + 6 * sqrt(frequency), 10, 52)',
+    concept_size_formula: 'clamp(10 + 10 * sqrt(frequency), 10, 72)',
     applicant_size_formula: 'clamp(18 + 5 * sqrt(patent_count), 18, 52)',
     patent_size: PATENT_NODE_SIZE,
     community_algorithm: 'louvain',
@@ -541,8 +541,9 @@ export function buildGraph(
     layout_distance_interpretation: 'visual_only',
     // PRD v2 / P3: the gradient window (data fact) and palette name. No
     // color_mode here — that is a view-layer option (see lib/graph-view.ts).
+    // 2026-08-09: palette 由 sequential_blue 改為 rainbow（彩虹 7 錨）。
     time_window: timeWindow,
-    time_color_scale: 'sequential_blue',
+    time_color_scale: 'rainbow',
     temporal_median_method: 'standard_median',
     temporal_quartile_method: 'nearest_rank',
     support_strength_visual: '0.30 + 0.70 * (1 - exp(-support/5))',

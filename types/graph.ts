@@ -227,7 +227,7 @@ export interface GraphMethodology {
 	layout_distance_interpretation: "visual_only";
 	// --- PRD v2 / P3 additions (optional, absent on pre-v3 graphs) ---
 	time_window?: [number, number] | null; // 漸層窗 = [min first_year, max first_year]
-	time_color_scale?: "sequential_blue"; // 漸層色盤名稱
+	time_color_scale?: "sequential_blue" | "rainbow"; // 漸層色盤名稱
 	/** P6: true median, nearest-rank quartiles, and fixed visual heuristic. */
 	temporal_median_method?: "standard_median";
 	temporal_quartile_method?: "nearest_rank";

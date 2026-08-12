@@ -8,23 +8,23 @@
 //    不是 year_counts 的鍵集，否則中位數算錯（[2015,2020,2020,2020] → 2020）。
 //  - 有效年份 = [1990, 今年+1]，與 P0 §3.1 的 date_out_of_range 門檻同源；
 //    防止單筆髒資料把漸層窗綁架（B5）。
-//  - 漸層映射 = sRGB 逐通道線性插值 + Math.round；9 個錨色為常數（B4）。
+//  - 漸層映射 = sRGB 逐通道線性插值 + Math.round；7 個錨色為常數（B4）。
 //  - GraphNode.color / concepts.color 永遠是社群色，漸層只活在 view 層（B1）。
 
 import type { ConceptNetworkResult } from './concept-network'
 import { leaveOneOutMedianSpan, medianStandard, quartiles } from './temporal'
 
-/** sequential_blue：9 個錨色（常數，方法圖例要印名稱）。 */
-export const SEQUENTIAL_BLUE = [
-  '#EFF6FF',
-  '#DBEAFE',
-  '#BFDBFE',
-  '#93C5FD',
-  '#60A5FA',
+/** rainbow：7 個錨色（紅橙黃綠藍靛紫，常數；方法圖例要印名稱）。
+ * 2026-08-09 修訂：由 sequential_blue 9 錨改為彩虹 7 錨（老師指定），
+ * 圖例由左（紅＝最早）至右（紫＝最近）。 */
+export const RAINBOW_COLORS = [
+  '#EF4444',
+  '#F97316',
+  '#EAB308',
+  '#22C55E',
   '#3B82F6',
-  '#2563EB',
-  '#1D4ED8',
-  '#1E3A8A',
+  '#4F46E5',
+  '#8B5CF6',
 ] as const
 
 /** 年份未知概念 / 社群模式缺省的灰色。 */
@@ -141,15 +141,15 @@ export function gradientColor(
   window: [number, number] | null,
 ): string {
   if (window === null || firstYear === undefined) return UNKNOWN_YEAR_COLOR
-  const n = SEQUENTIAL_BLUE.length
+  const n = RAINBOW_COLORS.length
   const span = window[1] - window[0]
   const t = span > 0 ? Math.min(1, Math.max(0, (firstYear - window[0]) / span)) : 0
   const pos = t * (n - 1)
   const lo = Math.floor(pos)
   const hi = Math.min(n - 1, lo + 1)
   const f = pos - lo
-  const a = hexToRgb(SEQUENTIAL_BLUE[lo]!)
-  const b = hexToRgb(SEQUENTIAL_BLUE[hi]!)
+  const a = hexToRgb(RAINBOW_COLORS[lo]!)
+  const b = hexToRgb(RAINBOW_COLORS[hi]!)
   return rgbToHex([
     Math.round(a[0] + (b[0] - a[0]) * f),
     Math.round(a[1] + (b[1] - a[1]) * f),

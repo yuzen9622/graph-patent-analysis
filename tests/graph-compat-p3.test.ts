@@ -55,7 +55,7 @@ function p3Graph(overrides: {
       cooccurrence_data: 'native',
       semantic_provenance: 'complete',
       time_window: [2007, 2025],
-      time_color_scale: 'sequential_blue',
+      time_color_scale: 'sequential_blue', // 舊名；normalize 應正規化為 rainbow
       ...overrides.methodology,
     },
   }
@@ -63,10 +63,10 @@ function p3Graph(overrides: {
 }
 
 describe('PRD v2 / P3 normalize 保留與驗證（B6/B7）', () => {
-  it('v3 的 time_window／time_color_scale 經 normalizeGraphData 逐欄保留', () => {
+  it('v3 的 time_window／time_color_scale 經 normalizeGraphData 逐欄保留（舊名 sequential_blue 正規化為 rainbow）', () => {
     const graph = normalizeGraphData(p3Graph())
     expect(graph?.methodology.time_window).toEqual([2007, 2025])
-    expect(graph?.methodology.time_color_scale).toBe('sequential_blue')
+    expect(graph?.methodology.time_color_scale).toBe('rainbow')
     const concept = graph?.nodes.find((n) => n.type === 'concept')
     expect(concept?.first_year).toBe(2007)
     expect(concept?.last_year).toBe(2025)
