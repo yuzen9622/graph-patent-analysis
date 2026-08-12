@@ -49,3 +49,4 @@ data/snapshots/
 ._*
 /memory
 /graphify-out
+.agent
