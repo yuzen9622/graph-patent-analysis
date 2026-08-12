@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useId } from "react";
+import { Suspense, useState, useId, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart2, Loader2, ArrowRight, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -80,35 +80,69 @@ function HomePageContent() {
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	// Ignore storage responses for files the user has already replaced or removed.
+	const uploadRequestRef = useRef(0);
 	const jobId = searchParams.get("jobId");
 	const phase = jobId ? "analyzing" : "upload";
 
 	const sampleInputId = useId();
 
+	// The API still has a global analysis ceiling. Divide it evenly across the
+	// participating source strata so a per-file cap can never create a request
+	// that the server must reject for exceeding that ceiling.
+	const sampleSourceCount = Math.max(
+		1,
+		planPatentSample({ patents, filenames, sampleSize: 1 }).allocations.length,
+	);
+	const maxPerFileSample = Math.max(
+		1,
+		Math.floor(MAX_SAMPLE / sampleSourceCount),
+	);
 	const effectiveSample =
-		patents.length > 0 ? Math.min(sampleSize, patents.length) : sampleSize;
+		patents.length > 0
+			? Math.min(sampleSize, patents.length, maxPerFileSample)
+			: sampleSize;
 	const samplePlan = planPatentSample({
 		patents,
 		filenames,
 		sampleSize: effectiveSample,
 	});
+	const maxCombinedSample = effectiveSample * sampleSourceCount;
 	const sampleHint =
 		patents.length > 0
-			? `將分析 ${effectiveSample} / 總計 ${patents.length} 筆` +
-				(filenames.length > 1 ? `（${formatUploadLabel(filenames)}）` : "")
+			? filenames.length > 1
+				? `每檔最多 ${effectiveSample} 筆，將分析 ${samplePlan.target} / 總計 ${patents.length} 筆（${formatUploadLabel(filenames)}）`
+				: `將分析 ${samplePlan.target} / 總計 ${patents.length} 筆`
 			: null;
 	const sampleAllocationHint =
 		patents.length > 0 && filenames.length > 1
-			? `多檔採分層隨機抽樣；預計各檔分配：${samplePlan.allocations
+			? `每個來源檔各自獨立抽樣，最多合計 ${maxCombinedSample} 筆；預計各檔分配：${samplePlan.allocations
 					.map(
 						({ sourceFile, allocated }) =>
 							`${sourceFile ?? "未標記來源"} ${allocated} 筆`,
 					)
-					.join("、")}`
+					.join("、")}（合計 ${samplePlan.target} 筆）`
 			: null;
 	const canStart = patents.length > 0;
 
+	function clearUploadedData() {
+		setPatents([]);
+		setFilenames([]);
+		setUploadIds([]);
+		setCitations([]);
+		setWarnings(null);
+		setSampleSize(1);
+	}
+
+	function handleClearUpload() {
+		uploadRequestRef.current += 1;
+		clearUploadedData();
+		setUploadError(null);
+		setSubmitError(null);
+	}
+
 	function handleParsed(upload: ParsedUpload) {
+		const requestId = ++uploadRequestRef.current;
 		setPatents(upload.patents);
 		setFilenames(upload.filenames);
 		setCitations(upload.citations);
@@ -117,7 +151,15 @@ function HomePageContent() {
 		setSubmitError(null);
 		// "Analyse everything" is the default the teacher asked for: the box is
 		// pre-filled with the de-duplicated count, not 50 (§5.2).
-		setSampleSize(defaultSampleSize(upload.dedupedCount, MAX_SAMPLE));
+		setSampleSize(
+			Math.min(
+				defaultSampleSize(upload.dedupedCount, MAX_SAMPLE),
+				Math.max(
+					1,
+					Math.floor(MAX_SAMPLE / Math.max(1, upload.filenames.length)),
+				),
+			),
+		);
 
 		// Archive the original spreadsheets server-side; the database keeps only
 		// the resulting URLs, never the bytes. Failure here must not block the
@@ -128,6 +170,7 @@ function HomePageContent() {
 		void fetch("/api/uploads", { method: "POST", body: form })
 			.then((res) => (res.ok ? res.json() : null))
 			.then((body: { upload_ids?: string[]; upload_id?: string } | null) => {
+				if (uploadRequestRef.current !== requestId) return;
 				if (body?.upload_ids?.length) setUploadIds(body.upload_ids);
 				else if (body?.upload_id) setUploadIds([body.upload_id]);
 			})
@@ -135,12 +178,9 @@ function HomePageContent() {
 	}
 
 	function handleUploadError(msg: string) {
+		uploadRequestRef.current += 1;
+		clearUploadedData();
 		setUploadError(msg);
-		setPatents([]);
-		setFilenames([]);
-		setUploadIds([]);
-		setCitations([]);
-		setWarnings(null);
 		setSubmitError(null);
 	}
 
@@ -275,6 +315,7 @@ function HomePageContent() {
 									<UploadZone
 										onParsed={handleParsed}
 										onError={handleUploadError}
+										onClear={handleClearUpload}
 									/>
 								</section>
 
@@ -301,13 +342,13 @@ function HomePageContent() {
 												htmlFor={sampleInputId}
 												className="text-xs font-semibold text-primary/70 uppercase tracking-widest"
 											>
-												抽樣筆數
+												每檔抽樣筆數
 											</Label>
 											<Input
 												id={sampleInputId}
 												type="number"
 												min={1}
-												max={MAX_SAMPLE}
+												max={maxPerFileSample}
 												// Meaningless before a parse: the default is filled in
 												// from the de-duplicated count once files are read.
 												disabled={patents.length === 0}
@@ -315,7 +356,9 @@ function HomePageContent() {
 												onChange={(e) => {
 													const v = parseInt(e.target.value, 10);
 													if (!isNaN(v))
-														setSampleSize(Math.min(MAX_SAMPLE, Math.max(1, v)));
+														setSampleSize(
+															Math.min(maxPerFileSample, Math.max(1, v)),
+														);
 												}}
 												className="h-9 w-28 border-border bg-background focus-visible:ring-primary text-sm backdrop-blur-sm"
 											/>
