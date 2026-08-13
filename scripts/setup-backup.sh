@@ -25,8 +25,8 @@ if [[ -f "$ENV_FILE" ]]; then
 	OLD_DIR=$(grep '^COMPOSE_DIR=' "$ENV_FILE" | head -1 | cut -d= -f2-)
 	if [[ -n "$OLD_DIR" && ! -d "$OLD_DIR" ]]; then
 		TMPF=$(mktemp "${ENV_FILE}.XXXXXX")
-		sed "s|^COMPOSE_DIR=.*|COMPOSE_DIR=$COMPOSE_DIR|" "$ENV_FILE" >"$TMPF" \
-			&& chmod 600 "$TMPF" && mv "$TMPF" "$ENV_FILE"
+		sed "s|^COMPOSE_DIR=.*|COMPOSE_DIR=$COMPOSE_DIR|" "$ENV_FILE" >"$TMPF" &&
+			chmod 600 "$TMPF" && mv "$TMPF" "$ENV_FILE"
 		echo "已修正 $ENV_FILE 的 COMPOSE_DIR: $OLD_DIR → $COMPOSE_DIR"
 	fi
 	echo "設定檔已存在: ${ENV_FILE}（保留）"
