@@ -1277,6 +1277,25 @@ export default function GraphViewer({
 				}
 				network.setOptions({ physics: { enabled: false } });
 				registerCaptureProviders();
+
+				// 預設進入：沒有可還原的視窗（例如新頁面載入）時縮放到全部節點可見；
+				// 同一 session 內重建（切換 unit／分析更新）仍沿用上次視窗。
+				if (!isValidGraphViewport(viewportRef.current)) {
+					const container = containerRef.current;
+					if (
+						container &&
+						container.clientWidth > 0 &&
+						container.clientHeight > 0
+					) {
+						network.fit({
+							animation: {
+								duration: 400,
+								easingFunction: "easeInOutQuad",
+							},
+						});
+					}
+				}
+
 				setStabilized(true);
 				setStabProgress(100);
 				startReveal(!shouldCachePositions);
