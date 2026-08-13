@@ -6,7 +6,7 @@
 # 若 VM 上改過認證方式，請改用 postgres superuser 執行本函式。
 # SQL 一律經 stdin 餵給 psql（不用 -c），避免密碼出現在 argv（ps/auditd 可見）。
 ensure_backup_role() {
-  docker compose exec -T db psql -v ON_ERROR_STOP=1 -U patent -d "$BACKUP_DB" -f - <<SQL >/dev/null
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U patent -d "$BACKUP_DB" -f - <<SQL >/dev/null
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${BACKUP_USER}') THEN
