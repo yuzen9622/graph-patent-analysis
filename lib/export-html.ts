@@ -1,33 +1,33 @@
-import { selectGraphView, type GraphViewOptions } from './graph-view'
-import { DEFAULT_IPC_LEVEL } from './ipc-filter'
-import type { FrozenPositions } from './export-positions'
-import { nodeTooltipLines } from './node-tooltip'
-import type { GraphData, GraphMode } from '../types/graph'
+import { selectGraphView, type GraphViewOptions } from "./graph-view";
+import { DEFAULT_IPC_LEVEL } from "./ipc-filter";
+import type { FrozenPositions } from "./export-positions";
+import { nodeTooltipLines } from "./node-tooltip";
+import type { GraphData, GraphMode } from "../types/graph";
 
 export interface ExportOptions extends GraphViewOptions {
-  paper: boolean
+  paper: boolean;
 }
 
 export function safeSerializeForInlineScript(value: unknown): string {
   return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029')
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 export function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function parseBoolean(value: string | null, fallback: boolean): boolean {
-  if (value === '1' || value === 'true') return true
-  if (value === '0' || value === 'false') return false
-  return fallback
+  if (value === "1" || value === "true") return true;
+  if (value === "0" || value === "false") return false;
+  return fallback;
 }
 
 function parseClampedInteger(
@@ -36,65 +36,83 @@ function parseClampedInteger(
   min: number,
   max: number,
 ): number {
-  if (value === null || !/^-?\d+$/.test(value)) return fallback
-  const parsed = Number(value)
-  if (!Number.isSafeInteger(parsed)) return fallback
-  return Math.min(max, Math.max(min, parsed))
+  if (value === null || !/^-?\d+$/.test(value)) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 export function parseExportOptions(
   params: URLSearchParams,
   graph: GraphData,
 ): ExportOptions {
-  const rawMode = params.get('mode')
+  const rawMode = params.get("mode");
   const mode: GraphMode =
-    rawMode === 'institution' ? 'institution' : rawMode === 'context' ? 'context' : 'concept'
-  const cooccurrence = graph.edges.filter((edge) => edge.kind === 'cooccurrence')
-  const colorMode = params.get('colorMode') === 'first_year'
-    ? 'first_year'
-    : params.get('colorMode') === 'community_applicants'
-      ? 'community_applicants'
-      : params.get('colorMode') === 'source'
-        ? 'source'
-        : params.get('colorMode') === 'ipc'
-          ? 'ipc'
-          : 'community'
-  const unit = params.get('unit') === 'applicant' ? 'applicant' : 'patent'
-  const supportOf = unit === 'applicant'
-    ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
-    : (e: { support_count?: number }) => e.support_count ?? 0
-  const maxSupport = Math.max(1, ...cooccurrence.map(supportOf))
+    rawMode === "institution"
+      ? "institution"
+      : rawMode === "context"
+        ? "context"
+        : "concept";
+  const cooccurrence = graph.edges.filter(
+    (edge) => edge.kind === "cooccurrence",
+  );
+  const colorMode =
+    params.get("colorMode") === "first_year"
+      ? "first_year"
+      : params.get("colorMode") === "community_applicants"
+        ? "community_applicants"
+        : params.get("colorMode") === "source"
+          ? "source"
+          : params.get("colorMode") === "ipc"
+            ? "ipc"
+            : "community";
+  const unit = params.get("unit") === "applicant" ? "applicant" : "patent";
+  const supportOf =
+    unit === "applicant"
+      ? (e: { support_applicants?: number }) => e.support_applicants ?? 0
+      : (e: { support_count?: number }) => e.support_count ?? 0;
+  const maxSupport = Math.max(1, ...cooccurrence.map(supportOf));
   const yearStart = parseClampedInteger(
-    params.get('yearStart'),
+    params.get("yearStart"),
     graph.stats.year_range[0],
     graph.stats.year_range[0],
     graph.stats.year_range[1],
-  )
+  );
   const yearEnd = parseClampedInteger(
-    params.get('yearEnd'),
+    params.get("yearEnd"),
     graph.stats.year_range[1],
     graph.stats.year_range[0],
     graph.stats.year_range[1],
-  )
-  let edgeWeight: GraphViewOptions['edgeWeight'] = 'jaccard'
-  if (params.get('el') === 'npmi' || params.get('ew') === 'npmi') edgeWeight = 'npmi'
-  const sourceFiles = params.getAll('source').filter(Boolean)
+  );
+  let edgeWeight: GraphViewOptions["edgeWeight"] = "jaccard";
+  if (params.get("el") === "npmi" || params.get("ew") === "npmi")
+    edgeWeight = "npmi";
+  const sourceFiles = params.getAll("source").filter(Boolean);
   // PRD v2 / P5: IPC 層級（1..5，缺省 3）與選定 key（多值）。
-  let ipcLevel: GraphViewOptions['ipcLevel'] = DEFAULT_IPC_LEVEL
-  const levelRaw = params.get('ipcLevel')
-  const level = Number(levelRaw)
-  if (levelRaw !== null && Number.isInteger(level) && level >= 1 && level <= 5) {
-    ipcLevel = level as GraphViewOptions['ipcLevel']
+  let ipcLevel: GraphViewOptions["ipcLevel"] = DEFAULT_IPC_LEVEL;
+  const levelRaw = params.get("ipcLevel");
+  const level = Number(levelRaw);
+  if (
+    levelRaw !== null &&
+    Number.isInteger(level) &&
+    level >= 1 &&
+    level <= 5
+  ) {
+    ipcLevel = level as GraphViewOptions["ipcLevel"];
   }
-  const ipcFilter = params.getAll('ipc').filter(Boolean)
-  const temporalReference = params.get('temporal_ref') === 'full' ? 'full' as const : 'active' as const
-  const showCitations = parseBoolean(params.get('citations'), false)
+  const ipcFilter = params.getAll("ipc").filter(Boolean);
+  const temporalReference =
+    params.get("temporal_ref") === "full"
+      ? ("full" as const)
+      : ("active" as const);
+  const showCitations = parseBoolean(params.get("citations"), false);
   return {
     mode,
-    showSemantic: parseBoolean(params.get('llm'), false),
-    paper: parseBoolean(params.get('paper'), true),
-    minSupport: parseClampedInteger(params.get('minSupport'), 1, 1, maxSupport),
-    yearRange: yearStart <= yearEnd ? [yearStart, yearEnd] : [yearEnd, yearStart],
+    showSemantic: parseBoolean(params.get("llm"), false),
+    paper: parseBoolean(params.get("paper"), true),
+    minSupport: parseClampedInteger(params.get("minSupport"), 1, 1, maxSupport),
+    yearRange:
+      yearStart <= yearEnd ? [yearStart, yearEnd] : [yearEnd, yearStart],
     colorMode,
     unit,
     edgeWeight,
@@ -103,7 +121,7 @@ export function parseExportOptions(
     ipcFilter: ipcFilter.length > 0 ? ipcFilter : undefined,
     temporalReference,
     showCitations,
-  }
+  };
 }
 
 // Always project citation evidence into the offline payload; its visibility is
@@ -111,10 +129,22 @@ export function parseExportOptions(
 // same projection to validate the live position ID set before exporting.
 export function buildExportViews(graph: GraphData, options: ExportOptions) {
   return {
-    concept: selectGraphView(graph, { ...options, mode: 'concept', showCitations: true }),
-    context: selectGraphView(graph, { ...options, mode: 'context', showCitations: true }),
-    institution: selectGraphView(graph, { ...options, mode: 'institution', showCitations: true }),
-  }
+    concept: selectGraphView(graph, {
+      ...options,
+      mode: "concept",
+      showCitations: true,
+    }),
+    context: selectGraphView(graph, {
+      ...options,
+      mode: "context",
+      showCitations: true,
+    }),
+    institution: selectGraphView(graph, {
+      ...options,
+      mode: "institution",
+      showCitations: true,
+    }),
+  };
 }
 
 export function buildExportHtml(
@@ -124,36 +154,39 @@ export function buildExportHtml(
   visNetworkSource: string,
   frozenPositions?: FrozenPositions,
 ): string {
-  const view = selectGraphView(graph, { ...options, showCitations: true })
+  const view = selectGraphView(graph, { ...options, showCitations: true });
   // tooltip 文字在伺服器端就算好，離線端只負責渲染，避免線上與離線兩份文字漂移。
   const viewWithTips = {
     ...view,
-    nodes: view.nodes.map((node) => ({ ...node, tip: nodeTooltipLines(node, options.unit) })),
-  }
+    nodes: view.nodes.map((node) => ({
+      ...node,
+      tip: nodeTooltipLines(node, options.unit),
+    })),
+  };
   const payload = safeSerializeForInlineScript({
     view: viewWithTips,
     frozenLayouts: frozenPositions ? { [options.mode]: frozenPositions } : {},
     options,
-  })
-  const escapedJobId = escapeHtml(jobId)
-  const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString('base64')}`
+  });
+  const escapedJobId = escapeHtml(jobId);
+  const visNetworkDataUrl = `data:text/javascript;base64,${Buffer.from(visNetworkSource).toString("base64")}`;
   const title =
-    options.mode === 'institution'
-      ? '機構網絡'
-      : options.mode === 'concept'
-        ? '技術概念網路'
-        : '專利脈絡圖'
+    options.mode === "institution"
+      ? "機構網路"
+      : options.mode === "concept"
+        ? "技術概念網路"
+        : "專利脈絡圖";
   const modeExplanation =
-    options.mode === 'institution'
-      ? '節點＝一家機構；大小＝該機構涉足的技術概念數（非專利篇數）；邊＝兩家共享 ≥' +
+    options.mode === "institution"
+      ? "節點＝一家機構；大小＝該機構涉足的技術概念數（非專利篇數）；邊＝兩家共享 ≥" +
         `${options.minSupport} 個概念；顏色＝機構類型（銀行/保險/大學/…）。`
-      : options.mode === 'concept'
-        ? options.colorMode === 'ipc'
-          ? `節點顏色＝優勢 IPC（L${options.ipcLevel ?? DEFAULT_IPC_LEVEL}）；${options.unit === 'applicant' ? '大小＝機構家數' : '大小＝專利篇數'}；實線粗細＝支持門檻（≥ ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
-          : options.unit === 'applicant'
-          ? `節點大小＝涵蓋該概念的機構家數（非專利篇數）；實線粗細＝共同投入的機構家數（門檻 ≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
-          : `節點大小＝包含該概念的專利篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === 'npmi' ? 'NPMI' : 'Jaccard'}。`
-        : '申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。'
+      : options.mode === "concept"
+        ? options.colorMode === "ipc"
+          ? `節點顏色＝優勢 IPC（L${options.ipcLevel ?? DEFAULT_IPC_LEVEL}）；${options.unit === "applicant" ? "大小＝機構家數" : "大小＝專利篇數"}；實線粗細＝支持門檻（≥ ${options.minSupport}）；線寬用${options.edgeWeight === "npmi" ? "NPMI" : "Jaccard"}。`
+          : options.unit === "applicant"
+            ? `節點大小＝涵蓋該概念的機構家數（非專利篇數）；實線粗細＝共同投入的機構家數（門檻 ≥ ${options.minSupport} 家）；線寬用 ${options.edgeWeight === "npmi" ? "NPMI" : "Jaccard"}。`
+            : `節點大小＝包含該概念的專利篇數；實線粗細＝共同出現篇數（門檻 ${options.minSupport}）；線寬用${options.edgeWeight === "npmi" ? "NPMI" : "Jaccard"}。`
+        : "申請人大小＝所選年份專利篇數；概念大小＝所選年份涵蓋篇數；結構線不表示強度。";
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -163,7 +196,7 @@ export function buildExportHtml(
   <script src="${visNetworkDataUrl}"></script>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${options.paper ? '#fff' : '#020617'}; color: ${options.paper ? '#172033' : '#f8fafc'}; font-family: system-ui, sans-serif; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${options.paper ? "#fff" : "#020617"}; color: ${options.paper ? "#172033" : "#f8fafc"}; font-family: system-ui, sans-serif; }
     header { padding: 12px 18px; border-bottom: 1px solid #cbd5e1; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
     h1 { margin: 0; font-size: 18px; } .meta { color: #64748b; font-size: 12px; }
     .title-group { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -187,8 +220,8 @@ export function buildExportHtml(
   <aside id="legend" aria-label="圖譜圖例">
     <strong id="legend-title">${escapeHtml(title)}圖例</strong>
     <p id="mode-explanation">${escapeHtml(modeExplanation)}</p>
-    <p id="semantic-explanation">${options.mode === 'concept' ? (options.showSemantic ? '紫色虛線＝LLM 語意關係（不參與社群與排版）。' : 'LLM 語意關係目前未顯示。') : '本模式只顯示申請人、專利與概念的來源結構線。'}</p>
-    <p id="capability-warning" class="warning"${view.capabilityWarning ? '' : ' hidden'}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ''}</p>
+    <p id="semantic-explanation">${options.mode === "concept" ? (options.showSemantic ? "紫色虛線＝LLM 語意關係（不參與社群與排版）。" : "LLM 語意關係目前未顯示。") : "本模式只顯示申請人、專利與概念的來源結構線。"}</p>
+    <p id="capability-warning" class="warning"${view.capabilityWarning ? "" : " hidden"}>${view.capabilityWarning ? escapeHtml(view.capabilityWarning) : ""}</p>
   </aside>
   <div id="tooltip" role="status"></div>
   <footer>${escapeHtml(graph.methodology.cooccurrence_metric)} · Louvain resolution ${escapeHtml(String(graph.methodology.community_resolution))} · ${escapeHtml(graph.methodology.model_id)}</footer>
@@ -300,5 +333,5 @@ export function buildExportHtml(
     })();
   </script>
 </body>
-</html>`
+</html>`;
 }
