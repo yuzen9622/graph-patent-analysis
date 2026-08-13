@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import StatCard from "./StatCard";
 import type { GraphNode, GraphEdge, Community } from "@/types/graph";
 
@@ -70,13 +71,15 @@ export default function NodeInfo({
 				>
 					{TYPE_LABELS[node.type]}
 				</Badge>
-				<button
+				<Button
+					variant="ghost"
+					size="icon-xs"
 					onClick={onClose}
-					className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer -mt-0.5 rounded p-0.5 hover:bg-muted"
+					className="text-muted-foreground hover:text-foreground cursor-pointer -mt-0.5 rounded"
 					aria-label="關閉節點資訊"
 				>
-					<X size={14} />
-				</button>
+					<X className="size-3.5" />
+				</Button>
 			</div>
 
 			<h3 className="font-serif text-sm font-semibold text-foreground leading-snug mb-3 break-words">
@@ -188,9 +191,11 @@ export default function NodeInfo({
 										: node.abstract.slice(0, 120) +
 											(node.abstract.length > 120 ? "…" : "")}
 									{node.abstract.length > 120 && (
-										<button
+										<Button
+											variant="link"
+											size="xs"
 											onClick={() => setAbstractExpanded((v) => !v)}
-											className="ml-1 text-primary hover:text-accent inline-flex items-center gap-0.5 cursor-pointer"
+											className="ml-1 h-auto gap-0.5 px-0 text-primary hover:text-accent hover:no-underline cursor-pointer"
 										>
 											{abstractExpanded ? (
 												<>
@@ -203,7 +208,7 @@ export default function NodeInfo({
 													展開
 												</>
 											)}
-										</button>
+										</Button>
 									)}
 								</dd>
 							</div>
@@ -279,14 +284,16 @@ export default function NodeInfo({
 					</p>
 					<div className="flex flex-wrap gap-1.5">
 						{adjacentNodes.map((n) => (
-							<button
+							<Button
 								key={n.id}
+								variant="outline"
+								size="xs"
 								onClick={() => {
 									onNodeSelect(n);
 									onNodeFocus(n.id);
 								}}
 								title={n.label}
-								className="max-w-full truncate rounded-md border px-2 py-1 text-[0.7rem] cursor-pointer transition-colors hover:opacity-90 hover:shadow-sm"
+								className="h-auto max-w-full truncate rounded-md px-2 py-1 text-[0.7rem] cursor-pointer hover:opacity-90 hover:shadow-sm"
 								style={{
 									borderColor: n.color,
 									color: n.color,
@@ -294,7 +301,7 @@ export default function NodeInfo({
 								}}
 							>
 								{n.label.length > 14 ? n.label.slice(0, 14) + "…" : n.label}
-							</button>
+							</Button>
 						))}
 					</div>
 				</div>

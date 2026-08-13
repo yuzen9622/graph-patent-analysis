@@ -2,6 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
 
 const ORDER = ["light", "dark", "system"] as const;
 const ICONS = { light: Sun, dark: Moon, system: Monitor };
@@ -13,14 +14,16 @@ export default function ModeToggle() {
 	const Icon = ICONS[current];
 	const next = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
 	return (
-		<button
+		<Button
 			type="button"
+			variant="outline"
+			size="icon"
 			onClick={() => setTheme(next)}
 			aria-label={`切換主題（目前：${LABELS[current]}）`}
 			title={`切換主題（目前：${LABELS[current]}）`}
-			className="flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground hover:border-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 cursor-pointer"
+			className="rounded-full text-muted-foreground hover:border-accent hover:bg-transparent hover:text-foreground cursor-pointer"
 		>
-			<Icon size={14} aria-hidden />
-		</button>
+			<Icon className="size-3.5" aria-hidden />
+		</Button>
 	);
 }

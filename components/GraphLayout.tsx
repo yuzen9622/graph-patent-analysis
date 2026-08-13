@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import Sidebar from "./Sidebar";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import CompareSetupPanel from "./CompareSetupPanel";
@@ -392,10 +394,15 @@ export default function GraphLayout({ graph, jobId }: Props) {
 			compareView,
 			panelScopes: compareMode ? panelScopes : undefined,
 		});
+		// toViewQueryString 只序列化檢視狀態；id 是路由參數，覆寫時必須保留，
+		// 否則重新整理／複製連結會找不到這份分析。
+		const search = new URLSearchParams(query);
+		const currentId = new URLSearchParams(window.location.search).get("id");
+		if (currentId) search.set("id", currentId);
 		window.history.replaceState(
 			null,
 			"",
-			`${window.location.pathname}?${query}`,
+			`${window.location.pathname}?${search.toString()}`,
 		);
 	}, [
 		mode,
@@ -926,6 +933,45 @@ export default function GraphLayout({ graph, jobId }: Props) {
 		if (compareMode) exitCompare();
 	}, [clearInspection, graph.stats.year_range, compareMode, exitCompare]);
 
+	// 切換到另一份分析時 page 不會 remount（同一個 route，只換 id query），
+	// 所以綁在資料上的篩選必須手動歸零；純檢視偏好（mode／配色／圖層…）保留。
+	// 但兩個能力相依的偏好要額外檢查：新分析若缺家單位資料或機構結構邊，
+	// 保留現況會畫出空圖／錯圖（UI 上這些選項本來就會因能力不足而停用，
+	// 切換分析後不應被靜默保留），所以退回有效狀態。
+	const prevJobIdRef = useRef(jobId);
+	useEffect(() => {
+		if (prevJobIdRef.current === jobId) return;
+		prevJobIdRef.current = jobId;
+		clearInspection();
+		setFocusNodeId(undefined);
+		setYearRange(graph.stats.year_range);
+		setMinSupport(1);
+		setIpcLevel(DEFAULT_IPC_LEVEL);
+		setIpcFilter([]);
+		setSourceFiles([]);
+		setSourceFilesRight([]);
+		setExtraPanels([]);
+		setHiddenCommunities(new Set());
+		setCompareUi("off");
+		setCompareView("side-by-side");
+		// 「家」單位：新分析完全沒有機構資料時退回篇單位
+		// （applicantAvailability 'none' 會畫出邊數 0、大小誤讀成篇數的空圖）。
+		setUnit(
+			unit === "applicant" && applicantDataAvailability === "none"
+				? "patent"
+				: unit,
+		);
+		// 「機構網絡」模式：機構視圖由 申請了 結構邊重建，缺省時是零節點空圖。
+		setMode(
+			mode === "institution" &&
+				!graph.edges.some(
+					(edge) => edge.kind === "structural" && edge.relation === "申請了",
+				)
+				? "concept"
+				: mode,
+		);
+	}, [jobId, graph, clearInspection, mode, unit, applicantDataAvailability]);
+
 	return (
 		<div className="flex flex-col h-screen bg-background overflow-hidden">
 			{/* ── Header ── */}
@@ -946,9 +992,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
 				</Link>
 
 				<div className="flex items-center gap-2 shrink-0">
-					<div
-						className="inline-flex rounded-md border border-border bg-background p-0.5"
+					<ButtonGroup
 						aria-label="圖譜模式"
+						className="rounded-md border border-border bg-background p-0.5"
 					>
 						{(
 							[
@@ -957,23 +1003,27 @@ export default function GraphLayout({ graph, jobId }: Props) {
 								["institution", "機構網絡"],
 							] as const
 						).map(([value, label]) => (
-							<button
+							<Button
 								key={value}
 								type="button"
+								variant={mode === value ? "default" : "ghost"}
+								size="xs"
 								onClick={() => selectMode(value)}
 								aria-pressed={mode === value}
-								className={`rounded px-2.5 py-1 text-xs transition-colors ${
+								className={`h-auto rounded px-2.5 py-1 text-xs ${
 									mode === value
-										? "bg-primary text-primary-foreground"
+										? ""
 										: "text-muted-foreground hover:text-foreground"
 								}`}
 							>
 								{label}
-							</button>
+							</Button>
 						))}
-					</div>
-					<button
+					</ButtonGroup>
+					<Button
 						type="button"
+						variant={compareUi !== "off" ? "default" : "outline"}
+						size="sm"
 						onClick={() =>
 							compareUi === "off" ? openCompareSetup() : exitCompare()
 						}
@@ -984,18 +1034,18 @@ export default function GraphLayout({ graph, jobId }: Props) {
 								? "此分析只有一個來源檔，無法比較"
 								: "設定多面板來源檔範圍並比較"
 						}
-						className={`inline-flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-							compareUi !== "off"
-								? "bg-primary text-primary-foreground border-primary"
-								: "bg-background border-border text-foreground hover:bg-accent"
+						className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-40 ${
+							compareUi !== "off" ? "border-primary" : "hover:bg-accent"
 						}`}
 					>
 						<GitCompare size={12} />
 						比較
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
 						onClick={handleCopy}
-						className="inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors duration-150 cursor-pointer"
+						className="h-auto gap-1.5 py-1.5 text-xs hover:border-accent hover:bg-accent hover:text-accent-foreground cursor-pointer"
 						aria-label="複製分享連結"
 					>
 						{copied ? (
@@ -1009,9 +1059,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
 								複製連結
 							</>
 						)}
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={() => void handleOfflineExport()}
 						disabled={!exportReady || exporting || offlineExportBlocked}
 						title={
@@ -1020,9 +1072,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
 								: (exportError ??
 									(exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成"))
 						}
-						className={`inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground transition-colors duration-150 ${
+						className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto ${
 							!exportReady || exporting || offlineExportBlocked
-								? "cursor-not-allowed opacity-50"
+								? "cursor-not-allowed"
 								: "cursor-pointer hover:bg-accent hover:text-accent-foreground"
 						}`}
 						aria-label="下載離線 HTML 圖譜"
@@ -1033,9 +1085,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
 							: compareMode
 								? "離線 HTML（差異）"
 								: "離線 HTML"}
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={() => void handleExportImage()}
 						disabled={!imageExportReady || imageExporting}
 						title={
@@ -1045,9 +1099,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
 									: "下載目前畫面的 PNG 圖片"
 								: "等待圖譜佈局完成"
 						}
-						className={`inline-flex items-center gap-1.5 text-xs bg-background border border-border rounded-md px-2.5 py-1.5 text-foreground transition-colors duration-150 ${
+						className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto ${
 							!imageExportReady || imageExporting
-								? "cursor-not-allowed opacity-50"
+								? "cursor-not-allowed"
 								: "cursor-pointer hover:bg-accent hover:text-accent-foreground"
 						}`}
 						aria-label={
@@ -1060,7 +1114,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 							: compareMode
 								? "匯出比較 PNG"
 								: "匯出圖片"}
-					</button>
+					</Button>
 					<PublicationExportPanel
 						overviewNodeCount={view.nodes.length}
 						selectedNodeId={selectedViewNode?.id ?? null}
@@ -1122,18 +1176,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
 						/>
 					)}
 					<div className="relative flex flex-1 min-w-0 overflow-hidden">
-						{compareUi === "setup" && (
-							<CompareSetupPanel
-								allSourceFiles={allSourceFiles}
-								panels={setupPanels}
-								onPanelsChange={setSetupPanels}
-								onSwap={swapSetupScopes}
-								onCancel={exitCompare}
-								onStart={startCompare}
-								onAddPanel={addSetupPanel}
-								onRemovePanel={removeSetupPanel}
-							/>
-						)}
+						<CompareSetupPanel
+							open={compareUi === "setup"}
+							onOpenChange={(nextOpen) => {
+								if (!nextOpen) exitCompare();
+							}}
+							allSourceFiles={allSourceFiles}
+							panels={setupPanels}
+							onPanelsChange={setSetupPanels}
+							onSwap={swapSetupScopes}
+							onCancel={exitCompare}
+							onStart={startCompare}
+							onAddPanel={addSetupPanel}
+							onRemovePanel={removeSetupPanel}
+						/>
 						{compareMode &&
 						compareView === "difference" &&
 						difference &&

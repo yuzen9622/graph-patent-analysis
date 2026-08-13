@@ -11,6 +11,7 @@ import type {
 	GodNode,
 	SurprisingConnection,
 } from "@/types/graph";
+import { Button } from "@/components/ui/button";
 import {
 	graphViewportsEqual,
 	isValidGraphViewport,
@@ -1679,13 +1680,15 @@ export default function GraphViewer({
 	return (
 		<div className="relative w-full h-full bg-accent">
 			{/* Fit-to-view button */}
-			<button
+			<Button
+				variant="outline"
+				size="sm"
 				onClick={handleFit}
 				title="全部顯示"
-				className="absolute top-3 right-3 z-10 px-2.5 py-1.5 text-xs rounded border border-border bg-background/90 text-muted-foreground hover:text-foreground hover:border-accent transition-colors duration-150 cursor-pointer backdrop-blur-sm"
+				className="absolute top-3 right-3 z-10 h-auto rounded bg-background/90 py-1.5 text-xs text-muted-foreground hover:border-accent hover:bg-transparent hover:text-foreground cursor-pointer backdrop-blur-sm"
 			>
 				全部顯示
-			</button>
+			</Button>
 
 			{/* Stabilizing overlay with progress */}
 			{!stabilized && (

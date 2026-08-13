@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GraphNode } from "@/types/graph";
 
@@ -93,13 +94,15 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
 					autoComplete="off"
 				/>
 				{query && (
-					<button
+					<Button
+						variant="ghost"
+						size="icon-xs"
 						onClick={clear}
-						className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer rounded p-0.5 hover:bg-muted"
+						className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer rounded"
 						aria-label="清除搜尋"
 					>
 						<X size={12} />
-					</button>
+					</Button>
 				)}
 			</div>
 

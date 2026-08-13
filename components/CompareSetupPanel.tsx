@@ -7,11 +7,22 @@ import {
 	TriangleAlert,
 	X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import SourceFileChecklist from "./Sidebar/SourceFileChecklist";
 import { panelLabel, scopeLabel } from "@/lib/compare-export";
 import { panelScopesDistinct } from "@/lib/graph-compare";
 
 interface Props {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
 	allSourceFiles: string[];
 	/** 每個面板的來源檔範圍；長度 2..6。 */
 	panels: string[][];
@@ -24,6 +35,8 @@ interface Props {
 }
 
 export default function CompareSetupPanel({
+	open,
+	onOpenChange,
 	allSourceFiles,
 	panels,
 	onPanelsChange,
@@ -38,40 +51,47 @@ export default function CompareSetupPanel({
 	const canAdd = panelCount < 6;
 
 	return (
-		<section
-			aria-label="比較設定"
-			className="absolute inset-0 z-20 flex items-start justify-center overflow-auto bg-background/95 p-6 backdrop-blur-sm"
-		>
-			<div className="w-full max-w-4xl rounded-lg border border-border bg-background p-5 shadow-sm">
-				<div className="flex items-start justify-between gap-3">
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent
+				showCloseButton={false}
+				className="max-w-4xl sm:max-w-4xl max-h-[85svh] overflow-y-auto"
+			>
+				<DialogHeader className="flex-row items-start justify-between gap-3">
 					<div>
-						<h2 className="font-serif text-base font-bold text-foreground">
+						<DialogTitle className="font-serif text-base font-bold text-foreground">
 							設定多面板比較
-						</h2>
+						</DialogTitle>
 						<p className="mt-1 text-xs text-muted-foreground leading-relaxed">
 							每個面板各自選擇來源檔範圍（至少 2 個面板，最多 6
 							個）。其餘篩選條件（年份、單位、著色、IPC…）各面板共用，只有來源檔不同。
 						</p>
 					</div>
-					<button
-						type="button"
-						onClick={onCancel}
-						aria-label="取消比較設定"
-						className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+					<DialogClose
+						render={
+							<Button
+								type="button"
+								variant="outline"
+								size="icon-lg"
+								aria-label="取消比較設定"
+								className="size-11 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+							/>
+						}
 					>
 						<X size={16} />
-					</button>
-				</div>
+					</DialogClose>
+				</DialogHeader>
 
-				<div className="mt-4 grid gap-4 md:grid-cols-2">
+				<div className="grid gap-4 md:grid-cols-2">
 					{panels.map((panel, index) => (
 						<div key={index} className="rounded-md border border-border p-3">
 							<div className="mb-2 flex items-center justify-between gap-2">
 								<p className="text-sm font-medium text-foreground">
 									{panelLabel(index, panelCount)}（面板 {index + 1}）來源
 								</p>
-								<button
+								<Button
 									type="button"
+									variant="outline"
+									size="icon-sm"
 									onClick={() => onRemovePanel(index)}
 									disabled={panelCount <= 2}
 									title={
@@ -80,10 +100,10 @@ export default function CompareSetupPanel({
 											: `移除${panelLabel(index, panelCount)}`
 									}
 									aria-label={`移除${panelLabel(index, panelCount)}`}
-									className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+									className="shrink-0 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-40"
 								>
 									<X size={14} />
-								</button>
+								</Button>
 							</div>
 							<SourceFileChecklist
 								allSourceFiles={allSourceFiles}
@@ -100,20 +120,21 @@ export default function CompareSetupPanel({
 						</div>
 					))}
 					{canAdd && (
-						<button
+						<Button
 							type="button"
+							variant="outline"
 							onClick={onAddPanel}
-							className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+							className="h-auto min-h-24 w-full gap-2 rounded-md border-dashed text-sm text-muted-foreground hover:border-primary hover:text-foreground"
 						>
 							<Plus size={16} />
 							新增面板
-						</button>
+						</Button>
 					)}
 				</div>
 
 				<p
 					role={distinct ? "status" : "alert"}
-					className={`mt-4 flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
+					className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
 						distinct
 							? "border-border bg-accent/40 text-muted-foreground"
 							: "border-destructive/40 bg-destructive/5 text-destructive"
@@ -129,35 +150,37 @@ export default function CompareSetupPanel({
 					</span>
 				</p>
 
-				<div className="mt-4 flex flex-wrap items-center gap-2">
-					<button
+				<DialogFooter className="flex-row flex-wrap items-center justify-start gap-2">
+					<Button
 						type="button"
 						onClick={onStart}
 						disabled={!distinct}
-						className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						className="h-auto min-h-11 gap-2 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						<GitCompare size={16} />
 						開始比較
-					</button>
+					</Button>
 					{panelCount === 2 && (
-						<button
+						<Button
 							type="button"
+							variant="outline"
 							onClick={onSwap}
-							className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+							className="h-auto min-h-11 gap-2 rounded-md px-4 text-sm hover:bg-accent"
 						>
 							<ArrowLeftRight size={16} />
 							交換 A/B
-						</button>
+						</Button>
 					)}
-					<button
+					<Button
 						type="button"
+						variant="outline"
 						onClick={onCancel}
-						className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						className="h-auto min-h-11 rounded-md px-4 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
 					>
 						取消
-					</button>
-				</div>
-			</div>
-		</section>
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

@@ -2,6 +2,7 @@
 
 import { X, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import StatCard from "./StatCard";
 import type {
 	GraphEdge,
@@ -58,14 +59,16 @@ export default function EdgeInfo({ edge, nodes, methodology, onClose }: Props) {
 				>
 					{kindLabel(kind)}
 				</Badge>
-				<button
+				<Button
 					type="button"
+					variant="ghost"
+					size="icon-xs"
 					onClick={onClose}
-					className="-mt-0.5 cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					className="-mt-0.5 cursor-pointer rounded text-muted-foreground hover:text-foreground"
 					aria-label="關閉關係資訊"
 				>
-					<X size={14} />
-				</button>
+					<X className="size-3.5" />
+				</Button>
 			</div>
 
 			{/* 來源 → 目標 */}

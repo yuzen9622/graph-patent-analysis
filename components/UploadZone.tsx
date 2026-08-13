@@ -12,6 +12,14 @@ import {
 	X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+	Attachment,
+	AttachmentActions,
+	AttachmentAction,
+	AttachmentContent,
+	AttachmentMedia,
+	AttachmentTitle,
+} from "@/components/ui/attachment";
 import { cn } from "@/lib/utils";
 import type { PatentRow } from "@/types/graph";
 import type {
@@ -451,14 +459,16 @@ export default function UploadZone({
 							<span className="font-semibold text-base text-error">
 								上傳失敗
 							</span>
-							<button
+							<Button
 								type="button"
+								variant="ghost"
+								size="icon-xs"
 								aria-label="關閉錯誤訊息並重試"
 								onClick={handleReset}
-								className="ml-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+								className="ml-1 rounded text-muted-foreground hover:text-foreground cursor-pointer"
 							>
 								<X size={15} aria-hidden />
-							</button>
+							</Button>
 						</div>
 						{errorMsg && (
 							<p className="text-sm text-error text-center max-w-sm leading-snug">
@@ -498,53 +508,65 @@ export default function UploadZone({
 								可個別移除
 							</p>
 						</div>
-						<ul role="list" className="space-y-3">
+						<ul role="list" className="space-y-2">
 							{summaries.map((summary, index) => (
-								<li
-									key={`${summary.filename}-${index}`}
-									className="text-sm border-b border-black/5 dark:border-white/8 last:border-b-0 pb-3 last:pb-0"
-								>
-									<div className="flex items-start justify-between gap-3">
-										<p className="font-medium text-foreground break-all">
-											{summary.filename}
-										</p>
-										<button
-											type="button"
-											onClick={() => handleRemoveFile(index)}
-											aria-label={`移除檔案 ${summary.filename}`}
-											title="移除這個檔案，其餘檔案會重新解析"
-											className="-m-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 cursor-pointer"
-										>
-											<X size={15} aria-hidden />
-										</button>
-									</div>
-									<dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-										<dt>判定格式</dt>
-										<dd className="text-foreground">{summary.formatLabel}</dd>
-										<dt>工作表</dt>
-										<dd className="text-foreground">
-											{summary.sheetName || "（未指定）"}
-										</dd>
-										<dt>有效筆數</dt>
-										<dd className="text-foreground">{summary.validRows} 筆</dd>
-										<dt>未識別欄位</dt>
-										<dd
-											className={
-												summary.unmappedColumns.length > 0
-													? "text-foreground break-all"
-													: "text-muted-foreground"
-											}
-										>
-											{summary.unmappedColumns.length > 0
-												? `${summary.unmappedColumns.length} 個：${summary.unmappedColumns.join("、")}`
-												: "無"}
-										</dd>
-									</dl>
-									{summary.errors.length > 0 && (
-										<p className="mt-1 text-xs text-error">
-											{summary.errors.join("；")}
-										</p>
-									)}
+								<li key={`${summary.filename}-${index}`}>
+									<Attachment
+										state={summary.errors.length > 0 ? "error" : "done"}
+										size="sm"
+										className="w-full items-start"
+									>
+										<AttachmentMedia>
+											<FileSpreadsheet size={16} aria-hidden />
+										</AttachmentMedia>
+										<AttachmentContent>
+											<AttachmentTitle className="break-all whitespace-normal">
+												{summary.filename}
+											</AttachmentTitle>
+											<dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+												<dt>判定格式</dt>
+												<dd className="text-foreground">
+													{summary.formatLabel}
+												</dd>
+												<dt>工作表</dt>
+												<dd className="text-foreground">
+													{summary.sheetName || "（未指定）"}
+												</dd>
+												<dt>有效筆數</dt>
+												<dd className="text-foreground">
+													{summary.validRows} 筆
+												</dd>
+												<dt>未識別欄位</dt>
+												<dd
+													className={
+														summary.unmappedColumns.length > 0
+															? "text-foreground break-all"
+															: "text-muted-foreground"
+													}
+												>
+													{summary.unmappedColumns.length > 0
+														? `${summary.unmappedColumns.length} 個：${summary.unmappedColumns.join("、")}`
+														: "無"}
+												</dd>
+											</dl>
+											{summary.errors.length > 0 && (
+												<p className="mt-1 text-xs text-error">
+													{summary.errors.join("；")}
+												</p>
+											)}
+										</AttachmentContent>
+										<AttachmentActions>
+											<AttachmentAction
+												type="button"
+												onClick={() => handleRemoveFile(index)}
+												aria-label={`移除檔案 ${summary.filename}`}
+												title="移除這個檔案，其餘檔案會重新解析"
+												className="text-muted-foreground hover:bg-error/10 hover:text-error cursor-pointer"
+											>
+												<X size={15} aria-hidden />
+											</AttachmentAction>
+										</AttachmentActions>
+									</Attachment>
 								</li>
 							))}
 						</ul>

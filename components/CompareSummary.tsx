@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeftRight, Columns2, Diff, Pencil, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
 	commonFilterSummary,
 	formatJaccard,
@@ -148,48 +149,56 @@ export default function CompareSummary({
 								["difference", "差異", Diff],
 							] as const
 						).map(([value, label, Icon]) => (
-							<button
+							<Button
 								key={value}
 								type="button"
+								variant={tab === value ? "default" : "ghost"}
+								size="sm"
 								onClick={() => onTabChange(value)}
 								aria-pressed={tab === value}
-								className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+								className={`h-auto gap-1.5 rounded px-2.5 py-1.5 text-xs ${
 									tab === value
-										? "bg-primary text-primary-foreground"
+										? ""
 										: "text-muted-foreground hover:text-foreground"
 								}`}
 							>
 								<Icon size={12} />
 								{label}
-							</button>
+							</Button>
 						))}
 					</div>
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={onEditScope}
-						className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent"
 					>
 						<Pencil size={12} />
 						編輯範圍
-					</button>
+					</Button>
 					{onSwap && (
-						<button
+						<Button
 							type="button"
+							variant="outline"
+							size="sm"
 							onClick={onSwap}
-							className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+							className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent"
 						>
 							<ArrowLeftRight size={12} />
 							交換 A/B
-						</button>
+						</Button>
 					)}
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={onExit}
-						className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
 					>
 						<X size={12} />
 						結束比較
-					</button>
+					</Button>
 				</div>
 			</div>
 

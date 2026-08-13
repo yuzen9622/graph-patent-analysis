@@ -81,7 +81,7 @@ describe("Sidebar filter reset action", () => {
 		const markup = renderSidebarWithAnActiveYearFilter();
 		const resetAt = markup.indexOf("重設</button>");
 		const firstFilterContentAt = markup.indexOf(
-			'data-slot="collapsible-content"',
+			'data-slot="accordion-content"',
 		);
 
 		expect(resetAt).toBeGreaterThan(-1);
