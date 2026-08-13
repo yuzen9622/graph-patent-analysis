@@ -8,18 +8,28 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${BACKUP_ENV:-/etc/wang-backup/backup.env}"
 KEY_FILE="${BACKUP_KEY_FILE:-/etc/wang-backup/backup.key}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/wang}"
-COMPOSE_DIR="${COMPOSE_DIR:-/opt/wang}"
+# 預設取專案根目錄（腳本上層），不再假設 /opt/wang；可用環境變數覆寫
+COMPOSE_DIR="${COMPOSE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BACKUP_DB="${BACKUP_DB:-patent_graph}"
 BACKUP_USER="${BACKUP_USER:-backup_user}"
 INSTALL_SYSTEMD=1
 case "$*" in *--no-systemd*) INSTALL_SYSTEMD=0 ;; esac
 
-# ── 1. 設定檔（已存在則跳過，避免覆寫既有密碼）────────────────────────────
+# ── 1. 設定檔（已存在則保留，但會自動修復錯誤的 COMPOSE_DIR）───────────
 if [[ -f "$ENV_FILE" ]]; then
-	echo "設定檔已存在: $ENV_FILE（保留。要重建請先刪除）"
+	# 檔內 COMPOSE_DIR 指向不存在的目錄（例如舊預設 /opt/wang）→ 自動修正
+	OLD_DIR=$(grep '^COMPOSE_DIR=' "$ENV_FILE" | head -1 | cut -d= -f2-)
+	if [[ -n "$OLD_DIR" && ! -d "$OLD_DIR" ]]; then
+		TMPF=$(mktemp "${ENV_FILE}.XXXXXX")
+		sed "s|^COMPOSE_DIR=.*|COMPOSE_DIR=$COMPOSE_DIR|" "$ENV_FILE" >"$TMPF" \
+			&& chmod 600 "$TMPF" && mv "$TMPF" "$ENV_FILE"
+		echo "已修正 $ENV_FILE 的 COMPOSE_DIR: $OLD_DIR → $COMPOSE_DIR"
+	fi
+	echo "設定檔已存在: ${ENV_FILE}（保留）"
 else
 	mkdir -p "$(dirname "$ENV_FILE")" "$BACKUP_DIR"/{daily,weekly,monthly}
 	chmod 700 "$(dirname "$ENV_FILE")" "$BACKUP_DIR" "$BACKUP_DIR"/{daily,weekly,monthly}
@@ -67,9 +77,15 @@ echo "備份角色 ${BACKUP_USER} 已就緒（僅 CONNECT + SELECT，無寫入�
 
 # ── 4. systemd 排程（僅 Linux）────────────────────────────────────────────
 if [[ "$INSTALL_SYSTEMD" == "1" ]] && [[ "$(uname -s)" == "Linux" ]]; then
-	SRC="$(cd "$(dirname "$0")/../deploy/systemd" && pwd)"
-	install -m 644 "$SRC"/wang-backup.service "$SRC"/wang-backup.timer \
-		"$SRC"/wang-restore-test.service "$SRC"/wang-restore-test.timer /etc/systemd/system/
+	SRC="$(cd "$SCRIPT_DIR/../deploy/systemd" && pwd)"
+	# unit 範本內的 /opt/wang 換成實際專案路徑（用 sudo 執行時目錄權限由 root 持有）
+	TMPU=$(mktemp -d)
+	for unit in wang-backup.service wang-restore-test.service; do
+		sed "s|/opt/wang|$SCRIPT_DIR|g" "$SRC/$unit" >"$TMPU/$unit"
+	done
+	install -m 644 "$TMPU"/wang-backup.service "$TMPU"/wang-restore-test.service \
+		"$SRC"/wang-backup.timer "$SRC"/wang-restore-test.timer /etc/systemd/system/
+	rm -rf "$TMPU"
 	systemctl daemon-reload
 	systemctl enable --now wang-backup.timer wang-restore-test.timer
 	systemctl status wang-backup.timer --no-pager | head -5

@@ -43,7 +43,8 @@
 ## Ubuntu VM 安裝步驟
 
 ```bash
-# 0. 前置：docker + compose 已就緒，專案位於 /opt/wang，docker compose up -d 已啟動
+# 0. 前置：docker + compose 已就緒，專案已 git clone/部署並 docker compose up -d 啟動
+#    （setup-backup.sh 會自動偵測專案路徑，不必在 /opt/wang；本範例以 /opt/wang 示範）
 cd /opt/wang
 
 # 1. 安裝依賴（rclone 為選用：異地備份用；mailutils 為選用：失敗通知用）
@@ -51,10 +52,12 @@ sudo apt update
 sudo apt install -y gnupg rclone mailutils
 
 # 2. 執行一次性設定（建立目錄/金鑰/備份角色/設定檔/systemd 排程）
+#    ⚠️ 需先 docker compose up -d db（角色 bootstrap 要連容器）
 sudo ./scripts/setup-backup.sh
 #    → 產生 /etc/wang-backup/backup.key
-#    → 產生 /etc/wang-backup/backup.env（含隨機 backup_user 密碼）
+#    → 產生 /etc/wang-backup/backup.env（含隨機 backup_user 密碼、自動偵測的 COMPOSE_DIR）
 #    → 啟用 wang-backup.timer（每日 02:10）與 wang-restore-test.timer（每週日 03:10）
+#    → systemd unit 內的腳本路徑已自動換成實際專案路徑
 
 # 3. ⚠️ 金鑰保管（最重要）：把 backup.key 內容複製進你的密碼管理器
 cat /etc/wang-backup/backup.key   # 複製 → 存密碼管理器 → 這台機器以外唯一副本
@@ -67,14 +70,11 @@ sudo ./scripts/restore-test.sh    # 應看到 [restore-test] PASS
 systemctl list-timers | grep wang
 ```
 
-### 若部署路徑不是 /opt/wang
+### 專案不在預期路徑時
 
-改 `deploy/systemd/*.service` 的 `ExecStart`，或在安裝後：
-
-```bash
-sudo ln -s /opt/wang/scripts/backup.sh /usr/local/bin/wang-backup
-# 並把 .service 的 ExecStart 改成 /usr/local/bin/wang-backup（restore-test 同理）
-```
+`setup-backup.sh` 預設把 `COMPOSE_DIR` 設為腳本所在專案的根目錄（自動偵測），systemd unit 的
+`ExecStart` 也會同步換成實際路徑，一般不需要手動改。若你是**手動複製** unit 檔（不用 setup 安裝），
+才需把 `deploy/systemd/*.service` 內的 `/opt/wang` 換成你的專案路徑。
 
 ## 異地備份（強烈建議，選用）
 

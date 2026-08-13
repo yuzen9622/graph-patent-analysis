@@ -14,7 +14,7 @@ set -euo pipefail
 
 ENV_FILE="${BACKUP_ENV:-/etc/wang-backup/backup.env}"
 if [[ ! -f "$ENV_FILE" ]]; then
-	echo "ERROR: 設定檔不存在: $ENV_FILE（請先執行 sudo ./scripts/setup-backup.sh）" >&2
+	echo "ERROR: 設定檔不存在: ${ENV_FILE}（請先執行 sudo ./scripts/setup-backup.sh）" >&2
 	exit 1
 fi
 # shellcheck source=/dev/null
@@ -104,7 +104,7 @@ gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 -q \
 	-o "$BACKUP_DIR/daily/$ARCHIVE" "$WORK/archive.tar"
 chmod 600 "$BACKUP_DIR/daily/$ARCHIVE"
 (cd "$BACKUP_DIR/daily" && sha256sum "$ARCHIVE" >"$ARCHIVE.sha256" && chmod 600 "$ARCHIVE.sha256")
-log "完成: $BACKUP_DIR/daily/$ARCHIVE（還原性由每週 restore-test.sh 驗證）"
+log "完成: $BACKUP_DIR/daily/${ARCHIVE}（還原性由每週 restore-test.sh 驗證）"
 
 # ── 7. 分層保留（daily 保留 N 天；每週一與每月 1 日各抽一份長保留）────────
 find "$BACKUP_DIR/daily" \( -name 'wang-backup-*.tar.gz.gpg' -o -name '*.sha256' \) \
