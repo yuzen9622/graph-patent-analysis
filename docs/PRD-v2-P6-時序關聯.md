@@ -7,6 +7,7 @@
 **名稱**：本圖正式名稱「**依中位申請年排序的技術關聯圖**」（Technology Relationship Graph Ordered by Median Application Year）。**不再**稱「技術演進圖」「前因→後果」——本圖不宣稱因果。
 
 > ## ⚠️ 2026-08-09 修訂／權威狀態
+>
 > **本次校正取代任何將 P6 時序 layout 當成預設概念圖的解讀。**
 >
 > - **預設概念視圖（default concept view）**＝community pre-spread + ForceAtlas2 community clustering；它是正常 `mode=concept` 的 `GraphViewer`，且必須保持預設。
@@ -44,11 +45,11 @@
 老師的三件事：**時間**、**關聯與單位**、**先後**。
 2026-08-09 定案：產品收斂成**三張圖**，各自回答不同問題，不做「一張萬能圖」。**三圖計畫不表示以①取代正常 `mode=concept` 的預設概念視圖。** 預設概念視圖仍是 community pre-spread + ForceAtlas2 的 community clustering；時序圖只能是另行明確選擇的衍生視圖。
 
-| 圖 | 樣態 | 回答 | 階段 |
-|---|---|---|---|
-| **① 依中位申請年排序的技術關聯圖（時序衍生視圖）** | 概念節點；僅在明確啟用時 Y＝median-year 序數、邊＝關聯 | 哪些技術先出現／後來發展／彼此高度相關 | **P6＝本規格；optional，UI mode 目前未實作** |
-| **② 機構–技術二部圖** | Applicant ↔ Concept | 哪間學校做哪些技術、哪些公司學校做相同技術、哪個技術競爭者最多 | P4 機構網絡進化（另規格） |
-| **③ 多資料集比較圖** | Overlay／Intersection／A-only／B-only／Difference＋指標 | A/B/C Excel 的共同與差異 | 獨立分析模型（另規格） |
+| 圖                                                 | 樣態                                                    | 回答                                                           | 階段                                         |
+| -------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------- |
+| **① 依中位申請年排序的技術關聯圖（時序衍生視圖）** | 概念節點；僅在明確啟用時 Y＝median-year 序數、邊＝關聯  | 哪些技術先出現／後來發展／彼此高度相關                         | **P6＝本規格；optional，UI mode 目前未實作** |
+| **② 機構–技術二部圖**                              | Applicant ↔ Concept                                     | 哪間學校做哪些技術、哪些公司學校做相同技術、哪個技術競爭者最多 | P4 機構網路進化（另規格）                    |
+| **③ 多資料集比較圖**                               | Overlay／Intersection／A-only／B-only／Difference＋指標 | A/B/C Excel 的共同與差異                                       | 獨立分析模型（另規格）                       |
 
 機構相似度圖（institution↔institution＝「兩家共享多少技術」）是②的**衍生**，不混入同一張。
 
@@ -58,31 +59,30 @@
 
 **以下 visual encoding 規範只在使用者經明確選擇／URL mode 啟用時序衍生視圖時適用。** `width`、`opacity`、citation 與 scope 的資料語意仍跨視圖保留，但不能因為有 `median_year` 或 `temporal_directed` 邊，就靜默啟用 temporal layout。**預設概念視圖不得呼叫 `computeTemporalLayout`，不得設定 median-based coordinates 或 `fixed: { y: true }`；它維持 community pre-spread + ForceAtlas2 community clustering。**
 
-| 時序衍生視圖的編碼 | 值 |
-|---|---|
-| Y position | 時間先後（active scope 內 `median_year` 的**序數排序**，節點不重疊） |
-| X position | 群聚／排版；**同一或相近時間層內，較相關的概念盡量靠近**（版面偏好，不是距離指標） |
-| edge width | 技術關聯強度（relation_weight；模型見 §9） |
-| edge opacity | 支持專利計數的視覺強弱（§8；不叫 confidence） |
-| arrow | `temporal_directed` 的時間先後（earlier → later；§6）；箭頭資料語意可保留，但不會自行啟用 Y-band |
-| node size | 該概念在 **active scope** 內的專利數 |
-| node color | Excel 資料集／IPC 分類／機構類型（沿用 P2／P5／P4 色盤） |
+| 時序衍生視圖的編碼 | 值                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| Y position         | 時間先後（active scope 內 `median_year` 的**序數排序**，節點不重疊）                             |
+| X position         | 群聚／排版；**同一或相近時間層內，較相關的概念盡量靠近**（版面偏好，不是距離指標）               |
+| edge width         | 技術關聯強度（relation_weight；模型見 §9）                                                       |
+| edge opacity       | 支持專利計數的視覺強弱（§8；不叫 confidence）                                                    |
+| arrow              | `temporal_directed` 的時間先後（earlier → later；§6）；箭頭資料語意可保留，但不會自行啟用 Y-band |
+| node size          | 該概念在 **active scope** 內的專利數                                                             |
+| node color         | Excel 資料集／IPC 分類／機構類型（沿用 P2／P5／P4 色盤）                                         |
 
 **「線的距離」語意（定案）**：時序衍生視圖不宣稱「線越短＝越相關」——因為 Y 受時間約束（A 2010、B 2020 即使高度關聯也必須垂直分開）。「相關越近」實作在 **X 軸同層靠近**；正式定量關聯只能看線寬／數值。**只有時序衍生視圖啟用時**，圖例才印：
 
 > Vertical position indicates the ordinal ranking of median application year and does not imply causality or proportional temporal distance.
 
-預設概念視圖不得印這段 temporal legend。`GraphLegend` 已在正常概念模式移除該 prose；只有未來明確 temporal mode 才可顯示。
----
+## 預設概念視圖不得印這段 temporal legend。`GraphLegend` 已在正常概念模式移除該 prose；只有未來明確 temporal mode 才可顯示。
 
 ## 3. 資料與 median 語意（R5 修正）
 
 **median 改用真統計中位數（允許小數）**，不再 lower-median 整數化：
 
-| 目前（錯誤） | 新（標準 median） |
-|---|---|
-| `[2018, 2019]` → 2018 | `2018.5` |
-| `[2018, 2024]` → 2018 | `2021.0` |
+| 目前（錯誤）          | 新（標準 median） |
+| --------------------- | ----------------- |
+| `[2018, 2019]` → 2018 | `2018.5`          |
+| `[2018, 2024]` → 2018 | `2021.0`          |
 
 - `median_year` 型別：**DOUBLE PRECISION（REAL）**；migration `007_p6_temporal.sql` 已完成 INTEGER → DOUBLE PRECISION，並新增 q1/q3 與 leave-one-out span 欄位。
 - 概念節點至少保存：
@@ -98,11 +98,11 @@
 
 ## 4. 年份窗三詞（禁止只用 year_window）
 
-| 詞 | 定義 | 例子 |
-|---|---|---|
-| `quality_year_bounds` | 資料清理合法範圍（資料品質） | 1990–2026 |
-| `analysis_year_filter` | 老師目前分析選用的資料 cohort | 2015–2025 |
-| `layout_time_band` | 僅限明確時序衍生視圖的純 UI Y 軸 band／lane；預設概念視圖不得建立或套用 | — |
+| 詞                     | 定義                                                                    | 例子      |
+| ---------------------- | ----------------------------------------------------------------------- | --------- |
+| `quality_year_bounds`  | 資料清理合法範圍（資料品質）                                            | 1990–2026 |
+| `analysis_year_filter` | 老師目前分析選用的資料 cohort                                           | 2015–2025 |
+| `layout_time_band`     | 僅限明確時序衍生視圖的純 UI Y 軸 band／lane；預設概念視圖不得建立或套用 | —         |
 
 `analysis_year_filter` 才是 cohort：`median_year`／所有衍生指標都對它重算；只有明確時序衍生視圖的 Y-band 使用該 median（見 §5）。`layout_time_band` 不是預設概念視圖的 layout 選項。
 
@@ -185,6 +185,7 @@ citation-supported := (net >= 2) AND (ratio >= 2)
   ```
 
 **citation-only 邊＝獨立虛線層**：當 A/B 共現 = 0（無 Jaccard/NPMI），**不得**硬塞 weight=0 的關聯邊：
+
 - 主圖只畫 `relation_edges`；
 - `citation_edges`（獨立虛線層）預設隱藏、可切換；
 - 已有 relation 邊的 pair 才顯示 citation badge；
@@ -202,12 +203,12 @@ opacity(s) = 0.30 + 0.70 × (1 − e^{−s/5})
 ```
 
 | support | opacity |
-|---:|---:|
-| 1 | .43 |
-| 2 | .53 |
-| 3 | .62 |
-| 5 | .74 |
-| 10 | .91 |
+| ------: | ------: |
+|       1 |     .43 |
+|       2 |     .53 |
+|       3 |     .62 |
+|       5 |     .74 |
+|      10 |     .91 |
 
 - `tau=5` 是**視覺 heuristic**——寫入 `visualization_methodology` 與 PNG/HTML metadata，不是統計參數。
 - **citation 完全不出現在 opacity**（只用徽章/虛線）。
