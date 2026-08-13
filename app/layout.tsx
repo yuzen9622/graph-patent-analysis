@@ -3,6 +3,7 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 // variable 命名為 --font-geist-sans，避免覆蓋 @theme 的 --font-sans（Atkinson Hyperlegible）
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
@@ -37,6 +38,7 @@ export default function RootLayout({
 					disableTransitionOnChange
 				>
 					{children}
+					<Toaster position="top-center" />
 				</ThemeProvider>
 			</body>
 		</html>

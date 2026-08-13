@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useId, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { BarChart2, Loader2, ArrowRight, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -186,10 +187,9 @@ function HomePageContent() {
 	}
 
 	async function handleStart() {
-		if (patents.length === 0) {
-			setSubmitError("請先上傳 .xlsx 檔案。");
-			return;
-		}
+		// 「開始分析」按鈕在無檔案時是 disabled（disabled={submitting || !canStart}），
+		// 瀏覽器不會派發 click，此處不需再檢查 patents.length——請先上傳的提示由
+		// 按鈕 disabled 狀態本身承擔。
 		setSubmitError(null);
 		setSubmitting(true);
 
@@ -235,11 +235,13 @@ function HomePageContent() {
 			// The row already exists server-side; just tell the sidebar to re-read.
 			notifyHistoryChanged();
 
+			toast.success(`分析已啟動，正在處理 ${sampled.length} 筆專利`);
 			router.replace(`/?jobId=${encodeURIComponent(data.job_id)}`);
 		} catch (err) {
-			setSubmitError(
-				err instanceof Error ? err.message : "啟動分析失敗，請重試。",
-			);
+			const message =
+				err instanceof Error ? err.message : "啟動分析失敗，請重試。";
+			setSubmitError(message);
+			toast.error(message);
 		} finally {
 			setSubmitting(false);
 		}
