@@ -1,0 +1,16 @@
+[Unit]
+Description=wang patent database encrypted backup (daily)
+Documentation=file:///opt/wang/docs/backup-and-restore.md
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/wang-backup/backup.env
+ExecStart=/opt/wang/scripts/backup.sh
+# 備份不搶資源
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

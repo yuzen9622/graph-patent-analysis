@@ -1,0 +1,10 @@
+[Unit]
+Description=Run wang database restore test every Sunday at 03:10
+
+[Timer]
+OnCalendar=Sun *-*-* 03:10:00
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

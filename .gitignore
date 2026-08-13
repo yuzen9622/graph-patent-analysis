@@ -50,3 +50,11 @@ data/snapshots/
 /memory
 /graphify-out
 .agent
+
+# ── 資安: 資料庫備份/明文 dump 絕不入庫（曾外洩，見 docs/backup-and-restore.md）──
+backup.sql.gz
+*.dump
+*.sql.gz
+*.gpg
+*.sha256
+/backups/

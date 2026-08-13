@@ -1,0 +1,11 @@
+[Unit]
+Description=Run wang database backup every day at 02:10
+
+[Timer]
+OnCalendar=*-*-* 02:10:00
+# 錯過時間（如關機）下次開機補跑
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

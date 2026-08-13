@@ -1,0 +1,15 @@
+[Unit]
+Description=wang database restore verification (weekly)
+Documentation=file:///opt/wang/docs/backup-and-restore.md
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/wang-backup/backup.env
+ExecStart=/opt/wang/scripts/restore-test.sh
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
