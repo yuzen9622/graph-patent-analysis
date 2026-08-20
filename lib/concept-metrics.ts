@@ -13,8 +13,7 @@
  * 所有函式皆純粹（無 DB、無 side effect），供 builder 使用且可直接 vitest。
  */
 
-import Graph from 'graphology'
-import louvain from 'graphology-communities-louvain'
+import { runLouvain, type LouvainOptions } from './louvain'
 
 export interface EdgeMetrics {
   /** 同一位申請人其專利同時含過 i 且含過 j 的家數（可跨篇）。 */
@@ -92,7 +91,7 @@ function nPointwise(cXY: number, cX: number, cY: number, total: number): number 
   return normalizedPointwiseMutualInformation(cXY / total, cX / total, cY / total)
 }
 
-function assocOf(cIJ: number, cA: number, cB: number, m: number): number | undefined {
+export function assocOf(cIJ: number, cA: number, cB: number, m: number): number | undefined {
   if (!(cIJ > 0) || cA <= 0 || cB <= 0) return undefined
   return (2 * m * cIJ) / (cA * cB)
 }
@@ -194,33 +193,21 @@ export function computeUnitMetrics(opts: {
 export function detectUnitCommunities(
   conceptLabels: string[],
   pairApplicants: Map<string, Set<string>>,
+  options?: LouvainOptions,
 ): Map<string, number> {
   const sorted = Array.from(conceptLabels).sort()
-  const graph = new Graph({ type: 'undirected', multi: false })
-  for (const label of sorted) graph.addNode(label)
+  const labels = new Set(sorted)
+  const edges: Array<{ a: string; b: string; support: number }> = []
 
   const seen = new Set<string>()
   for (const [key, applicants] of pairApplicants) {
     const [a, b] = key.split('\u0000')
-    if (!graph.hasNode(a) || !graph.hasNode(b) || a === b) continue
+    if (!labels.has(a) || !labels.has(b) || a === b) continue
     const dedupeKey = pairKey(a, b)
     if (seen.has(dedupeKey)) continue
     seen.add(dedupeKey)
-    graph.addEdge(a, b, { weight: applicants.size })
+    edges.push({ a, b, support: applicants.size })
   }
 
-  const assignments = new Map<string, number>()
-  if (graph.order === 0) return assignments
-
-  const communityMap: Record<string, number> =
-    graph.size === 0
-      ? Object.fromEntries(sorted.map((label, index) => [label, index]))
-      : (louvain(graph, {
-          getEdgeWeight: 'weight',
-          resolution: 1,
-          randomWalk: false,
-        }) as Record<string, number>)
-
-  for (const [label, id] of Object.entries(communityMap)) assignments.set(label, id)
-  return assignments
+  return runLouvain(sorted, edges, options).assignments
 }

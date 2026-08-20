@@ -1,6 +1,5 @@
-import Graph from 'graphology'
-import louvain from 'graphology-communities-louvain'
 import type { ConceptNetworkResult } from '@/lib/concept-network'
+import { runLouvain, type LouvainOptions } from './louvain'
 
 const COMMUNITY_COLORS: string[] = [
   '#4E79A7',
@@ -27,43 +26,24 @@ export interface CommunityResult {
 }
 
 export function detectCommunities(
-  conceptNetwork: ConceptNetworkResult
+  conceptNetwork: ConceptNetworkResult,
+  options?: LouvainOptions,
 ): CommunityResult {
-  const graph = new Graph({ type: 'undirected', multi: false })
-
-  for (const label of Array.from(conceptNetwork.concepts.keys()).sort()) {
-    graph.addNode(label)
-  }
+  const labels = Array.from(conceptNetwork.concepts.keys()).sort()
+  const labelsSet = new Set(labels)
+  const degree = new Map<string, number>()
+  const edges: Array<{ a: string; b: string; support: number }> = []
 
   for (const edge of conceptNetwork.cooccurrenceEdges) {
     const source = edge.from.replace(/^concept:/, '')
     const target = edge.to.replace(/^concept:/, '')
-    if (!graph.hasNode(source) || !graph.hasNode(target) || source === target) continue
-    graph.addEdge(source, target, { weight: edge.support_count ?? 1 })
+    if (!labelsSet.has(source) || !labelsSet.has(target) || source === target) continue
+    edges.push({ a: source, b: target, support: edge.support_count ?? 1 })
+    degree.set(source, (degree.get(source) ?? 0) + 1)
+    degree.set(target, (degree.get(target) ?? 0) + 1)
   }
 
-  if (graph.order === 0) {
-    return {
-      assignments: new Map(),
-      colors: new Map(),
-      names: new Map(),
-    }
-  }
-
-  // Louvain requires at least one edge. Isolated concepts are each their own
-  // deterministic community instead of being dropped or causing an exception.
-  const communityMap: { [node: string]: number } = graph.size === 0
-    ? Object.fromEntries(graph.nodes().sort().map((node, index) => [node, index]))
-    : louvain(graph, {
-        getEdgeWeight: 'weight',
-        resolution: 1,
-        randomWalk: false,
-      })
-
-  const assignments = new Map<string, number>()
-  for (const [node, communityId] of Object.entries(communityMap)) {
-    assignments.set(node, communityId)
-  }
+  const { assignments } = runLouvain(labels, edges, options)
 
   // Collect all unique community IDs
   const communityIds = Array.from(new Set(assignments.values())).sort(
@@ -84,7 +64,7 @@ export function detectCommunities(
 
     for (const [node, cid] of assignments) {
       if (cid !== communityId) continue
-      const deg = graph.degree(node)
+      const deg = degree.get(node) ?? 0
       if (deg > bestDegree) {
         bestDegree = deg
         bestNode = node

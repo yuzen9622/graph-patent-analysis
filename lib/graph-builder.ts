@@ -40,6 +40,7 @@ import {
   detectUnitCommunities,
   pairApplicantSupport,
 } from "@/lib/concept-metrics";
+import type { LouvainOptions } from "@/lib/louvain";
 
 // PRD v2 / P4 (Q2): 「家」單位社群的色盤與「篇」單位分開，同 community_id
 // 在兩單位下不共享色（色盤 key = unit + id）。
@@ -101,6 +102,7 @@ export function buildGraph(
   communityNames: Map<number, string>, // community_id → display name
   methodologyMeta: Pick<GraphMethodology, 'prompt_version' | 'model_provider' | 'model_id'>,
   citations?: Array<{ from: string; to: string }>,
+  louvainOptions?: LouvainOptions,
 ): GraphData {
   const conceptsByPatent = new Map<string, string[]>();
   for (const concept of conceptNetwork.concepts.values()) {
@@ -356,6 +358,7 @@ export function buildGraph(
   const applicantAssignments = detectUnitCommunities(
     Array.from(conceptNetwork.concepts.keys()),
     pairApplicants,
+    louvainOptions,
   );
   const applicantCommunityNames = new Map<number, string>();
   const applicantCommunityCounts = new Map<number, number>();
@@ -528,6 +531,8 @@ export function buildGraph(
   for (const edge of edges) if (edge.kind === 'cooccurrence') edge.scope_id = scopeId
   for (const edge of citationEdges) edge.scope_id = scopeId
 
+  const communityResolution = louvainOptions?.resolution ?? 1;
+  const communityWeightMode = louvainOptions?.weightMode ?? 'association';
   const methodology: GraphMethodology = {
     concept_frequency_metric: 'unique_patent_count',
     cooccurrence_metric: 'unique_patent_support',
@@ -535,8 +540,9 @@ export function buildGraph(
     applicant_size_formula: 'clamp(18 + 5 * sqrt(patent_count), 18, 52)',
     patent_size: PATENT_NODE_SIZE,
     community_algorithm: 'louvain',
-    community_edge_weight: 'support_count',
-    community_resolution: 1,
+    community_edge_weight:
+      communityWeightMode === 'support' ? 'support_count' : 'association_strength',
+    community_resolution: communityResolution,
     community_random_walk: false,
     layout_distance_interpretation: 'visual_only',
     // PRD v2 / P3: the gradient window (data fact) and palette name. No

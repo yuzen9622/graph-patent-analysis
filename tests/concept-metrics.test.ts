@@ -130,15 +130,18 @@ describe('detectUnitCommunities（Q2：家單位分區）', () => {
         ['Y', new Set(['A', 'B'])],
       ]),
     )
-    const assignments = detectUnitCommunities(['A', 'B', 'C', 'D'], pairApplicants)
+    const assignments = detectUnitCommunities(['A', 'B', 'C', 'D'], pairApplicants, {
+      weightMode: 'support',
+    })
     expect(assignments.size).toBe(4)
     expect(assignments.get('A')).toBe(assignments.get('B'))
     expect(assignments.get('A')).toBe(assignments.get('C'))
     expect(assignments.get('D')).not.toBe(assignments.get('A'))
+    expect(Object.fromEntries([...assignments.entries()].sort())).toEqual({ A: 0, B: 0, C: 0, D: 1 })
   })
 
   it('空圖（無邊）仍給出 deterministic 指派', () => {
-    const assignments = detectUnitCommunities(['A', 'B'], new Map())
+    const assignments = detectUnitCommunities(['A', 'B'], new Map(), { weightMode: 'support' })
     expect(assignments.get('A')).toBeDefined()
     expect(assignments.get('B')).toBeDefined()
     expect(assignments.get('A')).not.toBe(assignments.get('B'))

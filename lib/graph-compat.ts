@@ -184,8 +184,10 @@ function normalizeMethodology(
     community_algorithm: raw.community_algorithm === 'louvain'
       ? 'louvain'
       : defaults.community_algorithm,
-    community_edge_weight: raw.community_edge_weight === 'support_count'
-      ? 'support_count'
+    community_edge_weight:
+      raw.community_edge_weight === 'support_count' ||
+      raw.community_edge_weight === 'association_strength'
+      ? raw.community_edge_weight
       : defaults.community_edge_weight,
     community_resolution:
       asFiniteNumber(raw.community_resolution) ?? defaults.community_resolution,

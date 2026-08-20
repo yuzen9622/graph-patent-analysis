@@ -221,7 +221,7 @@ export interface GraphMethodology {
 	applicant_size_formula: string;
 	patent_size: number;
 	community_algorithm: "louvain";
-	community_edge_weight: "support_count";
+	community_edge_weight: "support_count" | "association_strength";
 	community_resolution: number;
 	community_random_walk: boolean;
 	layout_distance_interpretation: "visual_only";
