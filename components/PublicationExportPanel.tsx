@@ -51,7 +51,6 @@ const LABEL_OPTIONS: Array<[PublicationLabelMode, string]> = [
 	["none", "不顯示"],
 ];
 const DPI_OPTIONS: PublicationDpi[] = [300, 600];
-const HOP_OPTIONS: Array<1 | 2> = [1, 2];
 
 /**
  * PRD-Q8 出版圖選項面板：M1 整體圖／M2 局部子圖共用一個面板，圖幅支援
@@ -131,18 +130,12 @@ export default function PublicationExportPanel({
 
 				<DropdownMenuRadioGroup
 					value={figureMode}
-					onValueChange={(value) =>
-						setFigureMode(value as "overview" | "subgraph")
-					}
+					onValueChange={(value) => setFigureMode(value as "overview" | "subgraph")}
 					aria-label="M1／M2"
 					className="mb-3"
 				>
-					<DropdownMenuRadioItem value="overview">
-						M1 整體圖
-					</DropdownMenuRadioItem>
-					<DropdownMenuRadioItem value="subgraph">
-						M2 局部子圖
-					</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="overview">M1 整體圖</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="subgraph">M2 局部子圖</DropdownMenuRadioItem>
 				</DropdownMenuRadioGroup>
 
 				{isSubgraph && (
@@ -150,27 +143,26 @@ export default function PublicationExportPanel({
 						<p className="text-[0.65rem] text-muted-foreground">
 							中心節點：
 							{selectedNodeLabel ? (
-								<span className="font-medium text-foreground">
-									{selectedNodeLabel}
-								</span>
+								<span className="font-medium text-foreground">{selectedNodeLabel}</span>
 							) : (
 								<span className="text-destructive">請先在圖上點選一個節點</span>
 							)}
 						</p>
 						<div>
 							<p className="text-[0.65rem] text-muted-foreground mb-1.5">
-								範圍（hop）
+								關聯範圍（層級）
 							</p>
 							<DropdownMenuRadioGroup
 								value={String(hops)}
 								onValueChange={(value) => setHops(Number(value) as 1 | 2)}
-								aria-label="hop 範圍"
+								aria-label="關聯範圍"
 							>
-								{HOP_OPTIONS.map((value) => (
-									<DropdownMenuRadioItem key={value} value={String(value)}>
-										{value} 步
-									</DropdownMenuRadioItem>
-								))}
+								<DropdownMenuRadioItem value="1">
+									1 層（僅直接關聯）
+								</DropdownMenuRadioItem>
+								<DropdownMenuRadioItem value="2">
+									2 層（延伸脈絡，建議）
+								</DropdownMenuRadioItem>
 							</DropdownMenuRadioGroup>
 						</div>
 						{selectedNodeId && (
@@ -236,9 +228,7 @@ export default function PublicationExportPanel({
 						<p className="text-[0.65rem] text-muted-foreground mb-1.5">標籤</p>
 						<DropdownMenuRadioGroup
 							value={labelMode}
-							onValueChange={(value) =>
-								setLabelMode(value as PublicationLabelMode)
-							}
+							onValueChange={(value) => setLabelMode(value as PublicationLabelMode)}
 							aria-label="標籤"
 						>
 							{LABEL_OPTIONS.map(([value, label]) => (
@@ -277,9 +267,7 @@ export default function PublicationExportPanel({
 							widthMm,
 							dpi,
 							labelMode,
-							centerNodeId: isSubgraph
-								? (selectedNodeId ?? undefined)
-								: undefined,
+							centerNodeId: isSubgraph ? (selectedNodeId ?? undefined) : undefined,
 							hops: isSubgraph ? hops : undefined,
 						});
 						setOpen(false);

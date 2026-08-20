@@ -33,7 +33,7 @@ export default function SubgraphBanner({
           <Disc className="size-3.5" aria-hidden />
         </span>
         <span className="text-muted-foreground shrink-0 font-medium">
-          聚焦技術子圖：
+          關鍵字技術圖譜：
         </span>
         <Badge
           variant="secondary"
@@ -43,14 +43,14 @@ export default function SubgraphBanner({
           {centerNodeLabel}
         </Badge>
         <span className="text-[0.7rem] text-muted-foreground whitespace-nowrap">
-          （{nodeCount} 節點 · {edgeCount} 關聯）
+          （{nodeCount} 個概念 · {edgeCount} 條關聯）
         </span>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center gap-1">
-          <span className="text-[0.7rem] text-muted-foreground mr-0.5">
-            半徑:
+        <div className="flex items-center gap-1.5">
+          <span className="text-[0.7rem] text-muted-foreground mr-0.5 font-medium">
+            探索範圍:
           </span>
           <ButtonGroup>
             <Button
@@ -58,27 +58,27 @@ export default function SubgraphBanner({
               size="xs"
               onClick={() => onHopsChange(1)}
               className="h-6 px-2 text-[0.7rem] cursor-pointer"
-              title="1-hop：僅直接共現概念"
+              title="只顯示與此關鍵字直接相連的核心技術（第 1 層）"
             >
-              1-hop 直接
+              直接相關
             </Button>
             <Button
               variant={hops === 2 ? "default" : "outline"}
               size="xs"
               onClick={() => onHopsChange(2)}
               className="h-6 px-2 text-[0.7rem] cursor-pointer"
-              title="2-hop：包含延伸技術脈絡"
+              title="包含直接技術再向外延伸的應用脈絡（第 2 層，建議）"
             >
-              2-hop 延伸
+              延伸技術
             </Button>
             <Button
               variant={hops === 3 ? "default" : "outline"}
               size="xs"
               onClick={() => onHopsChange(3)}
               className="h-6 px-2 text-[0.7rem] cursor-pointer"
-              title="3-hop：廣域跨領域探索"
+              title="向外探索 3 層，發掘跨領域潛在技術關聯"
             >
-              3-hop 廣域
+              廣泛探索
             </Button>
           </ButtonGroup>
         </div>
@@ -88,10 +88,10 @@ export default function SubgraphBanner({
           size="xs"
           onClick={onExit}
           className="h-6 gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
-          title="退出子圖並返回全域圖譜"
+          title="退出局部子圖，返回完整圖譜"
         >
           <RotateCcw className="size-3" />
-          返回全圖
+          返回完整圖譜
         </Button>
       </div>
     </aside>

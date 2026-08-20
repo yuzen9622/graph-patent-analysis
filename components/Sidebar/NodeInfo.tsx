@@ -99,7 +99,7 @@ export default function NodeInfo({
 						<div className="flex items-center justify-between gap-2 p-2 rounded-md bg-primary/10 border border-primary/20 text-xs">
 							<span className="flex items-center gap-1.5 text-primary font-medium text-[0.75rem]">
 								<Disc className="size-3.5 shrink-0" />
-								目前子圖中心
+								目前圖譜中心
 							</span>
 							{onExitSubgraph && (
 								<Button
@@ -108,7 +108,7 @@ export default function NodeInfo({
 									onClick={onExitSubgraph}
 									className="h-6 text-[0.7rem] text-muted-foreground hover:text-foreground cursor-pointer px-1.5"
 								>
-									返回全圖
+									返回完整圖譜
 								</Button>
 							)}
 						</div>
@@ -120,7 +120,7 @@ export default function NodeInfo({
 							className="w-full justify-center gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/10 hover:text-primary cursor-pointer"
 						>
 							<Disc className="size-3.5" />
-							{subgraphCenterId ? "切換以此為子圖中心" : "聚焦此技術子圖"}
+							{subgraphCenterId ? "切換以此為中心探索" : "深入此關鍵字技術圖譜"}
 						</Button>
 					)}
 				</div>
