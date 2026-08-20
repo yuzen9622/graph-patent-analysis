@@ -18,6 +18,7 @@ import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
+import FloatingLegend from "./FloatingLegend";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
 } from "./PublicationExportPanel";
@@ -438,6 +439,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
     () => selectGraphView(graph, { ...sharedViewOptions, sourceFiles }),
     [graph, sharedViewOptions, sourceFiles],
   );
+  const timeWindow = useMemo(() => {
+    const years = view.nodes
+      .filter((n) => n.type === "concept" && n.first_year !== undefined)
+      .map((n) => n.first_year!);
+    if (years.length === 0) return null;
+    return [Math.min(...years), Math.max(...years)] as [number, number];
+  }, [view.nodes]);
   // 差異（聯集）檢視：節點⁃邊都是複本，不會動到各面板檢視本身。
   const difference = useMemo(
     () =>
@@ -1316,6 +1324,22 @@ export default function GraphLayout({ graph, jobId }: Props) {
                 />
               </div>
             )}
+
+            {/* 右下角顏色圖例清單（社群色／首次出現年／IPC分類／機構／來源檔／脈絡圖） */}
+            <FloatingLegend
+              mode={mode}
+              colorMode={colorMode}
+              communities={view.communities}
+              hiddenCommunities={hiddenCommunities}
+              onToggleCommunity={toggleCommunity}
+              ipcLegend={ipcLegend}
+              ipcLevel={ipcLevel}
+              yearRange={yearRange}
+              fullYearRange={graph.stats.year_range}
+              timeWindow={timeWindow}
+              allSourceFiles={allSourceFiles}
+              visibleLayers={visibleLayers}
+            />
           </div>
         </div>
 
@@ -1368,6 +1392,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
           onIpcFilterChange={setIpcFilter}
           ipcTree={ipcTree}
           hasIpcData={hasIpcData}
+          ipcLegend={ipcLegend}
           applicantAvailability={applicantDataAvailability}
           minSupport={minSupport}
           maxSupport={

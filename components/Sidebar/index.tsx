@@ -22,7 +22,7 @@ import {
   Sparkles,
   Tags,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import SearchBox from "./SearchBox";
 import NodeInfo from "./NodeInfo";
 import EdgeInfo from "./EdgeInfo";
@@ -89,6 +89,7 @@ interface Props {
   onIpcFilterChange: (keys: string[]) => void;
   ipcTree: IpcTreeNode[];
   hasIpcData: boolean;
+  ipcLegend?: Array<{ key: string; color: string; count: number }>;
   minSupport: number;
   maxSupport: number;
   visibleLayers: Set<NodeType>;
@@ -266,12 +267,14 @@ function IpcFilterSection({
   ipcFilter,
   onIpcFilterChange,
   ipcTree,
+  colorByKey,
 }: {
   ipcLevel: IpcLevel;
   onIpcLevelChange: (level: IpcLevel) => void;
   ipcFilter: string[];
   onIpcFilterChange: (keys: string[]) => void;
   ipcTree: IpcTreeNode[];
+  colorByKey?: Map<string, string>;
 }) {
   return (
     <div>
@@ -303,6 +306,7 @@ function IpcFilterSection({
         nodes={ipcTree}
         level={ipcLevel}
         selected={ipcFilter}
+        colorByKey={colorByKey}
         onToggle={(key) =>
           onIpcFilterChange(
             ipcFilter.includes(key)
@@ -432,6 +436,7 @@ export default function Sidebar({
   onIpcFilterChange,
   ipcTree,
   hasIpcData,
+  ipcLegend,
   minSupport,
   maxSupport,
   visibleLayers,
@@ -448,6 +453,11 @@ export default function Sidebar({
   showCitations,
   onCitationsChange,
 }: Props) {
+  const colorByKey = useMemo(
+    () => new Map(ipcLegend?.map((item) => [item.key, item.color]) ?? []),
+    [ipcLegend],
+  );
+
   const activeFilterCount = countActiveFilters({
     mode,
     yearRange,
@@ -570,6 +580,7 @@ export default function Sidebar({
                         ipcFilter={ipcFilter}
                         onIpcFilterChange={onIpcFilterChange}
                         ipcTree={ipcTree}
+                        colorByKey={colorByKey}
                       />
                     )}
                     <div>
@@ -762,11 +773,38 @@ export default function Sidebar({
                         </p>
                       )}
                       {colorMode === "ipc" && (
-                        <p className="text-[0.7rem] text-muted-foreground mt-1.5 leading-relaxed">
-                          顏色＝概念優勢 IPC（L{ipcLevel}
-                          ）：該概念的多數專利落在哪個分類。IPC
-                          篩選請見下方「IPC 分類篩選」。
-                        </p>
+                        <div className="mt-1.5 space-y-1.5">
+                          <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
+                            顏色＝概念優勢 IPC（L{ipcLevel}
+                            ）：該概念的多數專利落在哪個分類。
+                          </p>
+                          {ipcLegend && ipcLegend.length > 0 && (
+                            <div className="rounded-md border border-border bg-muted/40 p-2 text-xs space-y-1">
+                              <p className="text-[0.65rem] font-medium text-foreground">
+                                IPC 顏色對照（L{ipcLevel}）：
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                {ipcLegend.map((item) => (
+                                  <span
+                                    key={item.key}
+                                    className="inline-flex items-center gap-1 rounded bg-background px-1.5 py-0.5 text-[0.65rem] border border-border/60"
+                                  >
+                                    <span
+                                      className="size-2 rounded-sm shrink-0"
+                                      style={{ background: item.color }}
+                                    />
+                                    <span className="font-mono text-foreground font-medium">
+                                      {item.key}
+                                    </span>
+                                    <span className="text-muted-foreground font-mono">
+                                      ({item.count})
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div>
@@ -807,6 +845,7 @@ export default function Sidebar({
                         ipcFilter={ipcFilter}
                         onIpcFilterChange={onIpcFilterChange}
                         ipcTree={ipcTree}
+                        colorByKey={colorByKey}
                       />
                     )}
                     <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
