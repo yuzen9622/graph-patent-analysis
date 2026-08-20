@@ -20,6 +20,7 @@ import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
 import FloatingLegend from "./FloatingLegend";
 import SubgraphBanner from "./SubgraphBanner";
+import SearchBox from "./Sidebar/SearchBox";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
 } from "./PublicationExportPanel";
@@ -57,7 +58,14 @@ import {
   type CommonFilterInput,
   type CompareViewTab,
 } from "@/lib/compare-export";
-import { extractSubgraphView, type SubgraphHops } from "@/lib/graph-subgraph";
+import {
+  extractKeywordSubgraphView,
+  extractSubgraphView,
+  isNodeMatchingKeyword,
+  type KeywordSubgraphHops,
+  type SubgraphHops,
+  type SubgraphState,
+} from "@/lib/graph-subgraph";
 import type { GraphViewport } from "@/lib/graph-viewport";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
 import { subgraphNodeIds } from "@/lib/publication-export";
@@ -208,11 +216,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
     new Set(),
   );
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
-  const [subgraphState, setSubgraphState] = useState<{
-    centerNodeId: string;
-    centerNodeLabel: string;
-    hops: SubgraphHops;
-  } | null>(null);
+  const [subgraphState, setSubgraphState] = useState<SubgraphState | null>(
+    null,
+  );
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const positionSnapshotProviderRef = useRef<PositionSnapshotProvider | null>(
@@ -449,6 +455,12 @@ export default function GraphLayout({ graph, jobId }: Props) {
   );
   const focusedView = useMemo(() => {
     if (!subgraphState) return null;
+    if (subgraphState.kind === "keyword") {
+      return extractKeywordSubgraphView(view, {
+        query: subgraphState.query,
+        hops: subgraphState.hops,
+      });
+    }
     return extractSubgraphView(view, {
       centerNodeId: subgraphState.centerNodeId,
       hops: subgraphState.hops,
@@ -943,12 +955,31 @@ export default function GraphLayout({ graph, jobId }: Props) {
     });
   }, []);
 
+  const handleSearchKeyword = useCallback(
+    (query: string) => {
+      const clean = query.trim();
+      if (!clean) return;
+      const matchedCount = view.nodes.filter((n) =>
+        isNodeMatchingKeyword(n, clean),
+      ).length;
+      setSubgraphState({
+        kind: "keyword",
+        query: clean,
+        matchedCount,
+        hops: 1, // 預設 1 層 (包含直接相關技術)
+      });
+      clearInspection();
+    },
+    [view.nodes, clearInspection],
+  );
+
   const handleEnterSubgraph = useCallback((node: GraphNode) => {
-    setSubgraphState((prev) => ({
+    setSubgraphState({
+      kind: "node",
       centerNodeId: node.id,
       centerNodeLabel: node.label,
-      hops: prev?.centerNodeId === node.id ? prev.hops : 2,
-    }));
+      hops: 2,
+    });
     setFocusNodeId(node.id);
     setSelectedNode(node);
     setSelectedEdge(null);
@@ -958,8 +989,16 @@ export default function GraphLayout({ graph, jobId }: Props) {
     setSubgraphState(null);
   }, []);
 
-  const handleSubgraphHopsChange = useCallback((hops: SubgraphHops) => {
-    setSubgraphState((prev) => (prev ? { ...prev, hops } : null));
+  const handleKeywordHopsChange = useCallback((hops: KeywordSubgraphHops) => {
+    setSubgraphState((prev) =>
+      prev && prev.kind === "keyword" ? { ...prev, hops } : prev,
+    );
+  }, []);
+
+  const handleNodeHopsChange = useCallback((hops: SubgraphHops) => {
+    setSubgraphState((prev) =>
+      prev && prev.kind === "node" ? { ...prev, hops } : prev,
+    );
   }, []);
 
   /** 重設所有篩選（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
@@ -1025,7 +1064,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       <header className="shrink-0 bg-accent border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 min-h-[52px]">
         <Link
           href="/"
-          className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity"
+          className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity shrink-0"
         >
           <BarChart2 size={20} className="text-success shrink-0" aria-hidden />
           <div className="min-w-0">
@@ -1037,6 +1076,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
             </p>
           </div>
         </Link>
+
+        {/* ── 頂部全域技術關鍵字搜尋列 ── */}
+        <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-2 min-w-[14rem]">
+          <SearchBox
+            nodes={view.nodes}
+            onNodeFocus={setFocusNodeId}
+            onNodeSelect={(node) =>
+              selectInspectionNode(node, { kind: "main" })
+            }
+            onEnterSubgraph={handleEnterSubgraph}
+            onSearchKeyword={handleSearchKeyword}
+            placeholder="搜尋關鍵字（如：語音）生成主題圖譜… (/ 快捷鍵)"
+          />
+        </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <ButtonGroup
@@ -1340,9 +1393,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
               <div className="relative min-w-0 flex-1 overflow-hidden">
                 {subgraphState && (
                   <SubgraphBanner
-                    centerNodeLabel={subgraphState.centerNodeLabel}
-                    hops={subgraphState.hops}
-                    onHopsChange={handleSubgraphHopsChange}
+                    state={subgraphState}
+                    onKeywordHopsChange={handleKeywordHopsChange}
+                    onNodeHopsChange={handleNodeHopsChange}
                     onExit={handleExitSubgraph}
                     nodeCount={displayView.nodes.length}
                     edgeCount={displayView.edges.length}
@@ -1466,9 +1519,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
           onResetFilters={handleResetFilters}
           showCitations={showCitations}
           onCitationsChange={setShowCitations}
-          subgraphCenterId={subgraphState?.centerNodeId}
+          subgraphCenterId={
+            subgraphState?.kind === "node"
+              ? subgraphState.centerNodeId
+              : undefined
+          }
           onEnterSubgraph={handleEnterSubgraph}
           onExitSubgraph={handleExitSubgraph}
+          onSearchKeyword={handleSearchKeyword}
         />
       </div>
     </div>

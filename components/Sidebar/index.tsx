@@ -113,6 +113,7 @@ interface Props {
   subgraphCenterId?: string;
   onEnterSubgraph?: (node: GraphNode) => void;
   onExitSubgraph?: () => void;
+  onSearchKeyword?: (keyword: string) => void;
 }
 
 interface SectionProps {
@@ -468,6 +469,7 @@ export default function Sidebar({
   subgraphCenterId,
   onEnterSubgraph,
   onExitSubgraph,
+  onSearchKeyword,
 }: Props) {
   const colorByKey = useMemo(
     () => new Map(ipcLegend?.map((item) => [item.key, item.color]) ?? []),
@@ -501,6 +503,7 @@ export default function Sidebar({
           onNodeFocus={onNodeFocus}
           onNodeSelect={onSearchNodeSelect}
           onEnterSubgraph={onEnterSubgraph}
+          onSearchKeyword={onSearchKeyword}
         />
       </div>
 
