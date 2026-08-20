@@ -81,8 +81,7 @@ function captureNetworkImage(network: Network): string | null {
 			canvas?: { frame?: { canvas?: HTMLCanvasElement } };
 		}
 	).canvas?.frame?.canvas;
-	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0)
-		return null;
+	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0) return null;
 
 	const output = document.createElement("canvas");
 	output.width = rawCanvas.width;
@@ -348,9 +347,8 @@ function fontColorWithOpacity(color: string, opacity: number): string {
 		const green = Number.parseInt(rawHex.slice(2, 4), 16);
 		const blue = Number.parseInt(rawHex.slice(4, 6), 16);
 		const alpha =
-			(rawHex.length === 8
-				? Number.parseInt(rawHex.slice(6, 8), 16) / 255
-				: 1) * clampedOpacity;
+			(rawHex.length === 8 ? Number.parseInt(rawHex.slice(6, 8), 16) / 255 : 1) *
+			clampedOpacity;
 		return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 	}
 	const rgb = color.match(
@@ -419,9 +417,7 @@ function renderPublicationFigure(
 		? allEdges.filter((e) => subgraphIds.has(e.from) && subgraphIds.has(e.to))
 		: allEdges;
 	// §2 M2：子圖一律全標籤，忽略面板選的 labelMode。
-	const labelMode: PublicationLabelMode = isSubgraph
-		? "all"
-		: options.labelMode;
+	const labelMode: PublicationLabelMode = isSubgraph ? "all" : options.labelMode;
 
 	const nodeById = new Map(nodes.map((n) => [n.id, n]));
 	const visibleIds = nodes.map((n) => n.id).filter((id) => positions[id]);
@@ -520,10 +516,7 @@ function renderPublicationFigure(
 		const n = nodeById.get(id);
 		if (!n) continue;
 		const p = toCanvas(positions[id].x, positions[id].y);
-		const radius = Math.max(
-			1.5,
-			((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale,
-		);
+		const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
 		ctx.beginPath();
 		ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
 		ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -911,6 +904,9 @@ export default function GraphViewer({
 	);
 	const lastBuiltTopologyKeyRef = useRef<string | null>(null);
 	const positionsCacheRef = useRef(new Map<string, FrozenPositions>());
+	const nodePositionsCacheRef = useRef(
+		new Map<string, { x: number; y: number }>(),
+	);
 	const revealAnimationFrameRef = useRef<number | null>(null);
 	const finishRevealRef = useRef<() => void>(() => {});
 	const highlightRef = useRef<{ activeId: string | null }>({ activeId: null });
@@ -957,12 +953,27 @@ export default function GraphViewer({
 			if (cancelled || !containerRef.current) return;
 
 			const buildProps = propsRef.current;
-			const cachedPositions = positionsCacheRef.current.get(topologyKey);
+			let cachedPositions = positionsCacheRef.current.get(topologyKey);
 			if (cachedPositions) {
 				// Refresh insertion order so this small cache behaves as LRU.
 				positionsCacheRef.current.delete(topologyKey);
 				positionsCacheRef.current.set(topologyKey, cachedPositions);
+			} else if (nodePositionsCacheRef.current.size > 0) {
+				// 縮時或篩選切換時：若多數節點已有先前穩定的全域座標，繼承座標並避免物理引擎重算
+				const synthesized: FrozenPositions = {};
+				let matched = 0;
+				for (const node of buildProps.nodes) {
+					const pos = nodePositionsCacheRef.current.get(node.id);
+					if (pos) {
+						synthesized[node.id] = pos;
+						matched += 1;
+					}
+				}
+				if (matched > 0) {
+					cachedPositions = synthesized;
+				}
 			}
+
 			const initPos = cachedPositions
 				? new Map(
 						Object.entries(cachedPositions).map(([id, position]) => [
@@ -971,6 +982,15 @@ export default function GraphViewer({
 						]),
 					)
 				: buildInitialPositions(buildProps.nodes, buildProps.edges);
+
+			if (cachedPositions && initPos.size < buildProps.nodes.length) {
+				const fallback = buildInitialPositions(buildProps.nodes, buildProps.edges);
+				for (const node of buildProps.nodes) {
+					if (!initPos.has(node.id)) {
+						initPos.set(node.id, fallback.get(node.id) ?? { x: 0, y: 0 });
+					}
+				}
+			}
 			const godNodeMap = new Map(
 				(buildProps.analysis?.god_nodes ?? []).map((g) => [g.id, g]),
 			);
@@ -1071,12 +1091,7 @@ export default function GraphViewer({
 				});
 				latest.onCaptureReady?.((options) =>
 					networkRef.current === network
-						? renderPublicationFigure(
-								network,
-								latest.nodes,
-								latest.edges,
-								options,
-							)
+						? renderPublicationFigure(network, latest.nodes, latest.edges, options)
 						: null,
 				);
 				latest.onImageCaptureReady?.(() => captureNetworkImage(network));
@@ -1139,9 +1154,10 @@ export default function GraphViewer({
 						}),
 					);
 					const surprisingEdges = new Map(
-						(latest.analysis?.surprising_connections ?? []).map(
-							(connection) => [connection.edge_id, connection],
-						),
+						(latest.analysis?.surprising_connections ?? []).map((connection) => [
+							connection.edge_id,
+							connection,
+						]),
 					);
 					edgeDataSet.update([
 						...latest.edges.map((edge) => ({
@@ -1163,8 +1179,7 @@ export default function GraphViewer({
 
 				const reduceMotion =
 					typeof window !== "undefined" &&
-					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
-						false);
+					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 				if (reduceMotion || initial.nodes.length === 0) {
 					finishReveal();
 					return;
@@ -1175,9 +1190,7 @@ export default function GraphViewer({
 					if (completed || networkRef.current !== network) return;
 					const latest = propsRef.current;
 					const elapsed = Math.max(0, now - startedAt);
-					const latestNodes = new Map(
-						latest.nodes.map((node) => [node.id, node]),
-					);
+					const latestNodes = new Map(latest.nodes.map((node) => [node.id, node]));
 					const godNodes = new Map(
 						(latest.analysis?.god_nodes ?? []).map((godNode) => [
 							godNode.id,
@@ -1219,9 +1232,10 @@ export default function GraphViewer({
 						if (nextStep > edgeStep) {
 							edgeStep = nextStep;
 							const surprisingEdges = new Map(
-								(latest.analysis?.surprising_connections ?? []).map(
-									(connection) => [connection.edge_id, connection],
-								),
+								(latest.analysis?.surprising_connections ?? []).map((connection) => [
+									connection.edge_id,
+									connection,
+								]),
 							);
 							const edgeOpacity = edgeStep / 10;
 							edgeDataSet.update([
@@ -1259,9 +1273,16 @@ export default function GraphViewer({
 
 			const finishStabilization = (shouldCachePositions: boolean) => {
 				if (cancelled || networkRef.current !== network) return;
+				const currentPositions = network.getPositions();
+				for (const [id, position] of Object.entries(currentPositions)) {
+					nodePositionsCacheRef.current.set(id, {
+						x: position.x,
+						y: position.y,
+					});
+				}
 				if (shouldCachePositions) {
 					const positions: FrozenPositions = Object.fromEntries(
-						Object.entries(network.getPositions()).map(([id, position]) => [
+						Object.entries(currentPositions).map(([id, position]) => [
 							id,
 							{ x: position.x, y: position.y },
 						]),
@@ -1282,11 +1303,7 @@ export default function GraphViewer({
 				// 同一 session 內重建（切換 unit／分析更新）仍沿用上次視窗。
 				if (!isValidGraphViewport(viewportRef.current)) {
 					const container = containerRef.current;
-					if (
-						container &&
-						container.clientWidth > 0 &&
-						container.clientHeight > 0
-					) {
+					if (container && container.clientWidth > 0 && container.clientHeight > 0) {
 						network.fit({
 							animation: {
 								duration: 400,
@@ -1322,12 +1339,20 @@ export default function GraphViewer({
 					scale: network.getScale(),
 				};
 				if (!isValidGraphViewport(currentViewport)) return;
-				if (graphViewportsEqual(currentViewport, syncedViewportRef.current))
-					return;
+				if (graphViewportsEqual(currentViewport, syncedViewportRef.current)) return;
 				syncedViewportRef.current = currentViewport;
 				onViewportChangeRef.current?.(currentViewport);
 			};
-			network.on("dragEnd", emitViewport);
+			network.on("dragEnd", () => {
+				const currentPositions = network.getPositions();
+				for (const [id, position] of Object.entries(currentPositions)) {
+					nodePositionsCacheRef.current.set(id, {
+						x: position.x,
+						y: position.y,
+					});
+				}
+				emitViewport();
+			});
 			network.on("zoom", emitViewport);
 			// fit() 與 focus() 都用動畫改變視窗而不保證觸發 dragEnd/zoom；
 			// 動畫完成時再讀一次，A/B 才能維持同步。
@@ -1423,8 +1448,7 @@ export default function GraphViewer({
 				edgeDataSet.update(
 					latest.edges.map((edge) => ({
 						id: edge.id,
-						color: toVisEdge(edge, undefined, latest.edgeWeight, latest.unit)
-							.color,
+						color: toVisEdge(edge, undefined, latest.edgeWeight, latest.unit).color,
 					})),
 				);
 				highlightRef.current.activeId = null;
@@ -1523,12 +1547,7 @@ export default function GraphViewer({
 		);
 		nodeDataSet.update(
 			nodes.map((node) => {
-				const visual = toVisNode(
-					node,
-					unit,
-					undefined,
-					godNodeMap.get(node.id),
-				);
+				const visual = toVisNode(node, unit, undefined, godNodeMap.get(node.id));
 				return {
 					id: visual.id,
 					label: visual.label,
@@ -1596,12 +1615,7 @@ export default function GraphViewer({
 		});
 		current.onCaptureReady?.((options) =>
 			networkRef.current === network
-				? renderPublicationFigure(
-						network,
-						current.nodes,
-						current.edges,
-						options,
-					)
+				? renderPublicationFigure(network, current.nodes, current.edges, options)
 				: null,
 		);
 		current.onImageCaptureReady?.(() => captureNetworkImage(network));

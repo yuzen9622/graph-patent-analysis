@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import {
+	Play,
+	Pause,
+	RotateCcw,
+	SkipBack,
+	SkipForward,
+	Clock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 
@@ -8,6 +16,10 @@ interface Props {
 	value: [number, number];
 	fullRange: [number, number];
 	onChange: (range: [number, number]) => void;
+	isPlaying?: boolean;
+	onTogglePlay?: () => void;
+	onStep?: (direction: -1 | 1) => void;
+	onReset?: () => void;
 }
 
 function toArr(v: number | readonly number[]): number[] {
@@ -20,7 +32,15 @@ function clampYear(v: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, Math.round(v)));
 }
 
-export default function YearFilter({ value, fullRange, onChange }: Props) {
+export default function YearFilter({
+	value,
+	fullRange,
+	onChange,
+	isPlaying = false,
+	onTogglePlay,
+	onStep,
+	onReset,
+}: Props) {
 	const [local, setLocal] = useState<[number, number]>(value);
 	const [prevValue, setPrevValue] = useState<[number, number]>(value);
 	const [editing, setEditing] = useState<"min" | "max" | null>(null);
@@ -66,6 +86,28 @@ export default function YearFilter({ value, fullRange, onChange }: Props) {
 		setEditing(null);
 		setLocal(next);
 		onChange(next);
+	};
+
+	const handleStep = (direction: -1 | 1) => {
+		if (onStep) {
+			onStep(direction);
+		} else {
+			const current = local[1];
+			const nextYear = clampYear(current + direction, min, max);
+			const nextRange: [number, number] = [local[0], nextYear];
+			setLocal(nextRange);
+			onChange(nextRange);
+		}
+	};
+
+	const handleReset = () => {
+		if (onReset) {
+			onReset();
+		} else {
+			const nextRange: [number, number] = [min, min];
+			setLocal(nextRange);
+			onChange(nextRange);
+		}
 	};
 
 	if (!hasRange) {
@@ -146,6 +188,70 @@ export default function YearFilter({ value, fullRange, onChange }: Props) {
 			<div className="flex justify-between text-[0.65rem] text-muted-foreground">
 				<span>{min}</span>
 				<span>{max}</span>
+			</div>
+
+			{/* 縮時播放快捷控制列 */}
+			<div className="flex items-center justify-between gap-1 pt-1 border-t border-border/40">
+				<div className="flex items-center gap-1">
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-xs"
+						onClick={handleReset}
+						title="重設回起始年"
+						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+					>
+						<RotateCcw className="size-3" />
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-xs"
+						onClick={() => handleStep(-1)}
+						disabled={local[1] <= min}
+						title="上一年"
+						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+					>
+						<SkipBack className="size-3" />
+					</Button>
+					<Button
+						type="button"
+						variant={isPlaying ? "default" : "secondary"}
+						size="xs"
+						onClick={onTogglePlay}
+						title={isPlaying ? "暫停縮時動畫" : "播放縮時動畫"}
+						className={`h-6 px-2 text-[0.7rem] font-medium gap-1 ${
+							isPlaying ? "bg-primary text-primary-foreground animate-pulse" : ""
+						}`}
+					>
+						{isPlaying ? (
+							<>
+								<Pause className="size-3 fill-current" />
+								<span>暫停</span>
+							</>
+						) : (
+							<>
+								<Play className="size-3 fill-current" />
+								<span>縮時播放</span>
+							</>
+						)}
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-xs"
+						onClick={() => handleStep(1)}
+						disabled={local[1] >= max}
+						title="下一年"
+						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+					>
+						<SkipForward className="size-3" />
+					</Button>
+				</div>
+				<div className="flex items-center gap-1 text-[0.65rem] text-muted-foreground font-mono">
+					<Clock className="size-3 opacity-70" />
+					<span>{local[1]}</span>
+				</div>
 			</div>
 		</div>
 	);

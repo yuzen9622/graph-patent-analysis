@@ -19,6 +19,7 @@ import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
 import FloatingLegend from "./FloatingLegend";
+import FloatingTimelapse from "./FloatingTimelapse";
 import SubgraphBanner from "./SubgraphBanner";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
@@ -206,8 +207,93 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [yearRange, setYearRange] = useState<[number, number]>(
     graph.stats.year_range,
   );
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playSpeed, setPlaySpeed] = useState(1);
+  const [loopPlayback, setLoopPlayback] = useState(false);
+
+  const fullMinYear = graph.stats.year_range[0];
+  const fullMaxYear = graph.stats.year_range[1];
+
+  const handleTogglePlay = useCallback(() => {
+    setIsPlaying((prev) => {
+      if (!prev) {
+        if (yearRange[1] >= fullMaxYear) {
+          setYearRange([fullMinYear, fullMinYear]);
+        }
+        return true;
+      }
+      return false;
+    });
+  }, [yearRange, fullMinYear, fullMaxYear]);
+
+  const handleStepYear = useCallback(
+    (direction: -1 | 1) => {
+      setIsPlaying(false);
+      setYearRange(([start, end]) => {
+        const nextEnd = Math.min(
+          fullMaxYear,
+          Math.max(fullMinYear, end + direction),
+        );
+        return [start, nextEnd];
+      });
+    },
+    [fullMinYear, fullMaxYear],
+  );
+
+  const handleResetYear = useCallback(() => {
+    setIsPlaying(false);
+    setYearRange([fullMinYear, fullMinYear]);
+  }, [fullMinYear]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const intervalMs = Math.round(800 / playSpeed);
+    const timer = setInterval(() => {
+      setYearRange(([start, end]) => {
+        if (end < fullMaxYear) {
+          return [start, end + 1];
+        }
+        if (loopPlayback) {
+          return [start, fullMinYear];
+        }
+        setIsPlaying(false);
+        return [start, end];
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, playSpeed, fullMinYear, fullMaxYear, loopPlayback]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          (active as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        handleTogglePlay();
+      } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        handleStepYear(-1);
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        handleStepYear(1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleTogglePlay, handleStepYear]);
+
   const debouncedMinSupport = useDebouncedValue(minSupport, 200);
-  const debouncedYearRange = useDebouncedValue(yearRange, 200);
+  const debouncedYearRange = useDebouncedValue(yearRange, isPlaying ? 0 : 200);
   const [visibleLayers, setVisibleLayers] = useState<Set<NodeType>>(
     new Set<NodeType>(["applicant", "patent", "concept"]),
   );
@@ -466,6 +552,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
     });
   }, [view, subgraphState]);
   const displayView = focusedView ?? view;
+  const newNodesCount = useMemo(() => {
+    const currentYear = yearRange[1];
+    return displayView.nodes.filter((n) => {
+      if (n.type === "concept" && n.first_year === currentYear) return true;
+      if (n.type === "patent" && n.year === currentYear) return true;
+      return false;
+    }).length;
+  }, [displayView.nodes, yearRange]);
   const timeWindow = useMemo(() => {
     const years = displayView.nodes
       .filter((n) => n.type === "concept" && n.first_year !== undefined)
@@ -1002,6 +1096,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   /** 重設所有篩選（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
   const handleResetFilters = useCallback(() => {
+    setIsPlaying(false);
     clearInspection();
     setSubgraphState(null);
     setYearRange(graph.stats.year_range);
@@ -1026,6 +1121,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   useEffect(() => {
     if (prevJobIdRef.current === jobId) return;
     prevJobIdRef.current = jobId;
+    setIsPlaying(false);
     clearInspection();
     setSubgraphState(null);
     setFocusNodeId(undefined);
@@ -1412,6 +1508,25 @@ export default function GraphLayout({ graph, jobId }: Props) {
               </div>
             )}
 
+            {/* 懸浮縮時動畫播放器 */}
+            <FloatingTimelapse
+              yearRange={yearRange}
+              fullYearRange={graph.stats.year_range}
+              onYearChange={setYearRange}
+              isPlaying={isPlaying}
+              onTogglePlay={handleTogglePlay}
+              speed={playSpeed}
+              onSpeedChange={setPlaySpeed}
+              loop={loopPlayback}
+              onToggleLoop={() => setLoopPlayback((prev) => !prev)}
+              onReset={handleResetYear}
+              onStep={handleStepYear}
+              currentNodesCount={displayView.nodes.length}
+              totalNodesCount={graph.nodes.length}
+              newNodesCount={newNodesCount}
+              currentEdgesCount={displayView.edges.length}
+            />
+
             {/* 右下角顏色圖例清單（社群色／首次出現年／IPC分類／機構／來源檔／脈絡圖） */}
             <FloatingLegend
               mode={mode}
@@ -1504,6 +1619,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
           onResetFilters={handleResetFilters}
           showCitations={showCitations}
           onCitationsChange={setShowCitations}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onStepYear={handleStepYear}
+          onResetYear={handleResetYear}
           subgraphCenterId={
             subgraphState?.kind === "node"
               ? subgraphState.centerNodeId

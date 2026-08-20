@@ -109,6 +109,11 @@ interface Props {
   /** P6 獨立的引用虛線證據圖層（僅概念模式）。 */
   showCitations: boolean;
   onCitationsChange: (value: boolean) => void;
+  /** 縮時動畫播放狀態與回呼 */
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+  onStepYear?: (direction: -1 | 1) => void;
+  onResetYear?: () => void;
   /** 關鍵字子圖模式狀態與回呼 */
   subgraphCenterId?: string;
   onEnterSubgraph?: (node: GraphNode) => void;
@@ -466,6 +471,10 @@ export default function Sidebar({
   onResetFilters,
   showCitations,
   onCitationsChange,
+  isPlaying,
+  onTogglePlay,
+  onStepYear,
+  onResetYear,
   subgraphCenterId,
   onEnterSubgraph,
   onExitSubgraph,
@@ -577,6 +586,10 @@ export default function Sidebar({
                         value={yearRange}
                         fullRange={fullYearRange}
                         onChange={onYearChange}
+                        isPlaying={isPlaying}
+                        onTogglePlay={onTogglePlay}
+                        onStep={onStepYear}
+                        onReset={onResetYear}
                       />
                     </div>
                     <div>
@@ -673,6 +686,10 @@ export default function Sidebar({
                         value={yearRange}
                         fullRange={fullYearRange}
                         onChange={onYearChange}
+                        isPlaying={isPlaying}
+                        onTogglePlay={onTogglePlay}
+                        onStep={onStepYear}
+                        onReset={onResetYear}
                       />
                     </div>
                     <div>
