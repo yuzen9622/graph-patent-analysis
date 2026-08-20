@@ -767,7 +767,7 @@ export default function Sidebar({
                       )}
                       {colorMode === "source" && (
                         <p className="text-[0.7rem] text-muted-foreground mt-1.5 leading-relaxed">
-                          顏色＝該概念在哪幾個來源檔出現；單獨一文用該檔本色，跨多檔概念用灰紫共享色。
+                          顏色＝該概念在哪幾個來源檔出現；單獨一文用該檔本色，跨多檔概念用紅色共享色。
                           <br />
                           只著色不篩選——想只看某檔再往下「來源檔篩選」。
                         </p>
