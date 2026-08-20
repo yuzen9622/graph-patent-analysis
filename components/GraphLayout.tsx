@@ -19,6 +19,7 @@ import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
 import FloatingLegend from "./FloatingLegend";
+import SubgraphBanner from "./SubgraphBanner";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
 } from "./PublicationExportPanel";
@@ -56,6 +57,7 @@ import {
   type CommonFilterInput,
   type CompareViewTab,
 } from "@/lib/compare-export";
+import { extractSubgraphView, type SubgraphHops } from "@/lib/graph-subgraph";
 import type { GraphViewport } from "@/lib/graph-viewport";
 import type { PositionSnapshotProvider } from "@/lib/export-positions";
 import { subgraphNodeIds } from "@/lib/publication-export";
@@ -206,6 +208,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
     new Set(),
   );
   const [focusNodeId, setFocusNodeId] = useState<string | undefined>();
+  const [subgraphState, setSubgraphState] = useState<{
+    centerNodeId: string;
+    centerNodeLabel: string;
+    hops: SubgraphHops;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const positionSnapshotProviderRef = useRef<PositionSnapshotProvider | null>(
@@ -284,9 +291,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
           ...sharedViewOptions,
           panel: index,
           sourceFiles: scope,
+          subgraph: index === 0 && subgraphState ? subgraphState : undefined,
         }),
       ),
-    [sharedViewOptions, panelScopes],
+    [sharedViewOptions, panelScopes, subgraphState],
   );
   const layoutSnapshotKeyDiff = useMemo(
     () =>
@@ -439,13 +447,21 @@ export default function GraphLayout({ graph, jobId }: Props) {
     () => selectGraphView(graph, { ...sharedViewOptions, sourceFiles }),
     [graph, sharedViewOptions, sourceFiles],
   );
+  const focusedView = useMemo(() => {
+    if (!subgraphState) return null;
+    return extractSubgraphView(view, {
+      centerNodeId: subgraphState.centerNodeId,
+      hops: subgraphState.hops,
+    });
+  }, [view, subgraphState]);
+  const displayView = focusedView ?? view;
   const timeWindow = useMemo(() => {
-    const years = view.nodes
+    const years = displayView.nodes
       .filter((n) => n.type === "concept" && n.first_year !== undefined)
       .map((n) => n.first_year!);
     if (years.length === 0) return null;
     return [Math.min(...years), Math.max(...years)] as [number, number];
-  }, [view.nodes]);
+  }, [displayView.nodes]);
   // 差異（聯集）檢視：節點⁃邊都是複本，不會動到各面板檢視本身。
   const difference = useMemo(
     () =>
@@ -531,6 +547,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   const openCompareSetup = useCallback(() => {
     clearInspection();
+    setSubgraphState(null);
     const suggestion = suggestPanelScopes(allSourceFiles, [
       sourceFiles,
       sourceFilesRight,
@@ -656,7 +673,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   }, []);
 
   const inspectionView = resolveInspectionView(inspectionSource, {
-    main: view,
+    main: displayView,
     panels: panelViews,
     difference: difference?.view,
   });
@@ -800,6 +817,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     (nextMode: GraphMode) => {
       setMode(nextMode);
       clearInspection();
+      setSubgraphState(null);
     },
     [clearInspection],
   );
@@ -925,9 +943,29 @@ export default function GraphLayout({ graph, jobId }: Props) {
     });
   }, []);
 
+  const handleEnterSubgraph = useCallback((node: GraphNode) => {
+    setSubgraphState((prev) => ({
+      centerNodeId: node.id,
+      centerNodeLabel: node.label,
+      hops: prev?.centerNodeId === node.id ? prev.hops : 2,
+    }));
+    setFocusNodeId(node.id);
+    setSelectedNode(node);
+    setSelectedEdge(null);
+  }, []);
+
+  const handleExitSubgraph = useCallback(() => {
+    setSubgraphState(null);
+  }, []);
+
+  const handleSubgraphHopsChange = useCallback((hops: SubgraphHops) => {
+    setSubgraphState((prev) => (prev ? { ...prev, hops } : null));
+  }, []);
+
   /** 重設所有篩選（年份／來源檔／IPC／門檻／圖層／社群／引用線）。 */
   const handleResetFilters = useCallback(() => {
     clearInspection();
+    setSubgraphState(null);
     setYearRange(graph.stats.year_range);
     setMinSupport(1);
     setIpcFilter([]);
@@ -951,6 +989,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     if (prevJobIdRef.current === jobId) return;
     prevJobIdRef.current = jobId;
     clearInspection();
+    setSubgraphState(null);
     setFocusNodeId(undefined);
     setYearRange(graph.stats.year_range);
     setMinSupport(1);
@@ -1299,10 +1338,20 @@ export default function GraphLayout({ graph, jobId }: Props) {
               </div>
             ) : (
               <div className="relative min-w-0 flex-1 overflow-hidden">
+                {subgraphState && (
+                  <SubgraphBanner
+                    centerNodeLabel={subgraphState.centerNodeLabel}
+                    hops={subgraphState.hops}
+                    onHopsChange={handleSubgraphHopsChange}
+                    onExit={handleExitSubgraph}
+                    nodeCount={displayView.nodes.length}
+                    edgeCount={displayView.edges.length}
+                  />
+                )}
                 <GraphViewer
-                  nodes={view.nodes}
-                  edges={view.edges}
-                  citationEdges={view.citationEdges}
+                  nodes={displayView.nodes}
+                  edges={displayView.edges}
+                  citationEdges={displayView.citationEdges}
                   analysis={mode === "concept" ? graph.analysis : undefined}
                   onNodeSelect={(node) =>
                     selectInspectionNode(node, { kind: "main" })
@@ -1417,6 +1466,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
           onResetFilters={handleResetFilters}
           showCitations={showCitations}
           onCitationsChange={setShowCitations}
+          subgraphCenterId={subgraphState?.centerNodeId}
+          onEnterSubgraph={handleEnterSubgraph}
+          onExitSubgraph={handleExitSubgraph}
         />
       </div>
     </div>

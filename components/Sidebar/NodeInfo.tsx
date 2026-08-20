@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { X, ChevronDown, ChevronUp, ArrowRight, Disc } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import StatCard from "./StatCard";
@@ -15,6 +15,9 @@ interface Props {
 	onClose: () => void;
 	onNodeSelect: (node: GraphNode) => void;
 	onNodeFocus: (nodeId: string) => void;
+	subgraphCenterId?: string;
+	onEnterSubgraph?: (node: GraphNode) => void;
+	onExitSubgraph?: () => void;
 }
 
 const TYPE_TOKENS = {
@@ -39,6 +42,9 @@ export default function NodeInfo({
 	onClose,
 	onNodeSelect,
 	onNodeFocus,
+	subgraphCenterId,
+	onEnterSubgraph,
+	onExitSubgraph,
 }: Props) {
 	const [abstractExpanded, setAbstractExpanded] = useState(false);
 
@@ -82,25 +88,51 @@ export default function NodeInfo({
 				</Button>
 			</div>
 
-			<h3 className="font-serif text-sm font-semibold text-foreground leading-snug mb-3 break-words">
+			<h3 className="font-serif text-sm font-semibold text-foreground leading-snug mb-2.5 break-words">
 				{node.label}
 			</h3>
+
+			{/* ── 子圖聚焦操作 ── */}
+			{onEnterSubgraph && (
+				<div className="mb-3">
+					{subgraphCenterId === node.id ? (
+						<div className="flex items-center justify-between gap-2 p-2 rounded-md bg-primary/10 border border-primary/20 text-xs">
+							<span className="flex items-center gap-1.5 text-primary font-medium text-[0.75rem]">
+								<Disc className="size-3.5 shrink-0" />
+								目前子圖中心
+							</span>
+							{onExitSubgraph && (
+								<Button
+									variant="ghost"
+									size="xs"
+									onClick={onExitSubgraph}
+									className="h-6 text-[0.7rem] text-muted-foreground hover:text-foreground cursor-pointer px-1.5"
+								>
+									返回全圖
+								</Button>
+							)}
+						</div>
+					) : (
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => onEnterSubgraph(node)}
+							className="w-full justify-center gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/10 hover:text-primary cursor-pointer"
+						>
+							<Disc className="size-3.5" />
+							{subgraphCenterId ? "切換以此為子圖中心" : "聚焦此技術子圖"}
+						</Button>
+					)}
+				</div>
+			)}
 
 			{/* ── 指標卡（最常看的數字放最前） ── */}
 			<div className="grid grid-cols-2 gap-1.5 mb-3">
 				{node.type === "applicant" && (
 					<>
-						<StatCard
-							label="專利件數"
-							value={`${node.patent_count ?? 0}`}
-							sub="件"
-						/>
+						<StatCard label="專利件數" value={`${node.patent_count ?? 0}`} sub="件" />
 						{node.concept_count !== undefined && (
-							<StatCard
-								label="涉足概念"
-								value={`${node.concept_count}`}
-								sub="個"
-							/>
+							<StatCard label="涉足概念" value={`${node.concept_count}`} sub="個" />
 						)}
 					</>
 				)}
@@ -110,11 +142,7 @@ export default function NodeInfo({
 							<StatCard label="申請年" value={`${node.year}`} sub="年" />
 						)}
 						{node.cited_by_count !== undefined && (
-							<StatCard
-								label="被引用"
-								value={`${node.cited_by_count}`}
-								sub="次"
-							/>
+							<StatCard label="被引用" value={`${node.cited_by_count}`} sub="次" />
 						)}
 						{node.ipc_primary && (
 							<StatCard label="IPC 主分類" value={node.ipc_primary} />
@@ -126,24 +154,12 @@ export default function NodeInfo({
 				)}
 				{node.type === "concept" && (
 					<>
-						<StatCard
-							label="專利涵蓋"
-							value={`${node.frequency ?? 0}`}
-							sub="篇"
-						/>
+						<StatCard label="專利涵蓋" value={`${node.frequency ?? 0}`} sub="篇" />
 						{node.applicant_count !== undefined && (
-							<StatCard
-								label="機構涵蓋"
-								value={`${node.applicant_count}`}
-								sub="家"
-							/>
+							<StatCard label="機構涵蓋" value={`${node.applicant_count}`} sub="家" />
 						)}
 						{node.first_year !== undefined && (
-							<StatCard
-								label="首次出現"
-								value={`${node.first_year}`}
-								sub="年"
-							/>
+							<StatCard label="首次出現" value={`${node.first_year}`} sub="年" />
 						)}
 						{node.median_year !== undefined && (
 							<StatCard label="中位年" value={`${node.median_year}`} sub="年" />
@@ -173,9 +189,7 @@ export default function NodeInfo({
 				{node.type === "patent" && (
 					<>
 						{node.applicant && <Row label="申請人" value={node.applicant} />}
-						{node.filing_date && (
-							<Row label="申請日" value={node.filing_date} />
-						)}
+						{node.filing_date && <Row label="申請日" value={node.filing_date} />}
 						{node.application_number && (
 							<Row label="申請號" value={node.application_number} />
 						)}
@@ -275,11 +289,7 @@ export default function NodeInfo({
 			{adjacentNodes.length > 0 && (
 				<div className="mt-4">
 					<p className="text-xs text-foreground font-medium mb-2 flex items-center gap-1">
-						<ArrowRight
-							size={11}
-							className="text-muted-foreground"
-							aria-hidden
-						/>
+						<ArrowRight size={11} className="text-muted-foreground" aria-hidden />
 						相鄰節點
 					</p>
 					<div className="flex flex-wrap gap-1.5">

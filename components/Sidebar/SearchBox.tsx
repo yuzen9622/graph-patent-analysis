@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Search, X } from "lucide-react";
+import { Disc, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GraphNode } from "@/types/graph";
@@ -10,9 +10,15 @@ interface Props {
 	nodes: GraphNode[];
 	onNodeFocus: (nodeId: string) => void;
 	onNodeSelect: (node: GraphNode) => void;
+	onEnterSubgraph?: (node: GraphNode) => void;
 }
 
-export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
+export default function SearchBox({
+	nodes,
+	onNodeFocus,
+	onNodeSelect,
+	onEnterSubgraph,
+}: Props) {
 	const [query, setQuery] = useState("");
 	const [open, setOpen] = useState(false);
 	const wrapperRef = useRef<HTMLDivElement>(null);
@@ -59,10 +65,7 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
 
 	useEffect(() => {
 		function onClickOutside(e: MouseEvent) {
-			if (
-				wrapperRef.current &&
-				!wrapperRef.current.contains(e.target as Node)
-			) {
+			if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
 				setOpen(false);
 			}
 		}
@@ -124,19 +127,34 @@ export default function SearchBox({ nodes, onNodeFocus, onNodeSelect }: Props) {
 							role="option"
 							aria-selected={false}
 							onClick={() => handleSelect(node)}
-							className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted transition-colors"
+							className="group flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted transition-colors"
 						>
 							<span
 								aria-hidden
 								className="w-2 h-2 rounded-full shrink-0"
 								style={{ background: node.color }}
 							/>
-							<span className="text-foreground flex-1 truncate">
-								{node.label}
-							</span>
-							<span className="text-muted-foreground shrink-0">
+							<span className="text-foreground flex-1 truncate">{node.label}</span>
+							<span className="text-muted-foreground shrink-0 text-[0.7rem]">
 								{TYPE_LABELS[node.type]}
 							</span>
+							{onEnterSubgraph && (
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									className="size-5 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+									title="以此節點為中心生成細緻子圖"
+									aria-label={`以此節點 ${node.label} 為中心生成細緻子圖`}
+									onClick={(e) => {
+										e.stopPropagation();
+										onEnterSubgraph(node);
+										setQuery(node.label);
+										setOpen(false);
+									}}
+								>
+									<Disc className="size-3 text-primary" />
+								</Button>
+							)}
 						</li>
 					))}
 				</ul>

@@ -109,6 +109,10 @@ interface Props {
   /** P6 獨立的引用虛線證據圖層（僅概念模式）。 */
   showCitations: boolean;
   onCitationsChange: (value: boolean) => void;
+  /** 關鍵字子圖模式狀態與回呼 */
+  subgraphCenterId?: string;
+  onEnterSubgraph?: (node: GraphNode) => void;
+  onExitSubgraph?: () => void;
 }
 
 interface SectionProps {
@@ -181,6 +185,9 @@ interface InspectorProps {
   onClose: () => void;
   onNodeSelect: (node: GraphNode) => void;
   onNodeFocus: (nodeId: string) => void;
+  subgraphCenterId?: string;
+  onEnterSubgraph?: (node: GraphNode) => void;
+  onExitSubgraph?: () => void;
 }
 
 /** 底部獨立 inspector：新選取時由呼叫端 key remount，預設展開且內容獨立捲動。 */
@@ -195,6 +202,9 @@ function Inspector({
   onClose,
   onNodeSelect,
   onNodeFocus,
+  subgraphCenterId,
+  onEnterSubgraph,
+  onExitSubgraph,
 }: InspectorProps) {
   const [open, setOpen] = useState(true);
   const title = selectedEdge ? "關係資訊" : "節點資訊";
@@ -249,6 +259,9 @@ function Inspector({
                     onClose={onClose}
                     onNodeSelect={onNodeSelect}
                     onNodeFocus={onNodeFocus}
+                    subgraphCenterId={subgraphCenterId}
+                    onEnterSubgraph={onEnterSubgraph}
+                    onExitSubgraph={onExitSubgraph}
                   />
                 ) : null}
               </div>
@@ -452,6 +465,9 @@ export default function Sidebar({
   onResetFilters,
   showCitations,
   onCitationsChange,
+  subgraphCenterId,
+  onEnterSubgraph,
+  onExitSubgraph,
 }: Props) {
   const colorByKey = useMemo(
     () => new Map(ipcLegend?.map((item) => [item.key, item.color]) ?? []),
@@ -484,6 +500,7 @@ export default function Sidebar({
           nodes={nodes}
           onNodeFocus={onNodeFocus}
           onNodeSelect={onSearchNodeSelect}
+          onEnterSubgraph={onEnterSubgraph}
         />
       </div>
 
@@ -925,6 +942,9 @@ export default function Sidebar({
           onClose={onInspectorClose}
           onNodeSelect={onInspectorNodeSelect}
           onNodeFocus={onNodeFocus}
+          subgraphCenterId={subgraphCenterId}
+          onEnterSubgraph={onEnterSubgraph}
+          onExitSubgraph={onExitSubgraph}
         />
       ) : null}
     </aside>
