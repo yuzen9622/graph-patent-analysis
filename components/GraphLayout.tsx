@@ -20,7 +20,6 @@ import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
 import FloatingLegend from "./FloatingLegend";
 import SubgraphBanner from "./SubgraphBanner";
-import SearchBox from "./Sidebar/SearchBox";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
 } from "./PublicationExportPanel";
@@ -1064,7 +1063,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       <header className="shrink-0 bg-accent border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 min-h-[52px]">
         <Link
           href="/"
-          className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity shrink-0"
+          className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity"
         >
           <BarChart2 size={20} className="text-success shrink-0" aria-hidden />
           <div className="min-w-0">
@@ -1076,20 +1075,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
             </p>
           </div>
         </Link>
-
-        {/* ── 頂部全域技術關鍵字搜尋列 ── */}
-        <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-2 min-w-[14rem]">
-          <SearchBox
-            nodes={view.nodes}
-            onNodeFocus={setFocusNodeId}
-            onNodeSelect={(node) =>
-              selectInspectionNode(node, { kind: "main" })
-            }
-            onEnterSubgraph={handleEnterSubgraph}
-            onSearchKeyword={handleSearchKeyword}
-            placeholder="搜尋關鍵字（如：語音）生成主題圖譜… (/ 快捷鍵)"
-          />
-        </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <ButtonGroup
