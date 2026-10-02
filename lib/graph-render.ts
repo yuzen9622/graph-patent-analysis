@@ -75,3 +75,70 @@ export function revealSchedule(
 	const maxStartMs = Math.max(0, ...startMs.values());
 	return { startMs, totalMs: maxStartMs + fadeMs };
 }
+
+export interface InheritedPositions {
+	/** 有舊座標或已依鄰居推得座標的節點。 */
+	readonly positions: Map<string, { x: number; y: number }>;
+	/** 原本就有舊座標的節點數。 */
+	readonly matched: number;
+	/** 無舊座標、也無已定位鄰居可參考的節點。 */
+	readonly unplaced: string[];
+}
+
+/**
+ * 沿用前一次穩定版面的節點座標；新節點放在已定位鄰居的平均位置附近，
+ * 讓它們從鄰居旁開始而不是被丟到遠處，之後仍需交給物理引擎收斂。
+ */
+export function inheritPositions(
+	nodeIds: string[],
+	edges: { from: string; to: string }[],
+	previous: ReadonlyMap<string, { x: number; y: number }>,
+	jitter: (id: string, axis: "x" | "y") => number = () => 0,
+): InheritedPositions {
+	const positions = new Map<string, { x: number; y: number }>();
+	let matched = 0;
+	for (const id of nodeIds) {
+		const pos = previous.get(id);
+		if (pos) {
+			positions.set(id, { x: pos.x, y: pos.y });
+			matched += 1;
+		}
+	}
+
+	const adjacency = new Map<string, string[]>();
+	for (const edge of edges) {
+		if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+		if (!adjacency.has(edge.to)) adjacency.set(edge.to, []);
+		adjacency.get(edge.from)!.push(edge.to);
+		adjacency.get(edge.to)!.push(edge.from);
+	}
+
+	let pending = nodeIds.filter((id) => !positions.has(id));
+	while (pending.length > 0) {
+		const placedThisPass = new Map<string, { x: number; y: number }>();
+		for (const id of pending) {
+			let sumX = 0;
+			let sumY = 0;
+			let count = 0;
+			for (const neighbor of adjacency.get(id) ?? []) {
+				const pos = positions.get(neighbor);
+				if (pos) {
+					sumX += pos.x;
+					sumY += pos.y;
+					count += 1;
+				}
+			}
+			if (count > 0) {
+				placedThisPass.set(id, {
+					x: sumX / count + jitter(id, "x"),
+					y: sumY / count + jitter(id, "y"),
+				});
+			}
+		}
+		if (placedThisPass.size === 0) break;
+		for (const [id, pos] of placedThisPass) positions.set(id, pos);
+		pending = pending.filter((id) => !placedThisPass.has(id));
+	}
+
+	return { positions, matched, unplaced: pending };
+}

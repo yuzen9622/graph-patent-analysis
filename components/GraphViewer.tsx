@@ -37,7 +37,11 @@ import {
 	type PublicationLabelMode,
 	type PublicationWidthMm,
 } from "@/lib/publication-export";
-import { fingerprintTopology, revealSchedule } from "@/lib/graph-render";
+import {
+	fingerprintTopology,
+	inheritPositions,
+	revealSchedule,
+} from "@/lib/graph-render";
 
 /** PRD-Q8 出版整體圖（M1）／局部子圖（M2）共用的匯出選項。 */
 export interface PublicationFigureOptions {
@@ -585,6 +589,9 @@ function renderPublicationFigure(
 	};
 }
 
+// 沿用舊座標時新節點的收斂迭代數：夠讓新節點靠向鄰居，又不拖慢縮時播放。
+const INHERITED_SETTLE_ITERATIONS = 60;
+
 function stableUnit(value: string): number {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < value.length; i += 1) {
@@ -953,26 +960,37 @@ export default function GraphViewer({
 			if (cancelled || !containerRef.current) return;
 
 			const buildProps = propsRef.current;
-			let cachedPositions = positionsCacheRef.current.get(topologyKey);
+			const cachedPositions = positionsCacheRef.current.get(topologyKey);
+			// 縮時或篩選切換時沿用先前穩定的節點座標，讓舊節點不跳位；
+			// 但只要有新節點，就得讓物理引擎短暫收斂，否則新節點會卡在初始位置。
+			let inherited: Map<string, { x: number; y: number }> | null = null;
+			let needsSettle = false;
 			if (cachedPositions) {
 				// Refresh insertion order so this small cache behaves as LRU.
 				positionsCacheRef.current.delete(topologyKey);
 				positionsCacheRef.current.set(topologyKey, cachedPositions);
 			} else if (nodePositionsCacheRef.current.size > 0) {
-				// 縮時或篩選切換時：若多數節點已有先前穩定的全域座標，繼承座標並避免物理引擎重算
-				const synthesized: FrozenPositions = {};
-				let matched = 0;
-				for (const node of buildProps.nodes) {
-					const pos = nodePositionsCacheRef.current.get(node.id);
-					if (pos) {
-						synthesized[node.id] = pos;
-						matched += 1;
+				const result = inheritPositions(
+					buildProps.nodes.map((node) => node.id),
+					buildProps.edges,
+					nodePositionsCacheRef.current,
+					(id, axis) => (stableUnit(`${id}:${axis}`) - 0.5) * 60,
+				);
+				if (result.matched > 0) {
+					inherited = result.positions;
+					needsSettle = result.matched < buildProps.nodes.length;
+					if (result.unplaced.length > 0) {
+						const fallback = buildInitialPositions(
+							buildProps.nodes,
+							buildProps.edges,
+						);
+						for (const id of result.unplaced) {
+							inherited.set(id, fallback.get(id) ?? { x: 0, y: 0 });
+						}
 					}
 				}
-				if (matched > 0) {
-					cachedPositions = synthesized;
-				}
 			}
+			const skipPhysics = !!cachedPositions || (!!inherited && !needsSettle);
 
 			const initPos = cachedPositions
 				? new Map(
@@ -981,16 +999,8 @@ export default function GraphViewer({
 							{ x: position.x, y: position.y },
 						]),
 					)
-				: buildInitialPositions(buildProps.nodes, buildProps.edges);
-
-			if (cachedPositions && initPos.size < buildProps.nodes.length) {
-				const fallback = buildInitialPositions(buildProps.nodes, buildProps.edges);
-				for (const node of buildProps.nodes) {
-					if (!initPos.has(node.id)) {
-						initPos.set(node.id, fallback.get(node.id) ?? { x: 0, y: 0 });
-					}
-				}
-			}
+				: (inherited ??
+					buildInitialPositions(buildProps.nodes, buildProps.edges));
 			const godNodeMap = new Map(
 				(buildProps.analysis?.god_nodes ?? []).map((g) => [g.id, g]),
 			);
@@ -1049,12 +1059,24 @@ export default function GraphViewer({
 			}
 
 			const baseNetworkOptions = buildOptions(buildProps.nodes.length);
-			const networkOptions = cachedPositions
+			const networkOptions = skipPhysics
 				? {
 						...baseNetworkOptions,
 						physics: { ...baseNetworkOptions.physics, enabled: false },
 					}
-				: baseNetworkOptions;
+				: inherited
+					? {
+							...baseNetworkOptions,
+							physics: {
+								...baseNetworkOptions.physics,
+								// 舊節點已接近平衡，只需少量迭代讓新節點靠向鄰居。
+								stabilization: {
+									...baseNetworkOptions.physics.stabilization,
+									iterations: INHERITED_SETTLE_ITERATIONS,
+								},
+							},
+						}
+					: baseNetworkOptions;
 			const network = new Network(
 				containerRef.current,
 				{ nodes: nodeDataSet, edges: edgeDataSet },
@@ -1315,7 +1337,7 @@ export default function GraphViewer({
 
 				setStabilized(true);
 				setStabProgress(100);
-				startReveal(!shouldCachePositions);
+				startReveal(!shouldCachePositions || !!inherited);
 			};
 
 			network.on("stabilizationProgress", (params) => {
@@ -1323,7 +1345,7 @@ export default function GraphViewer({
 					setStabProgress(Math.round((params.iterations / params.total) * 100));
 			});
 
-			if (cachedPositions) {
+			if (skipPhysics) {
 				finishStabilization(false);
 			} else {
 				network.once("stabilizationIterationsDone", () => {

@@ -38,6 +38,7 @@ vi.mock("react", () => ({
 
 import {
 	fingerprintTopology,
+	inheritPositions,
 	revealSchedule,
 } from "@/lib/graph-render";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -181,5 +182,52 @@ describe("useDebouncedValue", () => {
 		vi.advanceTimersByTime(1);
 		expect(debounceHarness.setValue).toHaveBeenCalledTimes(1);
 		expect(debounceHarness.setValue).toHaveBeenLastCalledWith(10);
+	});
+});
+
+describe("inheritPositions", () => {
+	const previous = new Map([
+		["a", { x: 0, y: 0 }],
+		["b", { x: 100, y: 0 }],
+	]);
+
+	it("keeps previous coordinates for known nodes", () => {
+		const result = inheritPositions(["a", "b"], [], previous);
+		expect(result.matched).toBe(2);
+		expect(result.positions.get("b")).toEqual({ x: 100, y: 0 });
+		expect(result.unplaced).toEqual([]);
+	});
+
+	it("places new nodes at the mean of their positioned neighbours", () => {
+		const result = inheritPositions(
+			["a", "b", "c"],
+			[
+				{ from: "c", to: "a" },
+				{ from: "c", to: "b" },
+			],
+			previous,
+		);
+		expect(result.matched).toBe(2);
+		expect(result.positions.get("c")).toEqual({ x: 50, y: 0 });
+	});
+
+	it("chains placement through newly placed neighbours", () => {
+		const result = inheritPositions(
+			["a", "c", "d"],
+			[
+				{ from: "a", to: "c" },
+				{ from: "c", to: "d" },
+			],
+			previous,
+			(id, axis) => (axis === "x" ? 10 : 0),
+		);
+		expect(result.positions.get("c")).toEqual({ x: 10, y: 0 });
+		expect(result.positions.get("d")).toEqual({ x: 20, y: 0 });
+	});
+
+	it("reports nodes with no positioned neighbours as unplaced", () => {
+		const result = inheritPositions(["a", "e"], [], previous);
+		expect(result.unplaced).toEqual(["e"]);
+		expect(result.positions.has("e")).toBe(false);
 	});
 });
