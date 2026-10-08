@@ -18,8 +18,6 @@ import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
-import FloatingLegend from "./FloatingLegend";
-import FloatingTimelapse from "./FloatingTimelapse";
 import SubgraphBanner from "./SubgraphBanner";
 import PublicationExportPanel, {
   type PublicationGenerateOptions,
@@ -208,8 +206,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
     graph.stats.year_range,
   );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(1);
-  const [loopPlayback, setLoopPlayback] = useState(false);
 
   const fullMinYear = graph.stats.year_range[0];
   const fullMaxYear = graph.stats.year_range[1];
@@ -247,22 +243,18 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   useEffect(() => {
     if (!isPlaying) return;
-    const intervalMs = Math.round(800 / playSpeed);
     const timer = setInterval(() => {
       setYearRange(([start, end]) => {
         if (end < fullMaxYear) {
           return [start, end + 1];
         }
-        if (loopPlayback) {
-          return [start, fullMinYear];
-        }
         setIsPlaying(false);
         return [start, end];
       });
-    }, intervalMs);
+    }, 800);
 
     return () => clearInterval(timer);
-  }, [isPlaying, playSpeed, fullMinYear, fullMaxYear, loopPlayback]);
+  }, [isPlaying, fullMaxYear]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -552,21 +544,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
     });
   }, [view, subgraphState]);
   const displayView = focusedView ?? view;
-  const newNodesCount = useMemo(() => {
-    const currentYear = yearRange[1];
-    return displayView.nodes.filter((n) => {
-      if (n.type === "concept" && n.first_year === currentYear) return true;
-      if (n.type === "patent" && n.year === currentYear) return true;
-      return false;
-    }).length;
-  }, [displayView.nodes, yearRange]);
-  const timeWindow = useMemo(() => {
-    const years = displayView.nodes
-      .filter((n) => n.type === "concept" && n.first_year !== undefined)
-      .map((n) => n.first_year!);
-    if (years.length === 0) return null;
-    return [Math.min(...years), Math.max(...years)] as [number, number];
-  }, [displayView.nodes]);
   // 差異（聯集）檢視：節點⁃邊都是複本，不會動到各面板檢視本身。
   const difference = useMemo(
     () =>
@@ -1512,41 +1489,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
                 />
               </div>
             )}
-
-            {/* 懸浮縮時動畫播放器 */}
-            <FloatingTimelapse
-              yearRange={yearRange}
-              fullYearRange={graph.stats.year_range}
-              onYearChange={setYearRange}
-              isPlaying={isPlaying}
-              onTogglePlay={handleTogglePlay}
-              speed={playSpeed}
-              onSpeedChange={setPlaySpeed}
-              loop={loopPlayback}
-              onToggleLoop={() => setLoopPlayback((prev) => !prev)}
-              onReset={handleResetYear}
-              onStep={handleStepYear}
-              currentNodesCount={displayView.nodes.length}
-              totalNodesCount={graph.nodes.length}
-              newNodesCount={newNodesCount}
-              currentEdgesCount={displayView.edges.length}
-            />
-
-            {/* 右下角顏色圖例清單（社群色／首次出現年／IPC分類／機構／來源檔／脈絡圖） */}
-            <FloatingLegend
-              mode={mode}
-              colorMode={colorMode}
-              communities={view.communities}
-              hiddenCommunities={hiddenCommunities}
-              onToggleCommunity={toggleCommunity}
-              ipcLegend={ipcLegend}
-              ipcLevel={ipcLevel}
-              yearRange={yearRange}
-              fullYearRange={graph.stats.year_range}
-              timeWindow={timeWindow}
-              allSourceFiles={allSourceFiles}
-              visibleLayers={visibleLayers}
-            />
           </div>
         </div>
 
