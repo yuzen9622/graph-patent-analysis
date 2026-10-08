@@ -5,6 +5,7 @@
  * 排版計算抽成純函式 `compareImageLayout`（可單元測試，無 canvas）：
  * 兩張以內單排橫排；三張以上每列最多 2 張，避免匯出圖過寬。
  */
+import { IMAGE_EXPORT_SCALE } from "./network-image";
 import type { CompareLegendItem } from "./compare-export";
 
 const PADDING = 32;
@@ -195,6 +196,14 @@ export async function composeCompareImage(
 		input.panels.map((panel) => loadPngImage(panel.dataUrl)),
 	);
 
+	// Lay out in logical pixels; draw text at export density and keep panel
+	// bitmaps at their original pixel resolution (no upscaled screenshots).
+	const scale = IMAGE_EXPORT_SCALE;
+	const sizes = images.map((image) => ({
+		width: image.width / scale,
+		height: image.height / scale,
+	}));
+
 	// 先量出折行後的標註與圖例高度，再設定最終畫布尺寸；改變 height 會重設 context，
 	// 所以所有實際繪製設定都在後面重設一次。
 	const canvas = document.createElement("canvas");
@@ -204,19 +213,19 @@ export async function composeCompareImage(
 	ctx.font = `bold ${PANEL_LABEL_PX - 4}px system-ui, sans-serif`;
 	// 每張子圖都有自己的可用寬度；不可讓很長的檔名跨進另一張圖。
 	const panelLabelLines = input.panels.map((panel, index) =>
-		wrapCanvasText(ctx, panel.label, images[index].width),
+		wrapCanvasText(ctx, panel.label, sizes[index].width),
 	);
 	const panelLabelHeight =
 		Math.max(...panelLabelLines.map((lines) => lines.length)) * PANEL_LABEL_PX;
 	// 列間距要把標籤高度算進去：下一列的標籤才不會蓋到上一列的圖。
 	const layout = compareImageLayout(
-		images.map((image) => ({ width: image.width, height: image.height })),
+		sizes,
 		MAX_PANELS_PER_ROW,
 		panelLabelHeight + 10 + PANEL_GAP,
 	);
 	const contentWidth = layout.contentWidth;
 	const width = contentWidth + PADDING * 2;
-	canvas.width = width;
+	canvas.width = Math.ceil(width * scale);
 
 	ctx.font = `${LINE_FONT_PX}px system-ui, sans-serif`;
 	const annotationLines = input.annotationLines.flatMap((line) =>
@@ -236,7 +245,8 @@ export async function composeCompareImage(
 		10 +
 		layout.panelsAreaHeight +
 		PADDING * 2;
-	canvas.height = height;
+	canvas.height = Math.ceil(height * scale);
+	ctx.scale(scale, scale);
 
 	ctx.fillStyle = "#ffffff";
 	ctx.fillRect(0, 0, width, height);
@@ -280,10 +290,10 @@ export async function composeCompareImage(
 		for (const [lineIndex, line] of panelLabelLines[index].entries()) {
 			ctx.fillText(line, x, labelTop + lineIndex * PANEL_LABEL_PX);
 		}
-		ctx.drawImage(image, x, panelY);
+		ctx.drawImage(image, x, panelY, sizes[index].width, sizes[index].height);
 		ctx.strokeStyle = "#cbd5e1";
 		ctx.lineWidth = 1;
-		ctx.strokeRect(x + 0.5, panelY + 0.5, image.width, image.height);
+		ctx.strokeRect(x + 0.5, panelY + 0.5, sizes[index].width, sizes[index].height);
 	}
 
 	return canvas.toDataURL("image/png");

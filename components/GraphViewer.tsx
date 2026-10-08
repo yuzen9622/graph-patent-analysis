@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Network } from "vis-network";
+import { captureNetworkImage } from "@/lib/network-image";
 import type {
 	GraphNode,
 	GraphEdge,
@@ -69,34 +70,8 @@ export type PublicationCapture = (
 	options: PublicationFigureOptions,
 ) => PublicationFigureResult | null;
 
-/** 匯出圖片（輕量版）：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
+/** 高解析度圖片匯出：回傳目前畫面的 PNG data URL（白底），或 null（尚未就緒）。 */
 export type ImageCapture = () => string | null;
-
-/**
- * 輕量版圖片匯出：直接讀 vis-network 內部畫布，貼到一張不透明白底的畫布上再
- * 輸出 PNG——不重算佈局、不做標籤分級／碰撞避讓，畫面上有什麼就存什麼
- * （vis-network 的 canvas 本身透明，論文用圖需要不透明白底；被隱藏的節點／邊
- * 也不會出現在輸出中）。
- * `network.canvas` 不在公開型別中，故此處以最小必要的形狀轉型存取。
- */
-function captureNetworkImage(network: Network): string | null {
-	const rawCanvas = (
-		network as unknown as {
-			canvas?: { frame?: { canvas?: HTMLCanvasElement } };
-		}
-	).canvas?.frame?.canvas;
-	if (!rawCanvas || rawCanvas.width === 0 || rawCanvas.height === 0) return null;
-
-	const output = document.createElement("canvas");
-	output.width = rawCanvas.width;
-	output.height = rawCanvas.height;
-	const ctx = output.getContext("2d");
-	if (!ctx) return null;
-	ctx.fillStyle = "#ffffff";
-	ctx.fillRect(0, 0, output.width, output.height);
-	ctx.drawImage(rawCanvas, 0, 0);
-	return output.toDataURL("image/png");
-}
 
 // ── Performance thresholds ────────────────────────────────────────────────────
 // LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
@@ -812,7 +787,7 @@ interface Props {
 	) => void;
 	/** PRD-Q8 M1 出版整體圖（見 renderPublicationFigure）：佈局穩定後提供，重建/卸載時回 null。 */
 	onCaptureReady?: (capture: PublicationCapture | null) => void;
-	/** 輕量版圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
+	/** 高解析度圖片匯出（見 captureNetworkImage）：佈局穩定後提供，重建/卸載時回 null。 */
 	onImageCaptureReady?: (capture: ImageCapture | null) => void;
 	/** 差異檢視的成員篩選：這些 id 只隱藏、不重算佈局。 */
 	hiddenNodeIds?: Set<string>;

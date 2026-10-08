@@ -191,7 +191,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [compareViewport, setCompareViewport] = useState<GraphViewport | null>(
     null,
   );
-  // 圖片（PNG）匯出：輕量版 ImageCapture 逐面板註冊（並排）與差異檢視各一；
+  // 圖片（PNG）匯出：高解析度 ImageCapture 逐面板註冊（並排）與差異檢視各一；
   // ready flags 存 state，capture 就緒／卸載時才會觸發重繪更新按鈕可用性。
   const imageCaptureRefs = useRef<(ImageCapture | null)[]>([]);
   const diffImageCaptureRef = useRef<ImageCapture | null>(null);
@@ -869,11 +869,13 @@ export default function GraphLayout({ graph, jobId }: Props) {
         : compareMode
           ? imageCaptureRefs.current.slice(0, panelCount)
           : [imageCaptureRefs.current[0]];
-    const dataUrls = captures.map((capture) => capture?.() ?? null);
-    if (dataUrls.some((dataUrl) => dataUrl === null)) return;
     setImageExporting(true);
     setImageExportError(null);
     try {
+      const dataUrls = captures.map((capture) => capture?.() ?? null);
+      if (dataUrls.some((dataUrl) => dataUrl === null)) {
+        throw new Error("圖譜尚未就緒");
+      }
       if (!compareMode) {
         downloadDataUrl(dataUrls[0]!, `patent-graph-${jobId.slice(0, 8)}.png`);
         return;
@@ -1277,7 +1279,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
               imageExportReady
                 ? compareMode
                   ? "下載帶標題、面板來源、共用篩選與指標的比較 PNG"
-                  : "下載目前畫面的 PNG 圖片"
+                  : "下載目前畫面的高解析度 PNG 圖片（4 倍，超大畫面自動調整）"
                 : "等待圖譜佈局完成"
             }
             className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto ${
