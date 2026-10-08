@@ -1379,6 +1379,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
             membershipHidden ? (
               <div className="relative min-w-0 flex-1 overflow-hidden">
                 <GraphViewer
+                  key={`${jobId}:difference`}
                   nodes={difference.view.nodes}
                   edges={difference.view.edges}
                   citationEdges={difference.view.citationEdges}
@@ -1444,6 +1445,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
                       {panelView.stats.patent_count} 篇
                     </div>
                     <GraphViewer
+                      key={`${jobId}:panel:${index}`}
                       nodes={panelView.nodes}
                       edges={panelView.edges}
                       citationEdges={panelView.citationEdges}
@@ -1485,6 +1487,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
                   />
                 )}
                 <GraphViewer
+                  key={`${jobId}:main`}
                   nodes={displayView.nodes}
                   edges={displayView.edges}
                   citationEdges={displayView.citationEdges}

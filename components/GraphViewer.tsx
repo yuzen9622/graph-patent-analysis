@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Network } from "vis-network";
 import { captureNetworkImage } from "@/lib/network-image";
+import {
+	GRAPH_STABILIZATION_ITERATIONS,
+	waitForGraphStabilization,
+} from "@/lib/graph-stabilization";
 import type {
 	GraphNode,
 	GraphEdge,
@@ -74,7 +78,7 @@ export type PublicationCapture = (
 export type ImageCapture = () => string | null;
 
 // ── Performance thresholds ────────────────────────────────────────────────────
-// LARGE: shadows off, hideEdgesOnDrag on, reduced iterations
+// LARGE: shadows off, hideEdgesOnDrag on
 // HUGE:  straight edges, hover off, hideEdgesOnZoom on, clustering
 const LARGE_GRAPH = 120;
 const HUGE_GRAPH = 350;
@@ -564,9 +568,6 @@ function renderPublicationFigure(
 	};
 }
 
-// 沿用舊座標時新節點的收斂迭代數：夠讓新節點靠向鄰居，又不拖慢縮時播放。
-const INHERITED_SETTLE_ITERATIONS = 60;
-
 function stableUnit(value: string): number {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < value.length; i += 1) {
@@ -743,7 +744,7 @@ function buildOptions(nodeCount: number) {
 			minVelocity: 0.75,
 			stabilization: {
 				enabled: true,
-				iterations: isHuge ? 80 : isLarge ? 130 : 200,
+				iterations: GRAPH_STABILIZATION_ITERATIONS,
 				updateInterval: isLarge ? 25 : 15,
 				fit: false,
 			},
@@ -895,6 +896,7 @@ export default function GraphViewer({
 	const applyHighlightRef = useRef<(nodeId: string) => void>(() => {});
 	const clearHighlightRef = useRef<() => void>(() => {});
 	const [stabilized, setStabilized] = useState(false);
+	const [layoutIncomplete, setLayoutIncomplete] = useState(false);
 	const [stabProgress, setStabProgress] = useState(0);
 
 	useEffect(() => {
@@ -928,6 +930,7 @@ export default function GraphViewer({
 		if (!containerRef.current) return;
 		let cancelled = false;
 		let builtNetwork: Network | null = null;
+		let disposeStabilization: (() => void) | undefined;
 
 		const init = async () => {
 			const { Network } = await import("vis-network");
@@ -937,9 +940,8 @@ export default function GraphViewer({
 			const buildProps = propsRef.current;
 			const cachedPositions = positionsCacheRef.current.get(topologyKey);
 			// 縮時或篩選切換時沿用先前穩定的節點座標，讓舊節點不跳位；
-			// 但只要有新節點，就得讓物理引擎短暫收斂，否則新節點會卡在初始位置。
+			// 拓樸不同時仍須收斂；所有節點都有舊座標不代表新的連線已達平衡。
 			let inherited: Map<string, { x: number; y: number }> | null = null;
-			let needsSettle = false;
 			if (cachedPositions) {
 				// Refresh insertion order so this small cache behaves as LRU.
 				positionsCacheRef.current.delete(topologyKey);
@@ -953,7 +955,6 @@ export default function GraphViewer({
 				);
 				if (result.matched > 0) {
 					inherited = result.positions;
-					needsSettle = result.matched < buildProps.nodes.length;
 					if (result.unplaced.length > 0) {
 						const fallback = buildInitialPositions(
 							buildProps.nodes,
@@ -965,7 +966,7 @@ export default function GraphViewer({
 					}
 				}
 			}
-			const skipPhysics = !!cachedPositions || (!!inherited && !needsSettle);
+			const skipPhysics = !!cachedPositions || buildProps.nodes.length === 0;
 
 			const initPos = cachedPositions
 				? new Map(
@@ -1039,19 +1040,7 @@ export default function GraphViewer({
 						...baseNetworkOptions,
 						physics: { ...baseNetworkOptions.physics, enabled: false },
 					}
-				: inherited
-					? {
-							...baseNetworkOptions,
-							physics: {
-								...baseNetworkOptions.physics,
-								// 舊節點已接近平衡，只需少量迭代讓新節點靠向鄰居。
-								stabilization: {
-									...baseNetworkOptions.physics.stabilization,
-									iterations: INHERITED_SETTLE_ITERATIONS,
-								},
-							},
-						}
-					: baseNetworkOptions;
+				: baseNetworkOptions;
 			const network = new Network(
 				containerRef.current,
 				{ nodes: nodeDataSet, edges: edgeDataSet },
@@ -1069,6 +1058,7 @@ export default function GraphViewer({
 			}
 
 			setStabilized(false);
+			setLayoutIncomplete(false);
 			setStabProgress(0);
 
 			const registerCaptureProviders = () => {
@@ -1268,14 +1258,21 @@ export default function GraphViewer({
 				revealAnimationFrameRef.current = requestAnimationFrame(frame);
 			};
 
-			const finishStabilization = (shouldCachePositions: boolean) => {
+			let layoutConverged = false;
+			const finishStabilization = (
+				shouldCachePositions: boolean,
+				converged = true,
+			) => {
 				if (cancelled || networkRef.current !== network) return;
+				layoutConverged = converged;
 				const currentPositions = network.getPositions();
-				for (const [id, position] of Object.entries(currentPositions)) {
-					nodePositionsCacheRef.current.set(id, {
-						x: position.x,
-						y: position.y,
-					});
+				if (converged) {
+					for (const [id, position] of Object.entries(currentPositions)) {
+						nodePositionsCacheRef.current.set(id, {
+							x: position.x,
+							y: position.y,
+						});
+					}
 				}
 				if (shouldCachePositions) {
 					const positions: FrozenPositions = Object.fromEntries(
@@ -1311,20 +1308,23 @@ export default function GraphViewer({
 				}
 
 				setStabilized(true);
-				setStabProgress(100);
+				setLayoutIncomplete(!converged);
+				setStabProgress(converged ? 100 : 99);
 				startReveal(!shouldCachePositions || !!inherited);
 			};
 
 			network.on("stabilizationProgress", (params) => {
 				if (!cancelled)
-					setStabProgress(Math.round((params.iterations / params.total) * 100));
+					setStabProgress(
+						Math.min(99, Math.round((params.iterations / params.total) * 100)),
+					);
 			});
 
 			if (skipPhysics) {
 				finishStabilization(false);
 			} else {
-				network.once("stabilizationIterationsDone", () => {
-					finishStabilization(true);
+				disposeStabilization = waitForGraphStabilization(network, (converged) => {
+					finishStabilization(converged, converged);
 				});
 			}
 
@@ -1341,12 +1341,14 @@ export default function GraphViewer({
 				onViewportChangeRef.current?.(currentViewport);
 			};
 			network.on("dragEnd", () => {
-				const currentPositions = network.getPositions();
-				for (const [id, position] of Object.entries(currentPositions)) {
-					nodePositionsCacheRef.current.set(id, {
-						x: position.x,
-						y: position.y,
-					});
+				if (layoutConverged) {
+					const currentPositions = network.getPositions();
+					for (const [id, position] of Object.entries(currentPositions)) {
+						nodePositionsCacheRef.current.set(id, {
+							x: position.x,
+							y: position.y,
+						});
+					}
 				}
 				emitViewport();
 			});
@@ -1514,6 +1516,7 @@ export default function GraphViewer({
 
 		return () => {
 			cancelled = true;
+			disposeStabilization?.();
 			finishRevealRef.current();
 			if (networkRef.current === builtNetwork && builtNetwork) {
 				const viewport = {
@@ -1734,6 +1737,12 @@ export default function GraphViewer({
 							/>
 						</div>
 					)}
+				</div>
+			)}
+
+			{layoutIncomplete && (
+				<div role="status" className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground">
+					排版尚未完全收斂，目前顯示暫定位置。重新開啟可再次計算。
 				</div>
 			)}
 
