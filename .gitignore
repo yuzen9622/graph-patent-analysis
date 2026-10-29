@@ -58,3 +58,5 @@ backup.sql.gz
 *.gpg
 *.sha256
 /backups/
+
+.pi/
