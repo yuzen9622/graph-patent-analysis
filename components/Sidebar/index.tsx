@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BANK_OWNERSHIPS, BANK_OWNERSHIP_LABELS, includesAllOwnership, type BankOwnership } from "@/lib/bank-ownership";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Accordion,
@@ -76,6 +77,8 @@ interface Props {
   allSourceFiles: string[];
   sourceFiles: string[];
   onSourceFilesChange: (files: string[]) => void;
+  ownership: readonly BankOwnership[];
+  onOwnershipChange: (ownership: BankOwnership[]) => void;
   /** 比較模式：右圖獨立的來源檔選取；左圖沿用上面的 sourceFiles。 */
   compareMode: boolean;
   sourceFilesRight: string[];
@@ -397,8 +400,9 @@ function countActiveFilters(props: {
   showCitations: boolean;
   visibleLayers: Set<NodeType>;
   hiddenCommunities: Set<number>;
+  ownership: readonly BankOwnership[];
 }): number {
-  let n = 0;
+  let n = includesAllOwnership(props.ownership) ? 0 : 1;
   if (
     props.yearRange[0] !== props.fullYearRange[0] ||
     props.yearRange[1] !== props.fullYearRange[1]
@@ -445,6 +449,8 @@ export default function Sidebar({
   allSourceFiles,
   sourceFiles,
   onSourceFilesChange,
+  ownership,
+  onOwnershipChange,
   compareMode,
   sourceFilesRight,
   onSourceFilesRightChange,
@@ -498,6 +504,7 @@ export default function Sidebar({
     showCitations,
     visibleLayers,
     hiddenCommunities,
+    ownership,
   });
 
   return (
@@ -544,6 +551,31 @@ export default function Sidebar({
               }
             >
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="經營類型">
+                  {BANK_OWNERSHIPS.map(kind => (
+                    <label
+                      key={kind}
+                      className={cn(
+                        "flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs transition-colors hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                        ownership.includes(kind)
+                          ? "border-primary/30 bg-primary/5 text-foreground"
+                          : "border-border text-muted-foreground",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        name="ownership"
+                        value={kind}
+                        checked={ownership.includes(kind)}
+                        onChange={event => onOwnershipChange(
+                          BANK_OWNERSHIPS.filter(value => value === kind ? event.target.checked : ownership.includes(value)),
+                        )}
+                        className="size-3.5 shrink-0 cursor-pointer accent-primary"
+                      />
+                      {BANK_OWNERSHIP_LABELS[kind]}
+                    </label>
+                  ))}
+                </div>
                 {mode === "context" ? (
                   <>
                     {sharedConceptCount && (

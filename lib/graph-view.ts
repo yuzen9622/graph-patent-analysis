@@ -24,6 +24,7 @@ import {
   type IpcLevel,
 } from "./ipc-filter";
 import { classifyOrgType } from "./applicant-classify";
+import { bankOwnershipOf, includesAllOwnership, type BankOwnership } from "./bank-ownership";
 import type {
   Community,
   GraphData,
@@ -61,6 +62,7 @@ export interface GraphViewOptions {
    * source_files 與之相交的專利，並從那份子集重新推導概念圖（不重跑 LLM）。
    */
   sourceFiles?: string[];
+  ownership?: readonly BankOwnership[];
   /**
    * PRD v2 / P5: IPC 五級層級（1..5，缺省 3）。決定 IPC 篩選鍵與著色的投影層。
    */
@@ -166,7 +168,7 @@ function scopeIdOf(graph: GraphData, options: GraphViewOptions): string {
     : selectedSources?.length
       ? selectedSources
       : sourceFilesOf(graph);
-  return analysisScopeKeyOf({
+  const scope = analysisScopeKeyOf({
     dataset: datasetIdentity,
     source: selectedSources,
     ipc: options.ipcFilter,
@@ -174,6 +176,9 @@ function scopeIdOf(graph: GraphData, options: GraphViewOptions): string {
     // Full-range carries its explicit [min,max] tuple, not an omitted value.
     year: options.yearRange,
   });
+  return includesAllOwnership(options.ownership)
+    ? scope
+    : `${scope}|ownership=${[...(options.ownership ?? [])].sort().join(",")}`;
 }
 
 function viewStats(
@@ -540,6 +545,7 @@ function selectedRawIds(
   if (
     (!files || files.length === 0) &&
     (!ipcKeys || ipcKeys.length === 0) &&
+    includesAllOwnership(options.ownership) &&
     isFullRange
   )
     return null;
@@ -547,6 +553,11 @@ function selectedRawIds(
   const wantIpc = ipcKeys && ipcKeys.length > 0 ? new Set(ipcKeys) : null;
   const level = options.ipcLevel ?? DEFAULT_IPC_LEVEL;
   const raw = new Set<string>();
+  const ownershipPatents = includesAllOwnership(options.ownership)
+    ? null
+    : new Set(graph.edges
+        .filter(edge => edge.kind === "structural" && edge.relation === "申請了")
+        .map(edge => edge.to));
   for (const node of graph.nodes) {
     if (node.type !== "patent") continue;
     const okFile =
@@ -567,7 +578,8 @@ function selectedRawIds(
     const okYear =
       isFullRange ||
       (typeof year === "number" && year >= yearStart && year <= yearEnd);
-    if (okFile && okIpc && okYear) raw.add(node.id.replace(/^patent:/, ""));
+    const okOwnership = !ownershipPatents || ownershipPatents.has(node.id);
+    if (okFile && okIpc && okYear && okOwnership) raw.add(node.id.replace(/^patent:/, ""));
   }
   return raw;
 }
@@ -1281,6 +1293,16 @@ export function selectGraphView(
   graph: GraphData,
   options: GraphViewOptions,
 ): GraphViewData {
+  if (!includesAllOwnership(options.ownership)) {
+    const excluded = new Set(graph.nodes
+      .filter(node => node.type === "applicant" && !options.ownership?.includes(bankOwnershipOf(node.label)))
+      .map(node => node.id));
+    graph = {
+      ...graph,
+      nodes: graph.nodes.filter(node => !excluded.has(node.id)),
+      edges: graph.edges.filter(edge => !excluded.has(edge.from) && !excluded.has(edge.to)),
+    };
+  }
   if (options.mode === "institution")
     return selectInstitutionView(graph, options);
   return options.mode === "concept"

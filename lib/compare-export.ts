@@ -6,6 +6,7 @@
  * 「僅 1 組…僅 N 組＋聯集＋共有比例」的層級表述。
  */
 import { DEFAULT_IPC_LEVEL, type IpcLevel } from "./ipc-filter";
+import { BANK_OWNERSHIP_LABELS, includesAllOwnership, type BankOwnership } from "./bank-ownership";
 import {
   DIFF_COLORS,
   DIFF_LABELS,
@@ -70,6 +71,7 @@ export interface CommonFilterInput {
   ipcLevel?: IpcLevel;
   ipcFilter?: readonly string[];
   showCitations?: boolean;
+  ownership?: readonly BankOwnership[];
 }
 
 /**
@@ -81,6 +83,9 @@ export function commonFilterSummary(input: CommonFilterInput): string[] {
     `年份：${input.yearRange[0]}–${input.yearRange[1]}｜支持門檻：≥ ${input.minSupport}｜線寬指標：${input.edgeWeight === "npmi" ? "NPMI" : "Jaccard"}`,
     `節點著色：${COLOR_MODE_LABELS[input.colorMode]}｜引用虛線：${input.showCitations ? "顯示" : "隱藏"}`,
   ];
+  if (!includesAllOwnership(input.ownership)) {
+    lines.push(`經營類型：${input.ownership?.map(kind => BANK_OWNERSHIP_LABELS[kind]).join("、") || "未選取"}`);
+  }
   const ipcKeys = input.ipcFilter ?? [];
   if (ipcKeys.length > 0) {
     lines.push(

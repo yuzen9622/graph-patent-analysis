@@ -11,6 +11,7 @@ import type { CompareViewTab } from "./compare-export";
 import type { ColorMode, EdgeWeightMetric, Unit } from "./graph-view";
 import { DEFAULT_IPC_LEVEL, type IpcLevel } from "./ipc-filter";
 import type { GraphMode } from "../types/graph";
+import { includesAllOwnership, parseBankOwnership, type BankOwnership } from "./bank-ownership";
 
 export interface ViewState {
 	mode: GraphMode;
@@ -24,6 +25,7 @@ export interface ViewState {
 	unit?: Unit;
 	/** PRD v2 / P2: 來源檔篩選（多檔比對）。空＝不篩；非空以其子集重推導。 */
 	sourceFiles?: string[];
+	ownership?: BankOwnership[];
 	/** PRD v2 / P5: IPC 層級（缺省 3，不掛 URL）。 */
 	ipcLevel?: IpcLevel;
 	/** PRD v2 / P5: 選定層級的 IPC key（多值；空＝不篩）。 */
@@ -81,6 +83,9 @@ export function parseViewQuery(search: string): Partial<ViewState> {
 
 	const unit = p.get("unit");
 	if (isUnit(unit)) out.unit = unit;
+
+	const ownership = parseBankOwnership(p);
+	if (ownership) out.ownership = ownership;
 
 	// 比較工作區：panel0..panel5（新格式，逐面板多值）。任一存在就優先於舊 source/rsource。
 	// 參數存在即保留該面板（空值＝該面板為全部來源），不能因空值而跳過，否則面板索引會錯位。
@@ -178,6 +183,10 @@ export function toViewQueryString(state: ViewState): string {
 		params["ipcLevel"] = String(state.ipcLevel);
 	}
 	const searchParams = new URLSearchParams(params);
+	if (!includesAllOwnership(state.ownership)) {
+		for (const kind of state.ownership ?? []) searchParams.append("ownership", kind);
+		if (state.ownership?.length === 0) searchParams.set("ownership", "none");
+	}
 	const panelScopes = state.panelScopes ?? [];
 	if (state.compare && panelScopes.length >= 2) {
 		if (panelScopes.length === 2) {

@@ -7,7 +7,7 @@ import type { GraphNode } from "../types/graph";
 
 const noop = () => undefined;
 
-function renderSidebarWithAnActiveYearFilter(): string {
+function renderSidebarWithAnActiveYearFilter(overrides: Partial<ComponentProps<typeof Sidebar>> = {}): string {
 	const props: ComponentProps<typeof Sidebar> = {
 		nodes: [],
 		communities: [],
@@ -48,6 +48,8 @@ function renderSidebarWithAnActiveYearFilter(): string {
 		allSourceFiles: [],
 		sourceFiles: [],
 		onSourceFilesChange: noop,
+		ownership: ["public", "private"],
+		onOwnershipChange: noop,
 		compareMode: false,
 		sourceFilesRight: [],
 		onSourceFilesRightChange: noop,
@@ -75,8 +77,29 @@ function renderSidebarWithAnActiveYearFilter(): string {
 		onCitationsChange: noop,
 	};
 
-	return renderToStaticMarkup(createElement(Sidebar, props));
+	return renderToStaticMarkup(createElement(Sidebar, { ...props, ...overrides }));
 }
+
+describe("Sidebar 經營類型", () => {
+	it.each(["concept", "context", "institution"] as const)("%s 顯示兩個預設勾選且有名稱的 checkbox", mode => {
+		const markup = renderSidebarWithAnActiveYearFilter({ mode });
+		const inputs = markup.match(/<input\b[^>]*>/g) ?? [];
+		for (const kind of ["public", "private"]) {
+			const input = inputs.find(tag => tag.includes(`value="${kind}"`));
+			expect(input).toContain('type="checkbox"');
+			expect(input).toContain('checked=""');
+		}
+		expect(markup).toContain("國營</label>");
+		expect(markup).toContain("民營</label>");
+	});
+	it("經營類型單選時即使年份未篩選也提供重設", () => {
+		const markup = renderSidebarWithAnActiveYearFilter({ ownership: ["public"], yearRange: [2010, 2025] });
+		expect(markup).toContain("重設</button>");
+		const input = markup.match(/<input\b[^>]*>/g)?.find(tag => tag.includes('value="private"'));
+		expect(input).toBeDefined();
+		expect(input).not.toContain('checked=""');
+	});
+});
 
 describe("Sidebar filter reset action", () => {
 	it("keeps the reset action in the filter header instead of constraining its contents", () => {
@@ -161,6 +184,8 @@ describe("ScrollArea & Inspector overflow scrolling", () => {
 			allSourceFiles: [],
 			sourceFiles: [],
 			onSourceFilesChange: noop,
+			ownership: ["public", "private"],
+			onOwnershipChange: noop,
 			compareMode: false,
 			sourceFilesRight: [],
 			onSourceFilesRightChange: noop,

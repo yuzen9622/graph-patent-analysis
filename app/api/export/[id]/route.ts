@@ -155,6 +155,7 @@ function compareAttachment(
 			ipcLevel: options.ipcLevel,
 			ipcFilter: options.ipcFilter,
 			showCitations: options.showCitations ?? false,
+			ownership: options.ownership,
 		},
 		loadVisNetworkSource(),
 	);

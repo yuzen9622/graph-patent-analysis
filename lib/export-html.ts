@@ -1,5 +1,6 @@
 import { selectGraphView, type GraphViewOptions } from "./graph-view";
 import { DEFAULT_IPC_LEVEL } from "./ipc-filter";
+import { parseBankOwnership } from "./bank-ownership";
 import type { FrozenPositions } from "./export-positions";
 import { nodeTooltipLines } from "./node-tooltip";
 import type { GraphData, GraphMode } from "../types/graph";
@@ -117,6 +118,7 @@ export function parseExportOptions(
     unit,
     edgeWeight,
     sourceFiles: sourceFiles.length > 0 ? sourceFiles : undefined,
+    ownership: parseBankOwnership(params),
     ipcLevel,
     ipcFilter: ipcFilter.length > 0 ? ipcFilter : undefined,
     temporalReference,

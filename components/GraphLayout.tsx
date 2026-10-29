@@ -14,6 +14,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import Sidebar from "./Sidebar";
+import { BANK_OWNERSHIPS, includesAllOwnership, type BankOwnership } from "@/lib/bank-ownership";
 import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
@@ -171,6 +172,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const [edgeWeight, setEdgeWeight] = useState<EdgeWeightMetric>("jaccard");
   const [unit, setUnit] = useState<Unit>("patent");
   const [sourceFiles, setSourceFiles] = useState<string[]>([]);
+  const [ownership, setOwnership] = useState<BankOwnership[]>([...BANK_OWNERSHIPS]);
   // N 面板比較工作區：同一份分析裡，每個面板各自選來源檔子集；
   // 其餘篩選條件（年份/單位/顏色/IPC…）共用，只有來源檔各自獨立。
   const [compareUi, setCompareUi] = useState<CompareUiState>("off");
@@ -342,6 +344,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       colorMode,
       edgeWeight,
       unit,
+      ownership,
       ipcLevel,
       ipcFilter,
       temporalReference,
@@ -355,6 +358,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       colorMode,
       edgeWeight,
       unit,
+      ownership,
       ipcLevel,
       ipcFilter,
       temporalReference,
@@ -427,6 +431,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       // P9: 舊格式若不純粹可用（無機構資料），URL 殘留的 unit=applicant 視為無效，回到篇。
     }
     if (parsed.sourceFiles) setSourceFiles(parsed.sourceFiles);
+    if (parsed.ownership) setOwnership(parsed.ownership);
     if (parsed.ipcLevel) setIpcLevel(parsed.ipcLevel);
     if (parsed.ipcFilter) setIpcFilter(parsed.ipcFilter);
     if (parsed.showCitations !== undefined)
@@ -478,6 +483,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       edgeWeight,
       unit,
       sourceFiles,
+      ownership,
       ipcLevel,
       ipcFilter,
       temporalReference,
@@ -505,6 +511,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     edgeWeight,
     unit,
     sourceFiles,
+    ownership,
     ipcLevel,
     ipcFilter,
     temporalReference,
@@ -607,6 +614,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       ipcLevel: sharedViewOptions.ipcLevel,
       ipcFilter: sharedViewOptions.ipcFilter,
       showCitations: sharedViewOptions.showCitations,
+      ownership: sharedViewOptions.ownership,
     }),
     [sharedViewOptions],
   );
@@ -929,6 +937,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
   if (ipcLevel !== DEFAULT_IPC_LEVEL)
     exportQuery.set("ipcLevel", String(ipcLevel));
   for (const key of ipcFilter) exportQuery.append("ipc", key);
+  if (!includesAllOwnership(ownership)) {
+    for (const kind of ownership) exportQuery.append("ownership", kind);
+    if (ownership.length === 0) exportQuery.set("ownership", "none");
+  }
   if (compareHtmlExport) {
     exportQuery.set("compare", "1");
     for (const [index, scope] of panelScopes.entries()) {
@@ -1084,6 +1096,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     setShowCitations(false);
     setVisibleLayers(new Set<NodeType>(["applicant", "patent", "concept"]));
     setHiddenCommunities(new Set());
+    setOwnership([...BANK_OWNERSHIPS]);
     setSourceFiles([]);
     setSourceFilesRight([]);
     setExtraPanels([]);
@@ -1108,6 +1121,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
     setMinSupport(1);
     setIpcLevel(DEFAULT_IPC_LEVEL);
     setIpcFilter([]);
+    setOwnership([...BANK_OWNERSHIPS]);
     setSourceFiles([]);
     setSourceFilesRight([]);
     setExtraPanels([]);
@@ -1500,6 +1514,11 @@ export default function GraphLayout({ graph, jobId }: Props) {
                 />
               </div>
             )}
+            {ownership.length === 0 && (
+              <div role="status" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
+                請勾選國營或民營
+              </div>
+            )}
           </div>
         </div>
 
@@ -1530,6 +1549,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
           onUnitChange={setUnit}
           allSourceFiles={allSourceFiles}
           sourceFiles={sourceFiles}
+          ownership={ownership}
+          onOwnershipChange={setOwnership}
           onSourceFilesChange={
             compareMode
               ? (next) => updateActiveCompareScope("left", next)
