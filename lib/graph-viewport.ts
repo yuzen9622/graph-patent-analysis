@@ -34,3 +34,48 @@ export function isValidGraphViewport(
 			viewport.scale > 0,
 	);
 }
+
+export function shouldRestoreViewport({
+	savedScope,
+	scope,
+	viewport,
+	bounds,
+	width,
+	height,
+}: {
+	savedScope: string | null;
+	scope: string;
+	viewport: GraphViewport | null;
+	bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+	width: number;
+	height: number;
+}): boolean {
+	if (
+		savedScope !== scope ||
+		!isValidGraphViewport(viewport) ||
+		!bounds ||
+		width <= 0 ||
+		height <= 0
+	)
+		return false;
+	const values = [
+		bounds.minX,
+		bounds.minY,
+		bounds.maxX,
+		bounds.maxY,
+		width,
+		height,
+	];
+	if (!values.every(Number.isFinite)) return false;
+	const left = (bounds.minX - viewport.position.x) * viewport.scale + width / 2,
+		right = (bounds.maxX - viewport.position.x) * viewport.scale + width / 2;
+	const top = (bounds.minY - viewport.position.y) * viewport.scale + height / 2,
+		bottom = (bounds.maxY - viewport.position.y) * viewport.scale + height / 2;
+	return (
+		right >= 0 &&
+		left <= width &&
+		bottom >= 0 &&
+		top <= height &&
+		Math.min(right - left, bottom - top) >= Math.min(width, height) * 0.15
+	);
+}

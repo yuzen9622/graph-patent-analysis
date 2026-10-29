@@ -1357,6 +1357,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
               <div className="relative min-w-0 flex-1 overflow-hidden">
                 <GraphViewer
                   key={`${jobId}:difference`}
+                  layoutScopeKey={JSON.stringify([
+                    jobId, mode, unit, "difference",
+                    panelScopes.map((scope) => [...scope].sort()),
+                  ])}
                   nodes={difference.view.nodes}
                   edges={difference.view.edges}
                   citationEdges={difference.view.citationEdges}
@@ -1423,6 +1427,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
                     </div>
                     <GraphViewer
                       key={`${jobId}:panel:${index}`}
+                      layoutScopeKey={JSON.stringify([
+                        jobId, mode, unit, "panel", index,
+                        [...panelScopes[index]].sort(),
+                      ])}
                       nodes={panelView.nodes}
                       edges={panelView.edges}
                       citationEdges={panelView.citationEdges}
@@ -1465,6 +1473,9 @@ export default function GraphLayout({ graph, jobId }: Props) {
                 )}
                 <GraphViewer
                   key={`${jobId}:main`}
+                  layoutScopeKey={JSON.stringify([
+                    jobId, mode, unit, "main", [...sourceFiles].sort(), subgraphState,
+                  ])}
                   nodes={displayView.nodes}
                   edges={displayView.edges}
                   citationEdges={displayView.citationEdges}

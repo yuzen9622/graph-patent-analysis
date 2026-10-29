@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	graphViewportsEqual,
 	isValidGraphViewport,
+	shouldRestoreViewport,
 } from "../lib/graph-viewport";
 
 describe("isValidGraphViewport", () => {
@@ -64,5 +65,33 @@ describe("graphViewportsEqual", () => {
 		expect(
 			graphViewportsEqual(base, { position: { x: 100, y: -50 }, scale: 0 }),
 		).toBe(false);
+	});
+});
+
+describe("shouldRestoreViewport", () => {
+	it("requires same scope and visible meaningful bounds", () => {
+		const args = {
+			savedScope: "a",
+			scope: "a",
+			viewport: { position: { x: 0, y: 0 }, scale: 1 },
+			bounds: { minX: -200, minY: -200, maxX: 200, maxY: 200 },
+			width: 1000,
+			height: 800,
+		};
+		expect(shouldRestoreViewport(args)).toBe(true);
+		expect(shouldRestoreViewport({ ...args, scope: "b" })).toBe(false);
+		expect(
+			shouldRestoreViewport({
+				...args,
+				viewport: { position: { x: 0, y: 0 }, scale: 0.001 },
+			}),
+		).toBe(false);
+		expect(
+			shouldRestoreViewport({
+				...args,
+				viewport: { position: { x: 10000, y: 0 }, scale: 1 },
+			}),
+		).toBe(false);
+		expect(shouldRestoreViewport({ ...args, bounds: null })).toBe(false);
 	});
 });

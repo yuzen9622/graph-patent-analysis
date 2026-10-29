@@ -4,9 +4,13 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Network } from "vis-network";
 import { captureNetworkImage } from "@/lib/network-image";
 import {
-	GRAPH_STABILIZATION_ITERATIONS,
-	waitForGraphStabilization,
-} from "@/lib/graph-stabilization";
+	buildLayoutInput,
+	seedPositions,
+	stableUnit,
+} from "@/lib/graph-layout/input";
+import { startGraphLayout } from "@/lib/graph-layout/client";
+import { fallbackGrid, layoutBounds } from "@/lib/graph-layout/geometry";
+import type { LayoutSource, CompletedLayout } from "@/lib/graph-layout/types";
 import type {
 	GraphNode,
 	GraphEdge,
@@ -20,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import {
 	graphViewportsEqual,
 	isValidGraphViewport,
+	shouldRestoreViewport,
 	type GraphViewport,
 } from "@/lib/graph-viewport";
 import type { EdgeWeightMetric, Unit } from "@/lib/graph-view";
@@ -330,8 +335,9 @@ function fontColorWithOpacity(color: string, opacity: number): string {
 		const green = Number.parseInt(rawHex.slice(2, 4), 16);
 		const blue = Number.parseInt(rawHex.slice(4, 6), 16);
 		const alpha =
-			(rawHex.length === 8 ? Number.parseInt(rawHex.slice(6, 8), 16) / 255 : 1) *
-			clampedOpacity;
+			(rawHex.length === 8
+				? Number.parseInt(rawHex.slice(6, 8), 16) / 255
+				: 1) * clampedOpacity;
 		return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 	}
 	const rgb = color.match(
@@ -400,7 +406,9 @@ function renderPublicationFigure(
 		? allEdges.filter((e) => subgraphIds.has(e.from) && subgraphIds.has(e.to))
 		: allEdges;
 	// §2 M2：子圖一律全標籤，忽略面板選的 labelMode。
-	const labelMode: PublicationLabelMode = isSubgraph ? "all" : options.labelMode;
+	const labelMode: PublicationLabelMode = isSubgraph
+		? "all"
+		: options.labelMode;
 
 	const nodeById = new Map(nodes.map((n) => [n.id, n]));
 	const visibleIds = nodes.map((n) => n.id).filter((id) => positions[id]);
@@ -499,7 +507,10 @@ function renderPublicationFigure(
 		const n = nodeById.get(id);
 		if (!n) continue;
 		const p = toCanvas(positions[id].x, positions[id].y);
-		const radius = Math.max(1.5, ((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale);
+		const radius = Math.max(
+			1.5,
+			((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale,
+		);
 		ctx.beginPath();
 		ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
 		ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -568,143 +579,6 @@ function renderPublicationFigure(
 	};
 }
 
-function stableUnit(value: string): number {
-	let hash = 0x811c9dc5;
-	for (let i = 0; i < value.length; i += 1) {
-		hash ^= value.charCodeAt(i);
-		hash = Math.imul(hash, 0x01000193);
-	}
-	return (hash >>> 0) / 0xffffffff;
-}
-
-// Pre-spread concept nodes by community so ForceAtlas2 starts from a
-// separated state — prevents same-community nodes from collapsing together.
-// For nodes without communities (e.g. applicants and patents), positions
-// are computed iteratively from their connected nodes to prevent them from
-// starting in a giant default outer circle, solving layout issues.
-function buildInitialPositions(
-	nodes: GraphNode[],
-	edges: GraphEdge[],
-): Map<string, { x: number; y: number }> {
-	const positions = new Map<string, { x: number; y: number }>();
-
-	// 1. Group nodes by community if they have one (supports both community_id and community)
-	const byComm = new Map<number, string[]>();
-	nodes.forEach((n) => {
-		const commId =
-			n.community_id !== undefined
-				? n.community_id
-				: (n as { community?: number }).community;
-		if (commId !== undefined) {
-			const arr = byComm.get(commId) ?? [];
-			arr.push(n.id);
-			byComm.set(commId, arr);
-		}
-	});
-
-	const comms = [...byComm.entries()]
-		.sort(([a], [b]) => a - b)
-		.map(([id, ids]) => [id, [...ids].sort()] as [number, string[]]);
-	const K = comms.length;
-
-	if (K > 0) {
-		const RING = Math.max(300, Math.min(K * 40, 1200));
-		const SPREAD = 80;
-
-		comms.forEach(([, ids], ci) => {
-			const ca = (ci / K) * 2 * Math.PI;
-			const cx = Math.cos(ca) * RING;
-			const cy = Math.sin(ca) * RING;
-			ids.forEach((id, ni) => {
-				const na = (ni / Math.max(ids.length, 1)) * 2 * Math.PI;
-				const r = SPREAD * (0.35 + (ni % 3) * 0.32);
-				positions.set(id, {
-					x: cx + Math.cos(na) * r,
-					y: cy + Math.sin(na) * r,
-				});
-			});
-		});
-	}
-
-	// 2. Build adjacency list for connected nodes to compute positions of unpositioned nodes
-	const adj = new Map<string, string[]>();
-	edges.forEach((e) => {
-		if (!adj.has(e.from)) adj.set(e.from, []);
-		if (!adj.has(e.to)) adj.set(e.to, []);
-		adj.get(e.from)!.push(e.to);
-		adj.get(e.to)!.push(e.from);
-	});
-
-	// 3. For nodes without a community, position them based on their neighbors' positions
-	const unpositionedNodes = nodes.filter((n) => {
-		const commId =
-			n.community_id !== undefined
-				? n.community_id
-				: (n as { community?: number }).community;
-		return commId === undefined;
-	});
-
-	for (let pass = 0; pass < 3; pass++) {
-		let placedAny = false;
-		unpositionedNodes.forEach((n) => {
-			if (positions.has(n.id)) return;
-
-			const neighbors = adj.get(n.id) ?? [];
-			let sumX = 0;
-			let sumY = 0;
-			let count = 0;
-
-			neighbors.forEach((neighId) => {
-				const pos = positions.get(neighId);
-				if (pos) {
-					sumX += pos.x;
-					sumY += pos.y;
-					count++;
-				}
-			});
-
-			if (count > 0) {
-				// Add a small jitter to avoid exact overlapping
-				const jitterX = (stableUnit(`${n.id}:x`) - 0.5) * 30;
-				const jitterY = (stableUnit(`${n.id}:y`) - 0.5) * 30;
-				positions.set(n.id, {
-					x: sumX / count + jitterX,
-					y: sumY / count + jitterY,
-				});
-				placedAny = true;
-			}
-		});
-		if (!placedAny) break;
-	}
-
-	// 4. Any remaining nodes (completely disconnected or no positioned neighbors) get a default position on a circle
-	let unplacedCount = 0;
-	unpositionedNodes.forEach((n) => {
-		if (!positions.has(n.id)) {
-			unplacedCount++;
-		}
-	});
-
-	let unplacedIdx = 0;
-	unpositionedNodes.forEach((n) => {
-		if (!positions.has(n.id)) {
-			const angle = (unplacedIdx / Math.max(unplacedCount, 1)) * 2 * Math.PI;
-			const r = 200 + stableUnit(`${n.id}:radius`) * 100;
-			positions.set(n.id, {
-				x: Math.cos(angle) * r,
-				y: Math.sin(angle) * r,
-			});
-			unplacedIdx++;
-		}
-	});
-
-	return positions;
-}
-
-// Adaptive options: degrade rendering quality as graph size grows.
-// Inspired by vis-network smoothWorldCup example which achieves fluid
-// rendering by: adaptiveTimestep, continuous (not dynamic) smooth, and
-// hiding edges during drag/zoom.
 function buildOptions(nodeCount: number) {
 	const isLarge = nodeCount >= LARGE_GRAPH;
 	const isHuge = nodeCount >= HUGE_GRAPH;
@@ -727,28 +601,7 @@ function buildOptions(nodeCount: number) {
 				? false
 				: { enabled: true, type: "continuous" as const, roundness: 0.2 },
 		},
-		physics: {
-			solver: "forceAtlas2Based" as const,
-			forceAtlas2Based: {
-				gravitationalConstant: isLarge ? -80 : -150, // 大幅增加互斥力，把節點推開
-				centralGravity: 0.003, // 極大降低向心力，避免擠在中心
-				springLength: isLarge ? 150 : 250, // 把線拉長
-				springConstant: 0.04,
-				damping: 0.5,
-				avoidOverlap: 1,
-			},
-			// adaptiveTimestep: key WorldCup trick — auto-scales dt for stability,
-			// meaning the solver converges in far fewer real iterations
-			adaptiveTimestep: true,
-			maxVelocity: 50,
-			minVelocity: 0.75,
-			stabilization: {
-				enabled: true,
-				iterations: GRAPH_STABILIZATION_ITERATIONS,
-				updateInterval: isLarge ? 25 : 15,
-				fit: false,
-			},
-		},
+		physics: { enabled: false },
 		interaction: {
 			hover: !isHuge,
 			tooltipDelay: 250,
@@ -768,6 +621,7 @@ function buildOptions(nodeCount: number) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
+	layoutScopeKey?: string;
 	nodes: GraphNode[];
 	edges: GraphEdge[];
 	citationEdges?: CitationEdge[];
@@ -800,6 +654,7 @@ interface Props {
 }
 
 export default function GraphViewer({
+	layoutScopeKey = "",
 	nodes,
 	edges,
 	citationEdges = [],
@@ -826,6 +681,7 @@ export default function GraphViewer({
 	const networkRef = useRef<Network | null>(null);
 	const nodeDataSetRef = useRef<NodeDataSet | null>(null);
 	const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
+	const savedScopeRef = useRef<string | null>(null);
 	const viewportRef = useRef<GraphViewport | null>(null);
 	// 最後一次「已同步」的視窗：外送前與收到指令時都拿它比對，等價就不動作，
 	// 這樣 A→B 的移動不會再被 B 反彈回 A。
@@ -881,12 +737,12 @@ export default function GraphViewer({
 		viewport,
 		onViewportChange,
 	};
-	const topologyKey = useMemo(
-		() => fingerprintTopology(nodes, edges),
-		[nodes, edges],
+	const layoutInput = useMemo(
+		() => buildLayoutInput(nodes, edges, layoutScopeKey),
+		[nodes, edges, layoutScopeKey],
 	);
-	const lastBuiltTopologyKeyRef = useRef<string | null>(null);
-	const positionsCacheRef = useRef(new Map<string, FrozenPositions>());
+	const layoutKey = `${layoutInput.fingerprint}:${fingerprintTopology(nodes, edges)}`;
+	const lastBuiltLayoutKeyRef = useRef<string | null>(null);
 	const nodePositionsCacheRef = useRef(
 		new Map<string, { x: number; y: number }>(),
 	);
@@ -895,9 +751,32 @@ export default function GraphViewer({
 	const highlightRef = useRef<{ activeId: string | null }>({ activeId: null });
 	const applyHighlightRef = useRef<(nodeId: string) => void>(() => {});
 	const clearHighlightRef = useRef<() => void>(() => {});
-	const [stabilized, setStabilized] = useState(false);
-	const [layoutIncomplete, setLayoutIncomplete] = useState(false);
-	const [stabProgress, setStabProgress] = useState(0);
+	const [layoutState, setLayoutState] = useState<{
+		key: string;
+		status: "computing" | "ready" | "failed";
+		revealed: boolean;
+		reason?: CompletedLayout["reason"];
+		source?: LayoutSource;
+	}>({ key: "", status: "computing", revealed: false });
+	if (layoutState.key !== layoutKey) {
+		setLayoutState({ key: layoutKey, status: "computing", revealed: false });
+	}
+	const activeLayout =
+		layoutState.key === layoutKey
+			? layoutState
+			: {
+					status: "computing" as const,
+					revealed: false,
+					reason: undefined,
+					source: undefined,
+				};
+	const {
+		status: layoutStatus,
+		revealed: layoutRevealed,
+		reason: layoutReason,
+		source: layoutSource,
+	} = activeLayout;
+	const [layoutGeneration, setLayoutGeneration] = useState(0);
 
 	useEffect(() => {
 		onViewportChangeRef.current = onViewportChange;
@@ -909,16 +788,16 @@ export default function GraphViewer({
 		});
 	}, []);
 
-	// ── Build / rebuild only when the graph topology changes ─────────────────
+	// ── Build / rebuild when geometry or rendered membership changes ─────────
 	useEffect(() => {
 		finishRevealRef.current();
 		const current = propsRef.current;
-		lastBuiltTopologyKeyRef.current = topologyKey;
+		lastBuiltLayoutKeyRef.current = layoutKey;
 		highlightRef.current.activeId = null;
 		if (process.env.NODE_ENV !== "production") {
 			console.debug(
 				"[graph] rebuild",
-				topologyKey,
+				layoutKey,
 				current.nodes.length,
 				current.edges.length,
 			);
@@ -930,53 +809,54 @@ export default function GraphViewer({
 		if (!containerRef.current) return;
 		let cancelled = false;
 		let builtNetwork: Network | null = null;
-		let disposeStabilization: (() => void) | undefined;
-
+		let clearDataSets = () => {};
+		const seeds = seedPositions(current.nodes, current.edges);
+		if (nodePositionsCacheRef.current.size > 0) {
+			const inherited = inheritPositions(
+				current.nodes.map((n) => n.id),
+				current.edges,
+				nodePositionsCacheRef.current,
+				(id, axis) => (stableUnit(`${id}:${axis}`) - 0.5) * 60,
+			);
+			for (const [id, position] of inherited.positions) seeds.set(id, position);
+		}
+		const input = buildLayoutInput(
+			current.nodes,
+			current.edges,
+			layoutScopeKey,
+			undefined,
+			seeds,
+		);
+		const task = startGraphLayout(input);
 		const init = async () => {
-			const { Network } = await import("vis-network");
-			const { DataSet } = await import("vis-data");
-			if (cancelled || !containerRef.current) return;
-
-			const buildProps = propsRef.current;
-			const cachedPositions = positionsCacheRef.current.get(topologyKey);
-			// 縮時或篩選切換時沿用先前穩定的節點座標，讓舊節點不跳位；
-			// 拓樸不同時仍須收斂；所有節點都有舊座標不代表新的連線已達平衡。
-			let inherited: Map<string, { x: number; y: number }> | null = null;
-			if (cachedPositions) {
-				// Refresh insertion order so this small cache behaves as LRU.
-				positionsCacheRef.current.delete(topologyKey);
-				positionsCacheRef.current.set(topologyKey, cachedPositions);
-			} else if (nodePositionsCacheRef.current.size > 0) {
-				const result = inheritPositions(
-					buildProps.nodes.map((node) => node.id),
-					buildProps.edges,
-					nodePositionsCacheRef.current,
-					(id, axis) => (stableUnit(`${id}:${axis}`) - 0.5) * 60,
-				);
-				if (result.matched > 0) {
-					inherited = result.positions;
-					if (result.unplaced.length > 0) {
-						const fallback = buildInitialPositions(
-							buildProps.nodes,
-							buildProps.edges,
-						);
-						for (const id of result.unplaced) {
-							inherited.set(id, fallback.get(id) ?? { x: 0, y: 0 });
-						}
-					}
-				}
+			const [outcome, { Network }, { DataSet }] = await Promise.all([
+				task.result,
+				import("vis-network"),
+				import("vis-data"),
+			]);
+			if (cancelled || !containerRef.current || outcome.status === "cancelled")
+				return;
+			const failed = outcome.status === "failed";
+			const positions =
+				outcome.status === "ready"
+					? outcome.layout.positions
+					: fallbackGrid(input);
+			if (failed)
+				setLayoutState({ key: layoutKey, status: "failed", revealed: false });
+			if (outcome.status === "ready") {
+				for (let i = 0; i < input.nodeIds.length; i++)
+					nodePositionsCacheRef.current.set(input.nodeIds[i], {
+						x: positions[i * 2],
+						y: positions[i * 2 + 1],
+					});
 			}
-			const skipPhysics = !!cachedPositions || buildProps.nodes.length === 0;
-
-			const initPos = cachedPositions
-				? new Map(
-						Object.entries(cachedPositions).map(([id, position]) => [
-							id,
-							{ x: position.x, y: position.y },
-						]),
-					)
-				: (inherited ??
-					buildInitialPositions(buildProps.nodes, buildProps.edges));
+			const buildProps = propsRef.current;
+			const initPos = new Map(
+				input.nodeIds.map((id, i) => [
+					id,
+					{ x: positions[i * 2], y: positions[i * 2 + 1] },
+				]),
+			);
 			const godNodeMap = new Map(
 				(buildProps.analysis?.god_nodes ?? []).map((g) => [g.id, g]),
 			);
@@ -1021,45 +901,36 @@ export default function GraphViewer({
 					color: edgeColorWithOpacity(edge.color, 0),
 				})),
 			);
+			clearDataSets = () => {
+				nodeDataSet.clear();
+				edgeDataSet.clear();
+			};
 			nodeDataSetRef.current = nodeDataSet as unknown as NodeDataSet;
 			edgeDataSetRef.current = edgeDataSet as unknown as EdgeDataSet;
 
-			if (networkRef.current) {
-				const viewport = {
-					position: networkRef.current.getViewPosition(),
-					scale: networkRef.current.getScale(),
-				};
-				viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
-				networkRef.current.destroy();
-				networkRef.current = null;
-			}
-
-			const baseNetworkOptions = buildOptions(buildProps.nodes.length);
-			const networkOptions = skipPhysics
-				? {
-						...baseNetworkOptions,
-						physics: { ...baseNetworkOptions.physics, enabled: false },
-					}
-				: baseNetworkOptions;
 			const network = new Network(
 				containerRef.current,
 				{ nodes: nodeDataSet, edges: edgeDataSet },
-				networkOptions,
+				buildOptions(buildProps.nodes.length),
 			);
 			builtNetwork = network;
 			networkRef.current = network;
-
-			if (isValidGraphViewport(viewportRef.current)) {
-				network.moveTo({
-					position: viewportRef.current.position,
-					scale: viewportRef.current.scale,
-					animation: false,
-				});
+			setLayoutGeneration((g) => g + 1);
+			const container = containerRef.current;
+			if (
+				shouldRestoreViewport({
+					savedScope: savedScopeRef.current,
+					scope: layoutScopeKey,
+					viewport: viewportRef.current,
+					bounds: layoutBounds(positions, input.radii),
+					width: container.clientWidth,
+					height: container.clientHeight,
+				})
+			) {
+				network.moveTo({ ...viewportRef.current!, animation: false });
+			} else {
+				network.fit({ animation: false });
 			}
-
-			setStabilized(false);
-			setLayoutIncomplete(false);
-			setStabProgress(0);
 
 			const registerCaptureProviders = () => {
 				const latest = propsRef.current;
@@ -1068,7 +939,9 @@ export default function GraphViewer({
 					getPositions: () => {
 						if (cancelled || networkRef.current !== network) return null;
 						const positions: FrozenPositions = Object.fromEntries(
-							Object.entries(network.getPositions()).map(([id, position]) => [
+							Object.entries(
+								network.getPositions(latest.nodes.map((node) => node.id)),
+							).map(([id, position]) => [
 								id,
 								{ x: position.x, y: position.y },
 							]),
@@ -1078,10 +951,19 @@ export default function GraphViewer({
 				});
 				latest.onCaptureReady?.((options) =>
 					networkRef.current === network
-						? renderPublicationFigure(network, latest.nodes, latest.edges, options)
+						? renderPublicationFigure(
+								network,
+								latest.nodes,
+								latest.edges,
+								options,
+							)
 						: null,
 				);
-				latest.onImageCaptureReady?.(() => captureNetworkImage(network));
+				latest.onImageCaptureReady?.(() =>
+					!cancelled && networkRef.current === network
+						? captureNetworkImage(network)
+						: null,
+				);
 			};
 
 			const startReveal = (short: boolean) => {
@@ -1116,11 +998,11 @@ export default function GraphViewer({
 					if (finishRevealRef.current === finishReveal) {
 						finishRevealRef.current = () => {};
 					}
-					if (networkRef.current !== network) return;
+					if (cancelled || networkRef.current !== network) return;
 					const currentProps = propsRef.current;
 					const latest =
-						fingerprintTopology(currentProps.nodes, currentProps.edges) ===
-						topologyKey
+						`${buildLayoutInput(currentProps.nodes, currentProps.edges, layoutScopeKey).fingerprint}:${fingerprintTopology(currentProps.nodes, currentProps.edges)}` ===
+						layoutKey
 							? currentProps
 							: buildProps;
 					const godNodes = new Map(
@@ -1141,10 +1023,9 @@ export default function GraphViewer({
 						}),
 					);
 					const surprisingEdges = new Map(
-						(latest.analysis?.surprising_connections ?? []).map((connection) => [
-							connection.edge_id,
-							connection,
-						]),
+						(latest.analysis?.surprising_connections ?? []).map(
+							(connection) => [connection.edge_id, connection],
+						),
 					);
 					edgeDataSet.update([
 						...latest.edges.map((edge) => ({
@@ -1161,12 +1042,22 @@ export default function GraphViewer({
 							color: toVisCitationEdge(edge).color,
 						})),
 					]);
+					setLayoutState({
+						key: layoutKey,
+						status: failed ? "failed" : "ready",
+						revealed: true,
+						reason:
+							outcome.status === "ready" ? outcome.layout.reason : undefined,
+						source: outcome.status === "ready" ? outcome.source : undefined,
+					});
+					registerCaptureProviders();
 				};
 				finishRevealRef.current = finishReveal;
 
 				const reduceMotion =
 					typeof window !== "undefined" &&
-					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+						false);
 				if (reduceMotion || initial.nodes.length === 0) {
 					finishReveal();
 					return;
@@ -1177,7 +1068,9 @@ export default function GraphViewer({
 					if (completed || networkRef.current !== network) return;
 					const latest = propsRef.current;
 					const elapsed = Math.max(0, now - startedAt);
-					const latestNodes = new Map(latest.nodes.map((node) => [node.id, node]));
+					const latestNodes = new Map(
+						latest.nodes.map((node) => [node.id, node]),
+					);
 					const godNodes = new Map(
 						(latest.analysis?.god_nodes ?? []).map((godNode) => [
 							godNode.id,
@@ -1219,10 +1112,9 @@ export default function GraphViewer({
 						if (nextStep > edgeStep) {
 							edgeStep = nextStep;
 							const surprisingEdges = new Map(
-								(latest.analysis?.surprising_connections ?? []).map((connection) => [
-									connection.edge_id,
-									connection,
-								]),
+								(latest.analysis?.surprising_connections ?? []).map(
+									(connection) => [connection.edge_id, connection],
+								),
 							);
 							const edgeOpacity = edgeStep / 10;
 							edgeDataSet.update([
@@ -1258,75 +1150,7 @@ export default function GraphViewer({
 				revealAnimationFrameRef.current = requestAnimationFrame(frame);
 			};
 
-			let layoutConverged = false;
-			const finishStabilization = (
-				shouldCachePositions: boolean,
-				converged = true,
-			) => {
-				if (cancelled || networkRef.current !== network) return;
-				layoutConverged = converged;
-				const currentPositions = network.getPositions();
-				if (converged) {
-					for (const [id, position] of Object.entries(currentPositions)) {
-						nodePositionsCacheRef.current.set(id, {
-							x: position.x,
-							y: position.y,
-						});
-					}
-				}
-				if (shouldCachePositions) {
-					const positions: FrozenPositions = Object.fromEntries(
-						Object.entries(currentPositions).map(([id, position]) => [
-							id,
-							{ x: position.x, y: position.y },
-						]),
-					);
-					const cache = positionsCacheRef.current;
-					cache.delete(topologyKey);
-					cache.set(topologyKey, positions);
-					while (cache.size > 8) {
-						const oldestKey = cache.keys().next().value;
-						if (oldestKey === undefined) break;
-						cache.delete(oldestKey);
-					}
-				}
-				network.setOptions({ physics: { enabled: false } });
-				registerCaptureProviders();
-
-				// 預設進入：沒有可還原的視窗（例如新頁面載入）時縮放到全部節點可見；
-				// 同一 session 內重建（切換 unit／分析更新）仍沿用上次視窗。
-				if (!isValidGraphViewport(viewportRef.current)) {
-					const container = containerRef.current;
-					if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-						network.fit({
-							animation: {
-								duration: 400,
-								easingFunction: "easeInOutQuad",
-							},
-						});
-					}
-				}
-
-				setStabilized(true);
-				setLayoutIncomplete(!converged);
-				setStabProgress(converged ? 100 : 99);
-				startReveal(!shouldCachePositions || !!inherited);
-			};
-
-			network.on("stabilizationProgress", (params) => {
-				if (!cancelled)
-					setStabProgress(
-						Math.min(99, Math.round((params.iterations / params.total) * 100)),
-					);
-			});
-
-			if (skipPhysics) {
-				finishStabilization(false);
-			} else {
-				disposeStabilization = waitForGraphStabilization(network, (converged) => {
-					finishStabilization(converged, converged);
-				});
-			}
+			startReveal(outcome.status === "ready" && outcome.source !== "computed");
 
 			// ── 比較模式視窗同步：使用者拖曳⁃縮放後向上回報 ───────────────
 			const emitViewport = () => {
@@ -1336,12 +1160,13 @@ export default function GraphViewer({
 					scale: network.getScale(),
 				};
 				if (!isValidGraphViewport(currentViewport)) return;
-				if (graphViewportsEqual(currentViewport, syncedViewportRef.current)) return;
+				if (graphViewportsEqual(currentViewport, syncedViewportRef.current))
+					return;
 				syncedViewportRef.current = currentViewport;
 				onViewportChangeRef.current?.(currentViewport);
 			};
 			network.on("dragEnd", () => {
-				if (layoutConverged) {
+				if (!failed) {
 					const currentPositions = network.getPositions();
 					for (const [id, position] of Object.entries(currentPositions)) {
 						nodePositionsCacheRef.current.set(id, {
@@ -1447,7 +1272,8 @@ export default function GraphViewer({
 				edgeDataSet.update(
 					latest.edges.map((edge) => ({
 						id: edge.id,
-						color: toVisEdge(edge, undefined, latest.edgeWeight, latest.unit).color,
+						color: toVisEdge(edge, undefined, latest.edgeWeight, latest.unit)
+							.color,
 					})),
 				);
 				highlightRef.current.activeId = null;
@@ -1512,11 +1338,29 @@ export default function GraphViewer({
 			});
 		};
 
-		void init();
+		void init().catch((error) => {
+			if (cancelled) return;
+			task.cancel();
+			finishRevealRef.current();
+			builtNetwork?.destroy();
+			builtNetwork = null;
+			clearDataSets();
+			networkRef.current = null;
+			nodeDataSetRef.current = null;
+			edgeDataSetRef.current = null;
+			propsRef.current.onPositionSnapshotProvider?.(null);
+			propsRef.current.onCaptureReady?.(null);
+			propsRef.current.onImageCaptureReady?.(null);
+			setLayoutState({ key: layoutKey, status: "failed", revealed: false });
+			console.error("[graph] renderer initialization failed", error);
+		});
 
 		return () => {
 			cancelled = true;
-			disposeStabilization?.();
+			task.cancel();
+			propsRef.current.onPositionSnapshotProvider?.(null);
+			propsRef.current.onCaptureReady?.(null);
+			propsRef.current.onImageCaptureReady?.(null);
 			finishRevealRef.current();
 			if (networkRef.current === builtNetwork && builtNetwork) {
 				const viewport = {
@@ -1524,18 +1368,23 @@ export default function GraphViewer({
 					scale: builtNetwork.getScale(),
 				};
 				viewportRef.current = isValidGraphViewport(viewport) ? viewport : null;
+				savedScopeRef.current = layoutScopeKey;
 				builtNetwork.destroy();
 				networkRef.current = null;
 			}
+			clearDataSets();
+			nodeDataSetRef.current = null;
+			edgeDataSetRef.current = null;
+			applyHighlightRef.current = () => {};
+			clearHighlightRef.current = () => {};
 		};
-		// The topology key is deliberately the only rebuild trigger; dynamic
-		// callbacks and appearance props are read through propsRef above.
-	}, [topologyKey]);
+		// Geometry identity controls rebuilds; appearance and callbacks stay live through propsRef.
+	}, [layoutKey, layoutScopeKey]);
 
 	// ── Apply visual-only changes without rebuilding or moving the graph ──────
 	useEffect(() => {
-		if (lastBuiltTopologyKeyRef.current === topologyKey) {
-			lastBuiltTopologyKeyRef.current = null;
+		if (lastBuiltLayoutKeyRef.current === layoutKey) {
+			lastBuiltLayoutKeyRef.current = null;
 			return;
 		}
 		const nodeDataSet = nodeDataSetRef.current;
@@ -1547,7 +1396,12 @@ export default function GraphViewer({
 		);
 		nodeDataSet.update(
 			nodes.map((node) => {
-				const visual = toVisNode(node, unit, undefined, godNodeMap.get(node.id));
+				const visual = toVisNode(
+					node,
+					unit,
+					undefined,
+					godNodeMap.get(node.id),
+				);
 				return {
 					id: visual.id,
 					label: visual.label,
@@ -1592,20 +1446,22 @@ export default function GraphViewer({
 		if (highlightRef.current.activeId) {
 			applyHighlightRef.current(highlightRef.current.activeId);
 		}
-	}, [nodes, edges, citationEdges, edgeWeight, unit, analysis, topologyKey]);
+	}, [nodes, edges, citationEdges, edgeWeight, unit, analysis, layoutKey]);
 
 	// A changed export key must receive the existing stable network, not trigger
 	// another layout run.
 	useEffect(() => {
 		const network = networkRef.current;
-		if (!network || !stabilized) return;
+		if (!network || !layoutRevealed) return;
 		const current = propsRef.current;
 		current.onPositionSnapshotProvider?.({
 			key: positionSnapshotKey,
 			getPositions: () => {
 				if (networkRef.current !== network) return null;
 				const positions: FrozenPositions = Object.fromEntries(
-					Object.entries(network.getPositions()).map(([id, position]) => [
+					Object.entries(
+						network.getPositions(current.nodes.map((node) => node.id)),
+					).map(([id, position]) => [
 						id,
 						{ x: position.x, y: position.y },
 					]),
@@ -1615,11 +1471,18 @@ export default function GraphViewer({
 		});
 		current.onCaptureReady?.((options) =>
 			networkRef.current === network
-				? renderPublicationFigure(network, current.nodes, current.edges, options)
+				? renderPublicationFigure(
+						network,
+						current.nodes,
+						current.edges,
+						options,
+					)
 				: null,
 		);
-		current.onImageCaptureReady?.(() => captureNetworkImage(network));
-	}, [positionSnapshotKey, stabilized]);
+		current.onImageCaptureReady?.(() =>
+			networkRef.current === network ? captureNetworkImage(network) : null,
+		);
+	}, [positionSnapshotKey, layoutRevealed, layoutGeneration]);
 
 	// ── 比較模式：套用外部下達的視窗。已經在同一個位置就不動，避免兩側互推。
 	useEffect(() => {
@@ -1636,7 +1499,7 @@ export default function GraphViewer({
 			scale: viewport.scale,
 			animation: false,
 		});
-	}, [viewport, stabilized]);
+	}, [viewport, layoutGeneration]);
 
 	// ── Apply filter: yearRange + visibleLayers + hiddenCommunities ──
 	useEffect(() => {
@@ -1693,7 +1556,7 @@ export default function GraphViewer({
 		hiddenCommunities,
 		hiddenNodeIds,
 		hiddenEdgeIds,
-		stabilized,
+		layoutGeneration,
 	]);
 
 	// ── Focus a node (from SearchBox) ──
@@ -1708,8 +1571,6 @@ export default function GraphViewer({
 		networkRef.current.selectNodes([focusNodeId]);
 	}, [focusNodeId, nodes]);
 
-	const isLarge = nodes.length >= LARGE_GRAPH;
-
 	return (
 		<div className="relative w-full h-full bg-accent">
 			{/* Fit-to-view button */}
@@ -1723,30 +1584,31 @@ export default function GraphViewer({
 				全部顯示
 			</Button>
 
-			{/* Stabilizing overlay with progress */}
-			{!stabilized && (
-				<div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 bg-accent/85 border border-border rounded-md px-4 py-2 pointer-events-none backdrop-blur-sm">
-					<span className="text-xs text-muted-foreground">
-						佈局計算中… {stabProgress > 0 ? `${stabProgress}%` : ""}
-					</span>
-					{isLarge && (
-						<div className="w-32 h-1 bg-background rounded-full overflow-hidden">
-							<div
-								className="h-full bg-accent rounded-full transition-all duration-150"
-								style={{ width: `${stabProgress}%` }}
-							/>
-						</div>
-					)}
+			{layoutStatus === "computing" && (
+				<div
+					role="status"
+					className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground"
+				>
+					佈局計算中…
+				</div>
+			)}
+			{layoutStatus === "failed" && (
+				<div
+					role="alert"
+					className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground"
+				>
+					背景排版失敗，目前顯示初步位置；重新開啟此視圖會再次計算。
 				</div>
 			)}
 
-			{layoutIncomplete && (
-				<div role="status" className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground">
-					排版尚未完全收斂，目前顯示暫定位置。重新開啟可再次計算。
-				</div>
-			)}
-
-			<div ref={containerRef} className="w-full h-full" />
+			<div
+				ref={containerRef}
+				className="w-full h-full"
+				data-layout-status={layoutStatus}
+				data-layout-reason={layoutReason}
+				data-layout-source={layoutSource}
+				data-layout-revealed={layoutRevealed}
+			/>
 		</div>
 	);
 }
