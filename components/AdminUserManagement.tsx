@@ -1,5 +1,13 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
+
+import { Card, CardContent } from "@/components/ui/card";
+
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   Check,
@@ -259,7 +267,7 @@ export default function AdminUserManagement({
           </Alert>
         )}
         {success && (
-          <Alert className="border-success/30 bg-success/5 text-success">
+          <Alert>
             <Check aria-hidden />
             <AlertDescription className="text-current">{success}</AlertDescription>
           </Alert>
@@ -267,10 +275,9 @@ export default function AdminUserManagement({
       </div>
 
       {showCreate && (
-        <form
+        <Card><CardContent><form
           id="create-user-form"
           onSubmit={handleCreate}
-          className="rounded-xl border border-border bg-card p-4 sm:p-5"
         >
           <h2 className="mb-4 font-semibold">新增帳號</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -316,7 +323,7 @@ export default function AdminUserManagement({
               />
             </FormField>
             <FormField label="角色" htmlFor="create-role">
-              <select
+              <NativeSelect
                 id="create-role"
                 value={createForm.role}
                 onChange={(event) =>
@@ -326,11 +333,11 @@ export default function AdminUserManagement({
                   }))
                 }
                 disabled={busy}
-                className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                className="w-full"
               >
-                <option value="researcher">研究人員</option>
-                <option value="admin">管理員</option>
-              </select>
+                <NativeSelectOption value="researcher">研究人員</NativeSelectOption>
+                <NativeSelectOption value="admin">管理員</NativeSelectOption>
+              </NativeSelect>
             </FormField>
           </div>
           <div className="mt-4 flex justify-end">
@@ -339,20 +346,20 @@ export default function AdminUserManagement({
               建立帳號
             </Button>
           </div>
-        </form>
+        </form></CardContent></Card>
       )}
 
       {loading ? (
-        <div className="flex min-h-48 items-center justify-center rounded-xl border border-border bg-card text-sm text-muted-foreground">
+        <Card><CardContent className="flex min-h-48 items-center justify-center">
           <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
           讀取帳號中…
-        </div>
+        </CardContent></Card>
       ) : users.length === 0 ? (
-        <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
+        <Card><CardContent className="flex min-h-48 flex-col items-center justify-center">
           <UserRound className="mb-3 text-muted-foreground" aria-hidden />
           <p className="font-medium">尚無帳號</p>
           <p className="mt-1 text-sm text-muted-foreground">請使用「新增帳號」建立第一個帳號。</p>
-        </div>
+        </CardContent></Card>
       ) : (
         <div className="flex flex-col gap-3">
           {users.map((user) => {
@@ -361,7 +368,7 @@ export default function AdminUserManagement({
             const isConfirmingDelete = user.id === confirmDeleteId;
 
             return (
-              <article key={user.id} className="rounded-xl border border-border bg-card p-4 sm:p-5">
+              <Card key={user.id}><CardContent>
                 {isEditing ? (
                   <form onSubmit={(event) => handleUpdate(event, user)}>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -410,7 +417,7 @@ export default function AdminUserManagement({
                         />
                       </FormField>
                       <FormField label="角色" htmlFor={`edit-role-${user.id}`}>
-                        <select
+                        <NativeSelect
                           id={`edit-role-${user.id}`}
                           value={editForm.role}
                           onChange={(event) =>
@@ -422,24 +429,22 @@ export default function AdminUserManagement({
                           }
                           disabled={busy || isCurrentUser}
                           title={isCurrentUser ? "不能修改自己的角色" : undefined}
-                          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="w-full"
                         >
-                          <option value="researcher">研究人員</option>
-                          <option value="admin">管理員</option>
-                        </select>
+                          <NativeSelectOption value="researcher">研究人員</NativeSelectOption>
+                          <NativeSelectOption value="admin">管理員</NativeSelectOption>
+                        </NativeSelect>
                       </FormField>
                       <fieldset className="flex flex-col gap-2" disabled={busy || isCurrentUser}>
                         <legend className="text-sm font-medium">帳號狀態</legend>
                         <label className="flex h-8 items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={editForm.isActive}
-                            onChange={(event) =>
+                            onCheckedChange={(checked) =>
                               setEditForm((form) =>
-                                form ? { ...form, isActive: event.target.checked } : form,
+                                form ? { ...form, isActive: checked } : form,
                               )
                             }
-                            className="size-4 accent-accent"
                           />
                           啟用
                         </label>
@@ -476,22 +481,17 @@ export default function AdminUserManagement({
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-semibold">{user.display_name || user.username}</h2>
                           {isCurrentUser && (
-                            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                            <Badge variant="secondary">
                               目前帳號
-                            </span>
+                            </Badge>
                           )}
-                          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                          <Badge variant="secondary">
                             {user.role === "admin" ? "管理員" : "研究人員"}
-                          </span>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs ${
-                              user.is_active
-                                ? "bg-success/10 text-success"
-                                : "bg-destructive/10 text-destructive"
-                            }`}
+                          </Badge>
+                          <Badge variant={user.is_active ? "secondary" : "destructive"}
                           >
                             {user.is_active ? "已啟用" : "已停用"}
-                          </span>
+                          </Badge>
                         </div>
                         <p className="mt-1 break-all font-mono text-sm text-muted-foreground">
                           {user.username}
@@ -572,7 +572,7 @@ export default function AdminUserManagement({
                     )}
                   </>
                 )}
-              </article>
+              </CardContent></Card>
             );
           })}
         </div>

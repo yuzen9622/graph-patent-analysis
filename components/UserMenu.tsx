@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 interface SessionUser {
+  display_name?: string | null;
 	username: string;
 	role: "admin" | "researcher";
 }
@@ -14,7 +18,10 @@ interface SessionUser {
  * Shows the signed-in account and a logout action. The session cookie is
  * httpOnly, so the username comes from /api/auth/me (populated by proxy.ts).
  */
-export default function UserMenu() {
+const WorkspaceUser = createContext<SessionUser | null>(null);
+export const useWorkspaceUser = () => useContext(WorkspaceUser);
+
+export function WorkspaceUserProvider({ children }: { children: ReactNode }) {
 	const [user, setUser] = useState<SessionUser | null>(null);
 
 	useEffect(() => {
@@ -27,7 +34,7 @@ export default function UserMenu() {
 					body?.username &&
 					(body.role === "admin" || body.role === "researcher")
 				) {
-					setUser({ username: body.username, role: body.role });
+					setUser({ username: body.username, display_name: body.display_name, role: body.role });
 				}
 			})
 			.catch(() => {});
@@ -36,41 +43,31 @@ export default function UserMenu() {
 		};
 	}, []);
 
-	if (!user) return null;
+  return <WorkspaceUser.Provider value={user}>{children}</WorkspaceUser.Provider>;
+}
+
+export default function UserMenu({ compact = false }: { compact?: boolean }) {
+  const user = useWorkspaceUser();
+  if (!user) return null;
 
 	async function handleLogout() {
 		await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
 		window.location.assign("/login");
 	}
 
-	return (
-		<div className="ml-auto flex items-center gap-2 sm:gap-3">
-			<span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
-				<User size={12} aria-hidden />
-				{user.username}
-			</span>
-			{user.role === "admin" && (
-				<Button
-					variant="outline"
-					size="xs"
-					nativeButton={false}
-					render={<Link href="/admin/users" />}
-					className="h-auto gap-1.5 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-				>
-					<Settings size={12} aria-hidden />
-					帳號管理
-				</Button>
-			)}
-			<Button
-				type="button"
-				variant="outline"
-				size="xs"
-				onClick={handleLogout}
-				className="h-auto gap-1.5 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-			>
-				<LogOut size={12} aria-hidden />
-				登出
-			</Button>
-		</div>
-	);
+  const name = user.display_name || user.username;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size={compact ? "icon" : "lg"} className={compact ? "" : "min-w-0 flex-1 justify-start"} aria-label={`使用者選單：${name}`} />}>
+        <Avatar size="sm"><AvatarFallback>{Array.from(name)[0]}</AvatarFallback></Avatar>
+        {!compact && <><span className="truncate">{name}</span><ChevronsUpDown className="ml-auto" aria-hidden /></>}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start">
+        {user.role === "admin" && <>
+          <DropdownMenuItem render={<Link href="/admin/users" />}><Settings />帳號管理</DropdownMenuItem>
+        </>}
+        <DropdownMenuItem onClick={handleLogout}><LogOut />登出</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

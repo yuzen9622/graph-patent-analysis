@@ -1,7 +1,9 @@
 "use client";
 
+import styles from "./login.module.css";
 import { useState } from "react";
-import { BarChart2, LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,77 +47,78 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-background text-foreground flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8">
-          <BarChart2 size={22} className="text-success" aria-hidden />
-          <div>
-            <h1 className="font-serif text-lg font-bold leading-tight">
-              王老師專利知識圖譜分析平台
-            </h1>
-            <p className="text-[0.65rem] text-muted-foreground mt-0.5 font-mono tracking-wide">
-              Patent Knowledge Graph Analysis
-            </p>
-          </div>
+    <main>
+      <a href="#username" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4">跳至登入表單</a>
+      <section className={styles.page} aria-labelledby="login-title">
+        <div className={styles.content}>
+          <header className="grid gap-4">
+            <p>專利研究室</p>
+            <h1 id="login-title" className="text-3xl font-semibold">從資料出發。<br />看見技術之間的關係。</h1>
+            <p className="hidden text-muted-foreground md:block">檢索專利、整理來源、探索知識圖譜。<br />讓每一次研究，都有脈絡可循。</p>
+          </header>
+          <Card>
+            <CardHeader>
+              <CardDescription>王老師專利知識圖譜分析平台</CardDescription>
+              <CardTitle><h2>登入，接續研究。</h2></CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-6"
+            >
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="username">帳號</Label>
+                <Input
+                  id="username"
+                  name="username"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={pending}
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="password">密碼</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={pending}
+                  required
+                />
+              </div>
+
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+
+              <Button type="submit" disabled={pending} className="mt-1 w-full">
+                {pending ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" aria-hidden />
+                    登入中…
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={16} aria-hidden />
+                    登入
+                  </>
+                )}
+              </Button>
+              </form>
+
+            </CardContent>
+            <CardFooter><CardDescription>本平台為研究用途，帳號由系統管理者建立。若需要帳號或忘記密碼，請聯絡管理者。</CardDescription></CardFooter>
+          </Card>
         </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-xl border border-border bg-card p-6 flex flex-col gap-4"
-        >
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="username">帳號</Label>
-            <Input
-              id="username"
-              name="username"
-              autoComplete="username"
-              autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={pending}
-              required
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">密碼</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={pending}
-              required
-            />
-          </div>
-
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" disabled={pending} className="mt-1 w-full">
-            {pending ? (
-              <>
-                <Loader2 size={16} className="animate-spin" aria-hidden />
-                登入中…
-              </>
-            ) : (
-              <>
-                <LogIn size={16} aria-hidden />
-                登入
-              </>
-            )}
-          </Button>
-        </form>
-
-        <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
-          本平台為研究用途，帳號由系統管理者建立。若需要帳號或忘記密碼，請聯絡管理者。
-        </p>
-      </div>
+      </section>
     </main>
   );
 }

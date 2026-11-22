@@ -27,5 +27,5 @@ export default async function AnalysisPage({ searchParams }: Props) {
 		notFound();
 	}
 
-	return <GraphLayout graph={graph} jobId={id} />;
+	return <GraphLayout key={id} graph={graph} jobId={id} />;
 }
