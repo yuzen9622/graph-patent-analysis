@@ -32,6 +32,9 @@ const UP_FILES = [
   '006_p4_units_metrics.sql',
   '007_p6_temporal.sql',
   '008_p6_scope_id.sql',
+  '009_patent_search.sql',
+  '010_research_chats.sql',
+  '011_history_actions.sql',
 ] as const
 const REAPPLY_FILES = UP_FILES.slice(2)
 const INIT_TABLES = [
@@ -59,7 +62,13 @@ const FULL_TABLES = [
   'edges',
   'patent_applicants',
   'patent_concepts',
+  'patent_search_events',
+  'patent_search_jobs',
+  'patent_search_proposals',
+  'patent_search_worker',
   'patents',
+  'research_chat_turns',
+  'research_chats',
   'sessions',
   'synonym_groups',
   'uploads',
@@ -139,7 +148,7 @@ if (!needsDb) {
 }
 
 describe('database migration file inventory', () => {
-  it('uses the client readdirSync filter to select only the eight ordered up files', () => {
+  it('uses the client readdirSync filter to select only the ten ordered up files', () => {
     const entries = fs.readdirSync(MIGRATIONS_DIR)
     const filtered = filesUsingClientFilter()
 
@@ -152,7 +161,7 @@ describe('database migration file inventory', () => {
     expect(filesUsingClientFilter().some((file) => file.startsWith('._'))).toBe(false)
   })
 
-  it('001 是 init 不設 down；002–008 均有對應 down 檔', () => {
+  it('001 是 init 不設 down；002–011 均有對應 down 檔', () => {
     expect(fs.existsSync(path.join(DOWN_DIR, '001_down.sql'))).toBe(false)
     for (const file of UP_FILES.slice(1)) {
       expect(fs.existsSync(path.join(DOWN_DIR, `${file.slice(0, 3)}_down.sql`))).toBe(true)
@@ -188,7 +197,7 @@ describe.skipIf(!needsDb)('database migrations in a disposable PostgreSQL databa
     }
   })
 
-  it('migrates, rolls down 008 through 003 one file at a time, then reapplies 003 through 008', async () => {
+  it('migrates, rolls down 011 through 003 one file at a time, then reapplies 003 through 011', async () => {
     const activeClient = client!
     const activePool = pool!
 
@@ -196,7 +205,7 @@ describe.skipIf(!needsDb)('database migrations in a disposable PostgreSQL databa
     await activeClient.migrate()
     expect(await trackedNames(activePool)).toEqual(UP_FILES)
     expect(await tableList(activePool)).toEqual(FULL_TABLES)
-    expect(await tableList(activePool)).toHaveLength(16)
+    expect(await tableList(activePool)).toHaveLength(22)
 
     const extensions = await activePool.query<{ extname: string }>(
       "SELECT extname FROM pg_extension WHERE extname = 'pgcrypto'",
@@ -259,6 +268,10 @@ describe.skipIf(!needsDb)('database migrations in a disposable PostgreSQL databa
     expect(await advisoryLocks(activePool)).toBe(0)
 
     // Phase 2: down files are manually applied and deliberately do not touch tracking.
+    await applyDownFiles(activePool, ['011_down.sql', '010_down.sql', '009_down.sql'])
+    for (const table of ['patent_search_events', 'patent_search_jobs', 'patent_search_proposals', 'patent_search_worker']) {
+      expect(await tableExists(activePool, table)).toBe(false)
+    }
     await applyDownFiles(activePool, ['008_down.sql'])
     expect((await columnTypes(activePool, 'analyses')).scope_id).toBeUndefined()
     expect(await tableList(activePool)).toHaveLength(16)
@@ -299,7 +312,7 @@ describe.skipIf(!needsDb)('database migrations in a disposable PostgreSQL databa
     expect(await tableList(activePool)).toEqual(TABLES_AFTER_003_DOWN)
     expect(await tableList(activePool)).toHaveLength(13)
 
-    // Phase 3: real deployment recovery keeps 001/002 tracking, then reapplies only 003–008.
+    // Phase 3: real deployment recovery keeps 001/002 tracking, then reapplies only 003–011.
     await deleteTrackingRows(activePool, REAPPLY_FILES)
     expect(await trackedNames(activePool)).toEqual(UP_FILES.slice(0, 2))
     clearMigrationPromise()
