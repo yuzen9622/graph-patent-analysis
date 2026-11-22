@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 /**
  * 比較 PNG 的畫布組裝（瀏覽器端專用：用到 Image 與 canvas）。
  * 文案來源一律走 lib/compare-export.ts，跟離線 HTML 匯出共用同一份字串。
@@ -248,18 +249,18 @@ export async function composeCompareImage(
 	canvas.height = Math.ceil(height * scale);
 	ctx.scale(scale, scale);
 
-	ctx.fillStyle = "#ffffff";
+	ctx.fillStyle = graphColors["paper"];
 	ctx.fillRect(0, 0, width, height);
 	ctx.textBaseline = "top";
 
 	let y = PADDING;
-	ctx.fillStyle = "#0f172a";
+	ctx.fillStyle = graphColors["print-ink"];
 	ctx.font = `bold ${TITLE_FONT_PX}px system-ui, sans-serif`;
 	ctx.fillText(input.title, PADDING, y);
 	y += TITLE_FONT_PX + 20;
 
 	ctx.font = `${LINE_FONT_PX}px system-ui, sans-serif`;
-	ctx.fillStyle = "#334155";
+	ctx.fillStyle = graphColors["print-caption"];
 	for (const line of annotationLines) {
 		ctx.fillText(line, PADDING, y);
 		y += LINE_HEIGHT_PX;
@@ -274,7 +275,7 @@ export async function composeCompareImage(
 			LEGEND_SWATCH_PX,
 			LEGEND_SWATCH_PX,
 		);
-		ctx.fillStyle = "#334155";
+		ctx.fillStyle = graphColors["print-caption"];
 		ctx.fillText(entry.text, PADDING + entry.x + LEGEND_SWATCH_PX + 8, legendY);
 	}
 	y += legendRows * LINE_HEIGHT_PX + 12;
@@ -285,13 +286,13 @@ export async function composeCompareImage(
 		const x = PADDING + layout.panelX[index];
 		const panelY = panelTop + layout.panelY[index];
 		const labelTop = y + layout.panelY[index];
-		ctx.fillStyle = "#0f172a";
+		ctx.fillStyle = graphColors["print-ink"];
 		ctx.font = `bold ${PANEL_LABEL_PX - 4}px system-ui, sans-serif`;
 		for (const [lineIndex, line] of panelLabelLines[index].entries()) {
 			ctx.fillText(line, x, labelTop + lineIndex * PANEL_LABEL_PX);
 		}
 		ctx.drawImage(image, x, panelY, sizes[index].width, sizes[index].height);
-		ctx.strokeStyle = "#cbd5e1";
+		ctx.strokeStyle = graphColors["print-border"];
 		ctx.lineWidth = 1;
 		ctx.strokeRect(x + 0.5, panelY + 0.5, sizes[index].width, sizes[index].height);
 	}

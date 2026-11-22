@@ -1,5 +1,8 @@
 "use client";
 
+import presentation from "./sidebar.module.css";
+import { Input } from "@/components/ui/input";
+
 import { useState, useCallback } from "react";
 import {
 	Play,
@@ -114,16 +117,11 @@ export default function YearFilter({
 		return <p className="text-xs text-muted-foreground">資料中無年份資訊</p>;
 	}
 
-	const yearButtonCls =
-		"h-auto rounded px-1 py-0.5 font-semibold text-foreground tabular-nums hover:bg-accent hover:text-primary cursor-pointer";
-	const yearInputCls =
-		"w-16 rounded border border-border bg-background px-1 py-0.5 text-center font-semibold text-foreground tabular-nums outline-none focus:border-primary";
-
 	return (
 		<div className="space-y-3">
-			<div className="flex items-center justify-between gap-2 text-xs">
+			<div className={presentation.yearInputs}>
 				{editing === "min" ? (
-					<input
+					<Input
 						autoFocus
 						type="number"
 						value={draft}
@@ -133,7 +131,7 @@ export default function YearFilter({
 							if (event.key === "Enter") commitEdit();
 							if (event.key === "Escape") setEditing(null);
 						}}
-						className={yearInputCls}
+						className="w-16"
 						aria-label="起始年份（點擊可輸入）"
 					/>
 				) : (
@@ -142,7 +140,6 @@ export default function YearFilter({
 						variant="ghost"
 						size="xs"
 						onClick={() => startEdit("min")}
-						className={yearButtonCls}
 						title="點擊以輸入年份"
 					>
 						{local[0]}
@@ -150,7 +147,7 @@ export default function YearFilter({
 				)}
 				<span className="text-muted-foreground">–</span>
 				{editing === "max" ? (
-					<input
+					<Input
 						autoFocus
 						type="number"
 						value={draft}
@@ -160,7 +157,7 @@ export default function YearFilter({
 							if (event.key === "Enter") commitEdit();
 							if (event.key === "Escape") setEditing(null);
 						}}
-						className={yearInputCls}
+						className="w-16"
 						aria-label="結束年份（點擊可輸入）"
 					/>
 				) : (
@@ -169,7 +166,6 @@ export default function YearFilter({
 						variant="ghost"
 						size="xs"
 						onClick={() => startEdit("max")}
-						className={yearButtonCls}
 						title="點擊以輸入年份"
 					>
 						{local[1]}
@@ -191,7 +187,7 @@ export default function YearFilter({
 			</div>
 
 			{/* 縮時播放快捷控制列 */}
-			<div className="flex items-center justify-between gap-1 pt-1 border-t border-border/40">
+			<div className={presentation.transport}>
 				<div className="flex items-center gap-1">
 					<Button
 						type="button"
@@ -199,7 +195,7 @@ export default function YearFilter({
 						size="icon-xs"
 						onClick={handleReset}
 						title="重設回起始年"
-						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+						className="size-8"
 					>
 						<RotateCcw className="size-3" />
 					</Button>
@@ -210,7 +206,7 @@ export default function YearFilter({
 						onClick={() => handleStep(-1)}
 						disabled={local[1] <= min}
 						title="上一年"
-						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+						className="size-8"
 					>
 						<SkipBack className="size-3" />
 					</Button>
@@ -218,11 +214,9 @@ export default function YearFilter({
 						type="button"
 						variant={isPlaying ? "default" : "secondary"}
 						size="xs"
+						className="h-8"
 						onClick={onTogglePlay}
 						title={isPlaying ? "暫停縮時動畫" : "播放縮時動畫"}
-						className={`h-6 px-2 text-[0.7rem] font-medium gap-1 ${
-							isPlaying ? "bg-primary text-primary-foreground animate-pulse" : ""
-						}`}
 					>
 						{isPlaying ? (
 							<>
@@ -243,7 +237,7 @@ export default function YearFilter({
 						onClick={() => handleStep(1)}
 						disabled={local[1] >= max}
 						title="下一年"
-						className="h-6 w-6 text-muted-foreground hover:text-foreground"
+						className="size-8"
 					>
 						<SkipForward className="size-3" />
 					</Button>

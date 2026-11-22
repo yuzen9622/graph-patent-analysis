@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 import { buildConceptNetwork, applicantSize, conceptSize, PATENT_NODE_SIZE } from './concept-network'
 import { detectCommunities } from './community'
 import { computeGodNodes, computeSurprisingConnections } from './graph-analysis'
@@ -65,7 +66,7 @@ function normalizeNode(value: unknown): GraphNode | null {
     id,
     label,
     type,
-    color: typeof value.color === 'string' ? value.color : '#BAB0AC',
+    color: typeof value.color === 'string' ? value.color : graphColors["unknown"],
     size: asFiniteNumber(value.size) ?? (type === 'patent' ? PATENT_NODE_SIZE : 18),
     source_patents: asStringArray(value.source_patents),
     // PRD v2 / P3: the four concept-time fields are validated, not spread
@@ -313,7 +314,7 @@ function normalizeV2(raw: Record<string, unknown>, nodes: GraphNode[], edges: Gr
     ? (raw.communities.filter(isRecord).map((item) => ({
         id: asFiniteNumber(item.id) ?? 0,
         name: asString(item.name, '未命名社群'),
-        color: asString(item.color, '#BAB0AC'),
+        color: asString(item.color, graphColors["unknown"]),
         node_count: asFiniteNumber(item.node_count) ?? 0,
       })) as Community[])
     : []
@@ -425,7 +426,7 @@ function normalizeLegacy(raw: Record<string, unknown>, nodes: GraphNode[], edges
     .map((id) => ({
       id,
       name: communityResult.names.get(id) ?? `社群 ${id}`,
-      color: communityResult.colors.get(id) ?? '#BAB0AC',
+      color: communityResult.colors.get(id) ?? graphColors["unknown"],
       node_count: communityCounts.get(id) ?? 0,
     }))
 

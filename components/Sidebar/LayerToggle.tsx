@@ -12,52 +12,42 @@ interface Props {
 const LAYERS: {
   type: NodeType;
   label: string;
-  color: string;
-  /** 靜態 class 字串（Tailwind 需在原始碼可見才能產出樣式）。 */
-  checkedClass: string;
+  swatch: string;
 }[] = [
   {
     type: "applicant",
     label: "申請人層",
-    color: "#4E79A7",
-    checkedClass:
-      "data-checked:bg-layer-applicant data-checked:border-layer-applicant dark:data-checked:bg-layer-applicant dark:data-checked:border-layer-applicant",
+    swatch: "bg-layer-applicant",
   },
   {
     type: "patent",
     label: "專利層",
-    color: "#F28E2B",
-    checkedClass:
-      "data-checked:bg-layer-patent data-checked:border-layer-patent dark:data-checked:bg-layer-patent dark:data-checked:border-layer-patent",
+    swatch: "bg-layer-patent",
   },
   {
     type: "concept",
     label: "概念層",
-    color: "#59A14F",
-    checkedClass:
-      "data-checked:bg-layer-concept data-checked:border-layer-concept dark:data-checked:bg-layer-concept dark:data-checked:border-layer-concept",
+    swatch: "bg-layer-concept",
   },
 ];
 
 export default function LayerToggle({ visibleLayers, onToggle }: Props) {
   return (
     <div className="space-y-1.5">
-      {LAYERS.map(({ type, label, color, checkedClass }) => (
+      {LAYERS.map(({ type, label, swatch }) => (
         <div key={type} className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted/60 transition-colors">
           <Checkbox
             id={`layer-${type}`}
             checked={visibleLayers.has(type)}
             onCheckedChange={() => onToggle(type)}
-            className={`border-border ${checkedClass}`}
           />
           <Label
             htmlFor={`layer-${type}`}
-            className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1.5"
+            className="flex items-center gap-1.5"
           >
             <span
               aria-hidden
-              className="w-2 h-2 rounded-sm shrink-0"
-              style={{ background: `var(--color-${type === "applicant" ? "layer-applicant" : type === "patent" ? "layer-patent" : "layer-concept"}, ${color})` }}
+              className={`w-2 h-2 rounded-sm shrink-0 ${swatch}`}
             />
             {label}
           </Label>

@@ -1,21 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+
+import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  BarChart2,
   Copy,
+  ChevronDown,
+  SlidersHorizontal,
   Check,
   Download,
   GitCompare,
   ImageDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import toolbar from "./graph-toolbar.module.css";
 import Sidebar from "./Sidebar";
 import { BANK_OWNERSHIPS, includesAllOwnership, type BankOwnership } from "@/lib/bank-ownership";
-import AnalysisHistorySidebar from "./AnalysisHistorySidebar";
 import CompareSetupPanel from "./CompareSetupPanel";
 import CompareSummary from "./CompareSummary";
 import DiffLegend from "./DiffLegend";
@@ -130,6 +134,16 @@ function downloadDataUrl(dataUrl: string, filename: string): void {
 
 /** 比較工作區：off（單一檢視）→ setup（選面板範圍）→ active（比較中）。 */
 type CompareUiState = "off" | "setup" | "active";
+
+function isWide() {
+  return window.matchMedia("(min-width: 64rem)").matches;
+}
+
+function subscribeToWidth(notify: () => void) {
+  const query = window.matchMedia("(min-width: 64rem)");
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+}
 
 export default function GraphLayout({ graph, jobId }: Props) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -270,6 +284,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
         return;
       }
 
+      if (e.defaultPrevented || (e.target instanceof Element && e.target.closest('[role="tablist"]'))) return;
       if (e.code === "Space") {
         e.preventDefault();
         handleTogglePlay();
@@ -299,7 +314,6 @@ export default function GraphLayout({ graph, jobId }: Props) {
     null,
   );
   const [copied, setCopied] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const positionSnapshotProviderRef = useRef<PositionSnapshotProvider | null>(
     null,
   );
@@ -1146,30 +1160,114 @@ export default function GraphLayout({ graph, jobId }: Props) {
     );
   }, [jobId, graph, clearInspection, mode, unit, applicantDataAvailability]);
 
-  return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden">
-      {/* ── Header ── */}
-      <header className="shrink-0 bg-accent border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 min-h-[52px]">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity"
-        >
-          <BarChart2 size={20} className="text-success shrink-0" aria-hidden />
-          <div className="min-w-0">
-            <h1 className="font-serif text-base font-bold text-foreground leading-tight truncate">
-              專利知識圖譜分析
-            </h1>
-            <p className="text-[0.65rem] text-foreground leading-none mt-0.5 font-mono">
-              {jobId.slice(0, 8)}…
-            </p>
-          </div>
-        </Link>
+  const wide = useSyncExternalStore(subscribeToWidth, isWide, () => false);
+  const controls = (
+    <Sidebar
+      nodes={view.nodes}
+      communities={view.communities}
+      inspectionKey={`${inspectionVersion}:${inspectionSource?.kind ?? "none"}${
+        inspectionSource?.kind === "panel"
+          ? `:${inspectionSource.index}`
+          : ""
+      }`}
+      inspectionNodes={inspectionView?.nodes ?? []}
+      inspectionEdges={inspectionView?.edges ?? []}
+      inspectionLookupNodes={graph.nodes}
+      inspectionCommunities={inspectionView?.communities ?? []}
+      aiReport={graph.ai_report}
+      yearRange={yearRange}
+      fullYearRange={graph.stats.year_range}
+      selectedNode={selectedViewNode}
+      selectedEdge={selectedViewEdge}
+      methodology={graph.methodology}
+      mode={mode}
+      sharedConceptCount={sharedConceptCount}
+      colorMode={colorMode}
+      onColorModeChange={setColorMode}
+      unit={unit}
+      onUnitChange={setUnit}
+      allSourceFiles={allSourceFiles}
+      sourceFiles={sourceFiles}
+      ownership={ownership}
+      onOwnershipChange={setOwnership}
+      onSourceFilesChange={
+        compareMode
+          ? (next) => updateActiveCompareScope("left", next)
+          : setSourceFiles
+      }
+      compareMode={compareMode}
+      sourceFilesRight={sourceFilesRight}
+      onSourceFilesRightChange={(next) =>
+        updateActiveCompareScope("right", next)
+      }
+      extraPanelCount={
+        extraPanels.filter((scope) => scope.length > 0).length
+      }
+      ipcLevel={ipcLevel}
+      onIpcLevelChange={(level) => {
+        setIpcLevel(level);
+        setIpcFilter([]);
+      }}
+      ipcFilter={ipcFilter}
+      onIpcFilterChange={setIpcFilter}
+      ipcTree={ipcTree}
+      hasIpcData={hasIpcData}
+      ipcLegend={ipcLegend}
+      applicantAvailability={applicantDataAvailability}
+      minSupport={minSupport}
+      maxSupport={
+        panelViews && panelViews.length > 0
+          ? Math.max(...panelViews.map((panel) => panel.maxSupport))
+          : view.maxSupport
+      }
+      visibleLayers={visibleLayers}
+      hiddenCommunities={hiddenCommunities}
+      onYearChange={setYearRange}
+      onLayerToggle={toggleLayer}
+      onCommunityToggle={toggleCommunity}
+      onNodeFocus={setFocusNodeId}
+      onSearchNodeSelect={(node) =>
+        selectInspectionNode(node, { kind: "main" })
+      }
+      onInspectorNodeSelect={(node) =>
+        selectInspectionNode(node, inspectionSource ?? { kind: "main" })
+      }
+      onInspectorClose={clearInspection}
+      onMinSupportChange={setMinSupport}
+      onResetFilters={handleResetFilters}
+      showCitations={showCitations}
+      onCitationsChange={setShowCitations}
+      isPlaying={isPlaying}
+      onTogglePlay={handleTogglePlay}
+      onStepYear={handleStepYear}
+      onResetYear={handleResetYear}
+      subgraphCenterId={
+        subgraphState?.kind === "node"
+          ? subgraphState.centerNodeId
+          : undefined
+      }
+      onEnterSubgraph={handleEnterSubgraph}
+      onExitSubgraph={handleExitSubgraph}
+      onSearchKeyword={handleSearchKeyword}
+    />
+  );
 
-        <div className="flex items-center gap-2 shrink-0">
-          <ButtonGroup
-            aria-label="圖譜模式"
-            className="rounded-md border border-border bg-background "
-          >
+  return (
+    <div className="flex flex-col h-full min-h-0 bg-background overflow-hidden">
+      {/* ── Header ── */}
+      <header className={toolbar.header}>
+        {!wide && (
+          <Sheet>
+            <SheetTrigger render={<Button variant="outline" size="sm" className={toolbar.controlTrigger} />}><SlidersHorizontal aria-hidden />圖譜控制</SheetTrigger>
+            <SheetContent side="right" className="shadow-none">
+              <SheetTitle className="px-4 pt-4">圖譜控制</SheetTitle>
+              <SheetDescription className="sr-only">檢視節點與調整圖譜篩選。</SheetDescription>
+              <div className="flex min-h-0 flex-1">{controls}</div>
+            </SheetContent>
+          </Sheet>
+        )}
+        <div className={toolbar.tools}>
+          <div className={toolbar.modes} role="group" aria-label="圖譜模式">
             {(
               [
                 ["concept", "技術概念網路"],
@@ -1184,159 +1282,138 @@ export default function GraphLayout({ graph, jobId }: Props) {
                 size="xs"
                 onClick={() => selectMode(value)}
                 aria-pressed={mode === value}
-                className={`h-auto rounded px-2.5 py-1 text-xs ${
-                  mode === value
-                    ? ""
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
               >
                 {label}
               </Button>
             ))}
-          </ButtonGroup>
-          <Button
-            type="button"
-            variant={compareUi !== "off" ? "default" : "outline"}
-            size="sm"
-            onClick={() =>
-              compareUi === "off" ? openCompareSetup() : exitCompare()
-            }
-            disabled={allSourceFiles.length <= 1}
-            aria-pressed={compareUi !== "off"}
-            title={
-              allSourceFiles.length <= 1
-                ? "此分析只有一個來源檔，無法比較"
-                : "設定多面板來源檔範圍並比較"
-            }
-            className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-40 ${
-              compareUi !== "off" ? "border-primary" : "hover:bg-accent"
-            }`}
-          >
-            <GitCompare size={12} />
-            比較
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="h-auto gap-1.5 py-1.5 text-xs hover:border-accent hover:bg-accent hover:text-accent-foreground cursor-pointer"
-            aria-label="複製分享連結"
-          >
-            {copied ? (
-              <>
-                <Check size={12} className="text-success" />
-                已複製
-              </>
-            ) : (
-              <>
-                <Copy size={12} />
-                複製連結
-              </>
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void handleOfflineExport()}
-            disabled={!exportReady || exporting || offlineExportBlocked}
-            title={
-              offlineExportBlocked
-                ? "並排檢視無法匯出離線 HTML，請先切到「差異」檢視"
-                : (exportError ??
-                  (exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成"))
-            }
-            className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto ${
-              !exportReady || exporting || offlineExportBlocked
-                ? "cursor-not-allowed"
-                : "cursor-pointer hover:bg-accent hover:text-accent-foreground"
-            }`}
-            aria-label="下載離線 HTML 圖譜"
-          >
-            <Download size={12} />
-            {exporting
-              ? "匯出中…"
-              : compareMode
-                ? "離線 HTML（差異）"
-                : "離線 HTML"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void handleExportImage()}
-            disabled={!imageExportReady || imageExporting}
-            title={
-              imageExportReady
-                ? compareMode
-                  ? "下載帶標題、面板來源、共用篩選與指標的比較 PNG"
-                  : "下載目前畫面的高解析度 PNG 圖片（4 倍，超大畫面自動調整）"
-                : "等待圖譜佈局完成"
-            }
-            className={`h-auto gap-1.5 py-1.5 text-xs disabled:pointer-events-auto ${
-              !imageExportReady || imageExporting
-                ? "cursor-not-allowed"
-                : "cursor-pointer hover:bg-accent hover:text-accent-foreground"
-            }`}
-            aria-label={
-              compareMode ? "匯出比較 PNG" : "匯出目前畫面為 PNG 圖片"
-            }
-          >
-            <ImageDown size={12} />
-            {imageExporting
-              ? "匯出中…"
-              : compareMode
-                ? "匯出比較 PNG"
-                : "匯出圖片"}
-          </Button>
-          <PublicationExportPanel
-            overviewNodeCount={view.nodes.length}
-            selectedNodeId={selectedViewNode?.id ?? null}
-            selectedNodeLabel={selectedViewNode?.label ?? null}
-            getSubgraphNodeCount={getSubgraphNodeCount}
-            disabled={!publicationReady || compareUi !== "off"}
-            disabledReason={
-              compareUi !== "off"
-                ? "出版圖是單張圖譜的 PRD 規格，比較工作區不適用；請先結束比較。"
-                : undefined
-            }
-            onGenerate={handleGeneratePublicationFigure}
-          />
-          {(exportError || publicationError || imageExportError) && (
-            <span
-              role="status"
-              title={
-                exportError ?? publicationError ?? imageExportError ?? undefined
+          </div>
+          <div className={toolbar.actions}>
+            <Button
+              type="button"
+              variant={compareUi !== "off" ? "default" : "outline"}
+              size="sm"
+              onClick={() =>
+                compareUi === "off" ? openCompareSetup() : exitCompare()
               }
-              className="max-w-28 truncate text-xs text-destructive"
+              disabled={allSourceFiles.length <= 1}
+              aria-pressed={compareUi !== "off"}
+              title={
+                allSourceFiles.length <= 1
+                  ? "此分析只有一個來源檔，無法比較"
+                  : "設定多面板來源檔範圍並比較"
+              }
             >
-              {exportError ?? publicationError ?? imageExportError}
-            </span>
-          )}
-          {!exportError && !publicationError && publicationNotice && (
-            <span
-              role="status"
-              title={publicationNotice}
-              className="max-w-40 truncate text-xs text-muted-foreground"
+              <GitCompare size={12} />
+              比較
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="gap-1.5"
+              aria-label="複製分享連結"
             >
-              {publicationNotice}
-            </span>
-          )}
+              {copied ? (
+                <>
+                  <Check size={12} className="text-success" />
+                  已複製
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  複製連結
+                </>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="secondary" size="sm" />}>
+                <Download aria-hidden />
+                {exporting || imageExporting ? "匯出中…" : "匯出"}
+                <ChevronDown aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={6} className={toolbar.exportMenu}>
+                <DropdownMenuItem
+                  onClick={() => void handleOfflineExport()}
+                  disabled={!exportReady || exporting || offlineExportBlocked}
+                  title={
+                    offlineExportBlocked
+                      ? "並排檢視無法匯出離線 HTML，請先切到「差異」檢視"
+                      : (exportError ??
+                        (exportReady ? "下載離線 HTML 圖譜" : "等待圖譜佈局完成"))
+                  }
+                  aria-label="下載離線 HTML 圖譜"
+                >
+                  <Download size={12} />
+                  {exporting
+                    ? "匯出中…"
+                    : compareMode
+                      ? "離線 HTML（差異）"
+                      : "離線 HTML"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void handleExportImage()}
+                  disabled={!imageExportReady || imageExporting}
+                  title={
+                    imageExportReady
+                      ? compareMode
+                        ? "下載帶標題、面板來源、共用篩選與指標的比較 PNG"
+                        : "下載目前畫面的高解析度 PNG 圖片（4 倍，超大畫面自動調整）"
+                      : "等待圖譜佈局完成"
+                  }
+                  aria-label={
+                    compareMode ? "匯出比較 PNG" : "匯出目前畫面為 PNG 圖片"
+                  }
+                >
+                  <ImageDown size={12} />
+                  {imageExporting
+                    ? "匯出中…"
+                    : compareMode
+                      ? "匯出比較 PNG"
+                      : "匯出圖片"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <PublicationExportPanel
+              overviewNodeCount={view.nodes.length}
+              selectedNodeId={selectedViewNode?.id ?? null}
+              selectedNodeLabel={selectedViewNode?.label ?? null}
+              getSubgraphNodeCount={getSubgraphNodeCount}
+              disabled={!publicationReady || compareUi !== "off"}
+              disabledReason={
+                compareUi !== "off"
+                  ? "出版圖是單張圖譜的 PRD 規格，比較工作區不適用；請先結束比較。"
+                  : undefined
+              }
+              onGenerate={handleGeneratePublicationFigure}
+            />
+          </div>
         </div>
+        {(exportError || publicationError || imageExportError) && (
+          <span
+            role="status"
+            title={
+              exportError ?? publicationError ?? imageExportError ?? undefined
+            }
+            className={toolbar.error}
+          >
+            {exportError ?? publicationError ?? imageExportError}
+          </span>
+        )}
+        {!exportError && !publicationError && publicationNotice && (
+          <span
+            role="status"
+            title={publicationNotice}
+            className={toolbar.notice}
+          >
+            {publicationNotice}
+          </span>
+        )}
       </header>
 
       {/* ── Main area: graph + sidebar ── */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* History sidebar — hidden on mobile */}
-        <div className="hidden md:flex shrink-0">
-          <AnalysisHistorySidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((c) => !c)}
-          />
-        </div>
-
+      <div className="isolate flex flex-1 overflow-hidden min-h-0">
         {/* Graph canvas */}
-        <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden">
+        <div className="relative z-0 flex flex-1 min-w-0 flex-col overflow-hidden">
           {compareMode && difference && (
             <CompareSummary
               labels={compareLabels}
@@ -1409,7 +1486,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
               </div>
             ) : compareMode && panelViews ? (
               <div
-                className={`flex min-w-0 flex-1 overflow-hidden ${
+                className={`flex min-w-0 flex-1 gap-2 overflow-hidden ${
                   panelViews.length > 2 ? "overflow-x-auto" : ""
                 }`}
               >
@@ -1417,14 +1494,10 @@ export default function GraphLayout({ graph, jobId }: Props) {
                   <div
                     key={index}
                     className={`relative min-w-0 overflow-hidden ${
-                      index < panelViews.length - 1
-                        ? "border-r border-border"
-                        : ""
-                    } ${
                       panelViews.length > 2 ? "min-w-[28rem] flex-1" : "flex-1"
                     }`}
                   >
-                    <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[0.65rem] text-muted-foreground backdrop-blur-sm">
+                    <Card className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)]"><CardContent>
                       <span className="font-medium text-foreground">
                         {panelLabel(index, panelViews.length)}
                         {panelViews.length <= 2
@@ -1438,7 +1511,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
                       {" · "}
                       {panelView.stats.applicant_count} 家 ·{" "}
                       {panelView.stats.patent_count} 篇
-                    </div>
+                    </CardContent></Card>
                     <GraphViewer
                       key={`${jobId}:panel:${index}`}
                       layoutScopeKey={JSON.stringify([
@@ -1523,94 +1596,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
         </div>
 
         {/* Right sidebar */}
-        <Sidebar
-          nodes={view.nodes}
-          communities={view.communities}
-          inspectionKey={`${inspectionVersion}:${inspectionSource?.kind ?? "none"}${
-            inspectionSource?.kind === "panel"
-              ? `:${inspectionSource.index}`
-              : ""
-          }`}
-          inspectionNodes={inspectionView?.nodes ?? []}
-          inspectionEdges={inspectionView?.edges ?? []}
-          inspectionLookupNodes={graph.nodes}
-          inspectionCommunities={inspectionView?.communities ?? []}
-          aiReport={graph.ai_report}
-          yearRange={yearRange}
-          fullYearRange={graph.stats.year_range}
-          selectedNode={selectedViewNode}
-          selectedEdge={selectedViewEdge}
-          methodology={graph.methodology}
-          mode={mode}
-          sharedConceptCount={sharedConceptCount}
-          colorMode={colorMode}
-          onColorModeChange={setColorMode}
-          unit={unit}
-          onUnitChange={setUnit}
-          allSourceFiles={allSourceFiles}
-          sourceFiles={sourceFiles}
-          ownership={ownership}
-          onOwnershipChange={setOwnership}
-          onSourceFilesChange={
-            compareMode
-              ? (next) => updateActiveCompareScope("left", next)
-              : setSourceFiles
-          }
-          compareMode={compareMode}
-          sourceFilesRight={sourceFilesRight}
-          onSourceFilesRightChange={(next) =>
-            updateActiveCompareScope("right", next)
-          }
-          extraPanelCount={
-            extraPanels.filter((scope) => scope.length > 0).length
-          }
-          ipcLevel={ipcLevel}
-          onIpcLevelChange={(level) => {
-            setIpcLevel(level);
-            setIpcFilter([]);
-          }}
-          ipcFilter={ipcFilter}
-          onIpcFilterChange={setIpcFilter}
-          ipcTree={ipcTree}
-          hasIpcData={hasIpcData}
-          ipcLegend={ipcLegend}
-          applicantAvailability={applicantDataAvailability}
-          minSupport={minSupport}
-          maxSupport={
-            panelViews && panelViews.length > 0
-              ? Math.max(...panelViews.map((panel) => panel.maxSupport))
-              : view.maxSupport
-          }
-          visibleLayers={visibleLayers}
-          hiddenCommunities={hiddenCommunities}
-          onYearChange={setYearRange}
-          onLayerToggle={toggleLayer}
-          onCommunityToggle={toggleCommunity}
-          onNodeFocus={setFocusNodeId}
-          onSearchNodeSelect={(node) =>
-            selectInspectionNode(node, { kind: "main" })
-          }
-          onInspectorNodeSelect={(node) =>
-            selectInspectionNode(node, inspectionSource ?? { kind: "main" })
-          }
-          onInspectorClose={clearInspection}
-          onMinSupportChange={setMinSupport}
-          onResetFilters={handleResetFilters}
-          showCitations={showCitations}
-          onCitationsChange={setShowCitations}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onStepYear={handleStepYear}
-          onResetYear={handleResetYear}
-          subgraphCenterId={
-            subgraphState?.kind === "node"
-              ? subgraphState.centerNodeId
-              : undefined
-          }
-          onEnterSubgraph={handleEnterSubgraph}
-          onExitSubgraph={handleExitSubgraph}
-          onSearchKeyword={handleSearchKeyword}
-        />
+        {wide && controls}
       </div>
     </div>
   );

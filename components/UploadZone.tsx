@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+
+import React, { useCallback, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -11,6 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Attachment,
@@ -54,7 +57,12 @@ export interface ParsedUpload {
   files: File[];
 }
 
+export interface UploadZoneHandle {
+  importFiles: (files: File[]) => Promise<void>;
+}
+
 interface UploadZoneProps {
+  ref?: Ref<UploadZoneHandle>;
   onParsed: (upload: ParsedUpload) => void;
   onError: (msg: string) => void;
   /** Clears the parsed upload in the parent before a replacement or removal. */
@@ -65,40 +73,14 @@ const FIELD_LABELS: Record<string, string> = {
   title: "專利名稱",
   abstract: "摘要",
   applicant: "申請人",
+  applicants_exact: "完整申請人",
   filing_date: "申請日",
   application_number: "申請號",
 };
 
-function getZoneClass(state: UploadState) {
-  const base =
-    "flex flex-col items-center justify-center w-full min-h-[160px] rounded-xl border-2 border-dashed px-6 py-8 outline-none transition-all duration-200 backdrop-blur-sm";
-  switch (state) {
-    case "idle":
-      return cn(
-        base,
-        "border-border bg-black/[0.01] dark:bg-white/[0.02] cursor-pointer hover:border-accent/40 hover:bg-accent/5",
-      );
-    case "dragging":
-      return cn(
-        base,
-        "border-accent/60 bg-accent/10 scale-[1.01] cursor-copy shadow-lg shadow-accent/10",
-      );
-    case "parsing":
-      return cn(
-        base,
-        "border-black/5 dark:border-white/10 bg-black/[0.01] dark:bg-white/[0.02] opacity-75 cursor-wait",
-      );
-    case "success":
-      return cn(
-        base,
-        "border-success/40 bg-success/8 cursor-default shadow-sm shadow-success/10",
-      );
-    case "error":
-      return cn(base, "border-error/40 bg-error/8 cursor-pointer");
-  }
-}
 
 export default function UploadZone({
+  ref,
   onParsed,
   onError,
   onClear,
@@ -211,6 +193,8 @@ export default function UploadZone({
     [onParsed, onError, onClear],
   );
 
+  useImperativeHandle(ref, () => ({ importFiles: processFiles }), [processFiles]);
+
   // ── Reset ────────────────────────────────────────────────────────────────
 
   const handleReset = useCallback(
@@ -297,20 +281,11 @@ export default function UploadZone({
   // ── Click / keyboard ─────────────────────────────────────────────────────
 
   const handleClick = useCallback(() => {
-    if (state === "parsing" || state === "success") return;
+    if (state === "parsing") return;
     // Clearing the input lets a user choose the same file again.
     if (fileInputRef.current) fileInputRef.current.value = "";
     fileInputRef.current?.click();
   }, [state]);
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        handleClick();
-      }
-    },
-    [handleClick],
-  );
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -338,27 +313,13 @@ export default function UploadZone({
   return (
     <div className="w-full">
       {/* Drop zone */}
-      <div
-        role={state === "success" ? undefined : "button"}
-        tabIndex={state === "parsing" || state === "success" ? -1 : 0}
-        aria-label={
-          state === "success"
-            ? `已上傳 ${filesLabel}，可重新選擇或移除檔案`
-            : state === "parsing"
-              ? "正在解析檔案，請稍候"
-              : "點擊或拖曳 .xlsx 檔案至此上傳，可一次選多個"
-        }
-        aria-disabled={state === "parsing" ? true : undefined}
-        aria-busy={state === "parsing"}
-        className={getZoneClass(state)}
-        onClick={state === "success" ? undefined : handleClick}
-        onKeyDown={state === "success" ? undefined : handleKeyDown}
+      <Card className={cn("border border-dashed border-input bg-muted/30 shadow-none ring-0", state === "dragging" && "border-primary bg-accent")} aria-busy={state === "parsing"}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-      >
-        <input
+      ><CardContent className="grid min-h-40 place-items-center content-center gap-3 text-center">
+        <Input
           ref={fileInputRef}
           type="file"
           accept=".xlsx"
@@ -372,27 +333,11 @@ export default function UploadZone({
         {/* Idle / Dragging */}
         {(state === "idle" || state === "dragging") && (
           <>
-            <Upload
-              size={36}
-              className={cn(
-                "mb-3 transition-colors duration-200",
-                state === "dragging" ? "text-accent" : "text-muted-foreground",
-              )}
-              aria-hidden
-            />
-            <p
-              className={cn(
-                "font-semibold text-base transition-colors duration-200",
-                state === "dragging" ? "text-accent-hover" : "text-foreground",
-              )}
-            >
-              {state === "dragging"
-                ? "放開以上傳"
-                : "拖曳 .xlsx 至此，或點擊選擇"}
-            </p>
+            <FileSpreadsheet size={24} className="text-muted-foreground" aria-hidden />
+            <Button type="button" variant="outline" onClick={handleClick}><Upload aria-hidden />{state === "dragging" ? "放開以上傳" : "選擇 Excel 檔案"}</Button>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              僅支援 .xlsx 格式，可一次選多個檔（最多{" "}
-              {DEFAULT_LIMITS.uploadMaxFiles} 個）
+              或拖入 .xlsx 檔案，最多{" "}
+              {DEFAULT_LIMITS.uploadMaxFiles} 個
             </p>
           </>
         )}
@@ -465,7 +410,7 @@ export default function UploadZone({
                 size="icon-xs"
                 aria-label="關閉錯誤訊息並重試"
                 onClick={handleReset}
-                className="ml-1 rounded text-muted-foreground hover:text-foreground cursor-pointer"
+                className="ml-1"
               >
                 <X size={15} aria-hidden />
               </Button>
@@ -475,10 +420,10 @@ export default function UploadZone({
                 {errorMsg}
               </p>
             )}
-            <p className="mt-1.5 text-xs text-muted-foreground">點擊以重試</p>
+            <Button variant="outline" onClick={handleClick}>重新選擇檔案</Button>
           </>
         )}
-      </div>
+      </CardContent></Card>
 
       {/* Empty-state hint */}
       {state === "idle" && (
@@ -487,7 +432,7 @@ export default function UploadZone({
           aria-live="polite"
           className="mt-2 text-xs text-muted-foreground text-center"
         >
-          ← 上傳 .xlsx 後系統將自動辨識欄位
+          匯入後會自動辨識專利欄位
         </p>
       )}
 
@@ -495,14 +440,13 @@ export default function UploadZone({
       {summaries &&
         summaries.length > 0 &&
         (state === "success" || state === "error") && (
-          <div
+          <Card
             role="region"
-            aria-label="每個檔案的解析結果"
-            className="mt-4 bg-muted border border-black/5 dark:border-white/8 rounded-xl p-4 backdrop-blur-sm"
-          >
+            aria-label="每個檔案的解析結果" className="mt-4"
+          ><CardContent>
             <div className="flex items-baseline justify-between gap-2 mb-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                檔案解析結果 — 共 {summaries.length} 個檔
+              <p className="text-sm text-muted-foreground">
+                共處理 {summaries.length} 個檔案
               </p>
             </div>
             <ul role="list" className="space-y-2">
@@ -569,7 +513,7 @@ export default function UploadZone({
             </ul>
 
             {counts && (
-              <p className="mt-3 pt-3 border-t border-black/5 dark:border-white/8 text-sm font-semibold text-foreground">
+              <p className="mt-3 pt-3 text-sm font-semibold text-foreground">
                 合計 {counts.original} 筆 → 去重後 {counts.deduped} 筆
               </p>
             )}
@@ -600,20 +544,19 @@ export default function UploadZone({
                 </p>
               </details>
             )}
-          </div>
+          </CardContent></Card>
         )}
 
       {/* Field mapping results — the first file's header match */}
       {mappings &&
         mappings.length > 0 &&
         (state === "success" || state === "error") && (
-          <div
+          <Card
             role="region"
-            aria-label="欄位對應結果"
-            className="mt-4 bg-black/[0.01] dark:bg-white/[0.03] border border-black/5 dark:border-white/8 rounded-xl p-4 backdrop-blur-sm"
-          >
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              欄位對應 — {matchedCount} / {totalFields} 已辨識
+            aria-label="欄位對應結果" className="mt-4"
+          ><CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              已辨識 {matchedCount} / {totalFields} 個欄位
               {summaries && summaries.length > 1 && (
                 <span className="ml-1 normal-case tracking-normal font-normal">
                   （第一個檔：{summaries[0].filename}）
@@ -680,7 +623,7 @@ export default function UploadZone({
                 );
               })}
             </ul>
-          </div>
+          </CardContent></Card>
         )}
     </div>
   );

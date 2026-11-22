@@ -1,5 +1,8 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Checkbox } from "@/components/ui/checkbox";
+
 import type { IpcLevel, IpcTreeNode } from "@/lib/ipc-filter";
 
 interface Props {
@@ -57,18 +60,16 @@ function IpcNode({
     const color = colorByKey?.get(node.key);
     return (
       <li className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/60">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={checked}
-          onChange={() => onToggle(node.key)}
+          onCheckedChange={() => onToggle(node.key)}
           aria-label={`IPC ${node.key}`}
-          className="shrink-0"
         />
         {color && (
           <span
             aria-hidden
-            className="size-2.5 shrink-0 rounded-sm"
-            style={{ background: color }}
+            className="size-2.5 shrink-0 rounded-sm bg-graph-swatch"
+            style={graphSwatch(color)}
             title={`IPC ${node.key} 代表色`}
           />
         )}

@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 /**
  * N 面板比較的離線 HTML 匯出：把差異（聯集）圖、成員歸屬、指標與凍結座標
  * 一起內嵌成一份可離線互動的檔案。vis-network 原始碼同樣內嵌，沒有任何外部相依。
@@ -93,21 +94,21 @@ export function buildCompareExportHtml(
   <script src="${visNetworkDataUrl}"></script>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: #fff; color: #172033; font-family: system-ui, sans-serif; }
-    header { padding: 12px 18px; border-bottom: 1px solid #cbd5e1; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${graphColors["paper"]}; color: ${graphColors["export-text"]}; font-family: system-ui, sans-serif; }
+    header { padding: 12px 18px; border-bottom: 1px solid ${graphColors["print-border"]}; }
     h1 { margin: 0 0 4px; font-size: 18px; }
-    .meta { color: #64748b; font-size: 12px; }
-    #summary { padding: 10px 18px; border-bottom: 1px solid #e2e8f0; font-size: 12px; line-height: 1.6; }
+    .meta { color: ${graphColors["cooccurrence"]}; font-size: 12px; }
+    #summary { padding: 10px 18px; border-bottom: 1px solid ${graphColors["export-divider"]}; font-size: 12px; line-height: 1.6; }
     #summary p { margin: 2px 0; }
     #graph { flex: 1; min-height: 0; }
-    #legend { position: fixed; left: 16px; bottom: 36px; z-index: 5; width: min(360px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgba(255,255,255,.95); font-size: 12px; line-height: 1.55; }
+    #legend { position: fixed; left: 16px; bottom: 36px; z-index: 5; width: min(360px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid ${graphColors["print-border"]}; border-radius: 8px; background: ${graphColors["export-legend"]}; font-size: 12px; line-height: 1.55; }
     #legend strong { display: block; margin-bottom: 6px; }
     #legend label { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
     #legend input { width: 16px; height: 16px; }
     .swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
-    .encoding { color: #64748b; }
-    #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: #172033; color: #fff; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
-    footer { padding: 7px 18px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 11px; }
+    .encoding { color: ${graphColors["cooccurrence"]}; }
+    #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: ${graphColors["export-text"]}; color: ${graphColors["paper"]}; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
+    footer { padding: 7px 18px; border-top: 1px solid ${graphColors["print-border"]}; color: ${graphColors["cooccurrence"]}; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -156,7 +157,7 @@ ${legend
           shape: node.shape,
           size: node.size,
           color: node.color,
-          font: { size: node.type === 'applicant' ? 14 : 11, color: '#172033' }
+          font: { size: node.type === 'applicant' ? 14 : 11, color: '${graphColors["export-text"]}' }
         };
       });
       function edgeWidth(edge) {
@@ -195,7 +196,7 @@ ${legend
           dashes: [4, 5],
           physics: false,
           arrows: { to: { enabled: true, scaleFactor: .35 } },
-          color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb' }
+          color: { color: edge.direction_conflict ? '${graphColors["citation-conflict"]}' : '${graphColors["citation"]}' }
         };
       }));
 

@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 import {
   applicantSize,
   conceptSize,
@@ -85,16 +86,16 @@ export interface GraphViewOptions {
  * 跨檔（在 ≥2 個來源都出現）的概念用共享色以便一眼看出「哪個是獨有、哪個是共有」。
  */
 export const SOURCE_FILE_COLORS = [
-  "#0ea5e9", // sky（第一檔）
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#f43f5e", // rose
-  "#6366f1", // indigo
+  graphColors["source-1"], // sky（第一檔）
+  graphColors["source-2"], // emerald
+  graphColors["source-3"], // amber
+  graphColors["source-4"], // violet
+  graphColors["source-5"], // pink
+  graphColors["source-6"], // teal
+  graphColors["source-7"], // rose
+  graphColors["source-8"], // indigo
 ];
-export const SOURCE_OVERLAP_COLOR = "#dc2626"; // 跨多個來源檔出現的共有概念（紅色）
+export const SOURCE_OVERLAP_COLOR = graphColors["source-overlap"]; // 跨多個來源檔出現的共有概念（紅色）
 
 /**
  * PRD v2 / P4: coarse institution-type for the 機構節點圖. Splits 大學 out
@@ -113,16 +114,16 @@ export type InstitutionType =
   | "其他";
 
 export const INSTITUTION_TYPE_COLORS: Record<InstitutionType, string> = {
-  銀行: "#1d6fd1",
-  金控: "#12385c",
-  保險: "#d97706",
-  大學: "#7c3aed",
-  證券投承: "#0f7662",
-  支付金流: "#15803d",
-  科技: "#475569",
-  學研: "#8b5cf6",
-  個人: "#d1d5db",
-  其他: "#94a3b8",
+  銀行: graphColors["institution-bank"],
+  金控: graphColors["institution-holding"],
+  保險: graphColors["institution-insurance"],
+  大學: graphColors["institution-university"],
+  證券投承: graphColors["institution-securities"],
+  支付金流: graphColors["institution-payment"],
+  科技: graphColors["institution-technology"],
+  學研: graphColors["institution-research"],
+  個人: graphColors["institution-individual"],
+  其他: graphColors["institution-other"],
 };
 
 /** Unit-testable classifier for the institution view bucket colouring. */
@@ -1261,7 +1262,7 @@ function selectInstitutionView(
     ([name, node_count]) => ({
       id: -1,
       name,
-      color: INSTITUTION_TYPE_COLORS[name as InstitutionType] ?? "#94a3b8",
+      color: INSTITUTION_TYPE_COLORS[name as InstitutionType] ?? graphColors["unclassified"],
       node_count,
     }),
   );

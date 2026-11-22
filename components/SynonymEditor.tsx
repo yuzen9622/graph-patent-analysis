@@ -1,5 +1,7 @@
 "use client";
 
+import { Card, CardContent } from "@/components/ui/card";
+
 import { useCallback, useEffect, useState } from "react";
 import { Check, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -154,7 +156,7 @@ export default function SynonymEditor() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           合併規則套用在共現計算的輸入層——把「AI」「人工智能」都歸到「人工智慧」。
           每次分析落庫當下的快照，所以日後編輯不會改寫舊分析。
@@ -197,10 +199,7 @@ export default function SynonymEditor() {
           </p>
         )}
         {rows.map((row) => (
-          <div
-            key={row.key}
-            className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-end"
-          >
+          <Card key={row.key}><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`canonical-${row.key}`}>代表標籤 (canonical)</Label>
@@ -239,7 +238,7 @@ export default function SynonymEditor() {
                 </Button>
               </div>
             </div>
-          </div>
+          </CardContent></Card>
         ))}
       </div>
     </div>

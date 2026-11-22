@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 import { selectGraphView, type GraphViewOptions } from "./graph-view";
 import { DEFAULT_IPC_LEVEL } from "./ipc-filter";
 import { parseBankOwnership } from "./bank-ownership";
@@ -198,16 +199,16 @@ export function buildExportHtml(
   <script src="${visNetworkDataUrl}"></script>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${options.paper ? "#fff" : "#020617"}; color: ${options.paper ? "#172033" : "#f8fafc"}; font-family: system-ui, sans-serif; }
-    header { padding: 12px 18px; border-bottom: 1px solid #cbd5e1; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
-    h1 { margin: 0; font-size: 18px; } .meta { color: #64748b; font-size: 12px; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: ${options.paper ? graphColors.paper : graphColors["export-night"]}; color: ${options.paper ? graphColors["export-text"] : graphColors["export-light-text"]}; font-family: system-ui, sans-serif; }
+    header { padding: 12px 18px; border-bottom: 1px solid ${graphColors["print-border"]}; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h1 { margin: 0; font-size: 18px; } .meta { color: ${graphColors["cooccurrence"]}; font-size: 12px; }
     .title-group { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     #graph { flex: 1; min-height: 0; }
-    #legend { position: fixed; left: 16px; bottom: 40px; z-index: 5; width: min(390px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: rgba(255,255,255,.94); color: #172033; font-size: 12px; line-height: 1.55; }
+    #legend { position: fixed; left: 16px; bottom: 40px; z-index: 5; width: min(390px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid ${graphColors["print-border"]}; border-radius: 8px; background: ${graphColors["export-legend"]}; color: ${graphColors["export-text"]}; font-size: 12px; line-height: 1.55; }
     #legend strong { display: block; margin-bottom: 4px; } #legend p { margin: 3px 0; }
-    .warning { color: #b45309; }
-    #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: #172033; color: #fff; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
-    footer { padding: 7px 18px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 11px; }
+    .warning { color: ${graphColors["export-warning"]}; }
+    #tooltip { position: fixed; display: none; z-index: 10; max-width: 360px; padding: 9px 11px; border-radius: 6px; background: ${graphColors["export-text"]}; color: ${graphColors["paper"]}; font-size: 12px; line-height: 1.5; pointer-events: none; white-space: pre-wrap; }
+    footer { padding: 7px 18px; border-top: 1px solid ${graphColors["print-border"]}; color: ${graphColors["cooccurrence"]}; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -259,7 +260,7 @@ export function buildExportHtml(
             shape: node.type === 'applicant' ? 'star' : 'dot',
             size: node.size,
             color: node.color,
-            font: { size: node.type === 'applicant' ? 14 : 11, color: ${options.paper ? "'#172033'" : "'#f8fafc'"} }
+            font: { size: node.type === 'applicant' ? 14 : 11, color: '${options.paper ? graphColors["export-text"] : graphColors["export-light-text"]}' }
           };
         });
         var relationEdges = view.edges.map(function (edge) {
@@ -274,13 +275,13 @@ export function buildExportHtml(
             dashes: semantic ? [6, 4] : false,
             physics: !semantic,
             arrows: { to: { enabled: semantic || edge.temporal_directed || edge.kind === 'structural', scaleFactor: .4 } },
-            color: { color: semantic ? '#8b5cf6' : (edge.kind === 'institution' ? '#0f766e' : (co ? '#64748b' : '#94a3b8')), opacity: edge.opacity == null ? 1 : edge.opacity }
+            color: { color: semantic ? '${graphColors["semantic"]}' : (edge.kind === 'institution' ? '${graphColors["institution-edge"]}' : (co ? '${graphColors["cooccurrence"]}' : '${graphColors["edge"]}')), opacity: edge.opacity == null ? 1 : edge.opacity }
           };
         });
         var citationEdges = showCitations ? (view.citationEdges || []).map(function (edge) {
           return { id: 'citation:' + edge.id, from: edge.from, to: edge.to, dashes: [4, 5], width: 1.5,
             physics: false, arrows: { to: { enabled: true, scaleFactor: .35 } },
-            color: { color: edge.direction_conflict ? '#dc2626' : '#2563eb', opacity: 1 } };
+            color: { color: edge.direction_conflict ? '${graphColors["citation-conflict"]}' : '${graphColors["citation"]}', opacity: 1 } };
         }) : [];
         var edges = relationEdges.concat(citationEdges);
         if (network) network.destroy();

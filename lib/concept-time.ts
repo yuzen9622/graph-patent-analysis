@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 // lib/concept-time.ts — PRD v2 / P3 概念時間
 //
 // 給每個概念節點算出時間元資料（first/last/median_year、year_counts），
@@ -18,17 +19,17 @@ import { leaveOneOutMedianSpan, medianStandard, quartiles } from "./temporal";
  * 2026-08-09 修訂：由 sequential_blue 9 錨改為彩虹 7 錨（老師指定），
  * 圖例由左（紅＝最早）至右（紫＝最近）。 */
 export const RAINBOW_COLORS = [
-	"#EF4444",
-	"#F97316",
-	"#EAB308",
-	"#22C55E",
-	"#3B82F6",
-	"#4F46E5",
-	"#8B5CF6",
+	graphColors["year-1"],
+	graphColors["year-2"],
+	graphColors["year-3"],
+	graphColors["year-4"],
+	graphColors["year-5"],
+	graphColors["year-6"],
+	graphColors["year-7"],
 ] as const;
 
 /** 年份未知概念 / 社群模式缺省的灰色。 */
-export const UNKNOWN_YEAR_COLOR = "#BAB0AC";
+export const UNKNOWN_YEAR_COLOR = graphColors["unknown"];
 
 export const VALID_YEAR_MIN = 1990;
 export const VALID_YEAR_MAX = () => new Date().getFullYear() + 1;

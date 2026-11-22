@@ -1,8 +1,10 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+
 import { useState } from "react";
 import { X, ChevronDown, ChevronUp, ArrowRight, Disc } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import StatCard from "./StatCard";
 import type { GraphNode, GraphEdge, Community } from "@/types/graph";
@@ -20,11 +22,6 @@ interface Props {
 	onExitSubgraph?: () => void;
 }
 
-const TYPE_TOKENS = {
-	applicant: "var(--color-layer-applicant, #4E79A7)",
-	patent: "var(--color-layer-patent, #F28E2B)",
-	concept: "var(--color-layer-concept, #59A14F)",
-} as const;
 const TYPE_LABELS = {
 	applicant: "申請人",
 	patent: "專利",
@@ -71,32 +68,24 @@ export default function NodeInfo({
 	return (
 		<div className="relative">
 			<div className="flex items-start justify-between mb-2.5">
-				<Badge
-					className="text-[0.7rem] font-bold px-2 py-0.5 rounded border-0"
-					style={{ background: TYPE_TOKENS[node.type], color: "white" }}
-				>
-					{TYPE_LABELS[node.type]}
-				</Badge>
+				<h3 className="min-w-0 break-words font-medium">
+					{TYPE_LABELS[node.type]} · {node.label}
+				</h3>
 				<Button
 					variant="ghost"
 					size="icon-xs"
 					onClick={onClose}
-					className="text-muted-foreground hover:text-foreground cursor-pointer -mt-0.5 rounded"
 					aria-label="關閉節點資訊"
 				>
 					<X className="size-3.5" />
 				</Button>
 			</div>
 
-			<h3 className="font-serif text-sm font-semibold text-foreground leading-snug mb-2.5 break-words">
-				{node.label}
-			</h3>
-
 			{/* ── 子圖聚焦操作 ── */}
 			{onEnterSubgraph && (
 				<div className="mb-3">
 					{subgraphCenterId === node.id ? (
-						<div className="flex items-center justify-between gap-2 p-2 rounded-md bg-primary/10 border border-primary/20 text-xs">
+						<Card><CardContent className="flex items-center justify-between gap-2">
 							<span className="flex items-center gap-1.5 text-primary font-medium text-[0.75rem]">
 								<Disc className="size-3.5 shrink-0" />
 								目前圖譜中心
@@ -106,18 +95,17 @@ export default function NodeInfo({
 									variant="ghost"
 									size="xs"
 									onClick={onExitSubgraph}
-									className="h-6 text-[0.7rem] text-muted-foreground hover:text-foreground cursor-pointer px-1.5"
 								>
 									返回完整圖譜
 								</Button>
 							)}
-						</div>
+						</CardContent></Card>
 					) : (
 						<Button
 							variant="outline"
 							size="sm"
 							onClick={() => onEnterSubgraph(node)}
-							className="w-full justify-center gap-1.5 text-xs text-primary border-primary/30 hover:bg-primary/10 hover:text-primary cursor-pointer"
+							className="w-full justify-center gap-1.5"
 						>
 							<Disc className="size-3.5" />
 							{subgraphCenterId ? "切換以此為中心探索" : "深入此關鍵字技術圖譜"}
@@ -209,7 +197,7 @@ export default function NodeInfo({
 											variant="link"
 											size="xs"
 											onClick={() => setAbstractExpanded((v) => !v)}
-											className="ml-1 h-auto gap-0.5 px-0 text-primary hover:text-accent hover:no-underline cursor-pointer"
+											className="ml-1 gap-0.5"
 										>
 											{abstractExpanded ? (
 												<>
@@ -237,8 +225,8 @@ export default function NodeInfo({
 						<dd className="flex items-center gap-1.5 m-0">
 							<span
 								aria-hidden
-								className="w-2.5 h-2.5 rounded-full shrink-0"
-								style={{ background: community.color }}
+								className="w-2.5 h-2.5 rounded-full shrink-0 bg-graph-swatch"
+								style={graphSwatch(community.color)}
 							/>
 							<span className="text-muted-foreground">{community.name}</span>
 						</dd>
@@ -303,12 +291,8 @@ export default function NodeInfo({
 									onNodeFocus(n.id);
 								}}
 								title={n.label}
-								className="h-auto max-w-full truncate rounded-md px-2 py-1 text-[0.7rem] cursor-pointer hover:opacity-90 hover:shadow-sm"
-								style={{
-									borderColor: n.color,
-									color: n.color,
-									background: `${n.color}18`,
-								}}
+								className="max-w-full truncate bg-graph-swatch/10 border-graph-swatch text-graph-swatch"
+								style={graphSwatch(n.color)}
 							>
 								{n.label.length > 14 ? n.label.slice(0, 14) + "…" : n.label}
 							</Button>

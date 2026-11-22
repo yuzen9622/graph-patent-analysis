@@ -9,11 +9,9 @@
  *   Format B ("老師版"): 10 sheets, data in `原始資料`, 83 columns,
  *                        Excel serial-number dates.
  *
- * Format A's parse path is deliberately left byte-for-byte as it was in v1.2
- * (PRD v2 §7-5): the same read options, the same synonym map, the same
- * `cleanApplicantName()`, the same row filter. The only intentional change to
- * format A output is `PatentRow.id`, whose semantics moved from
- * `${filename}-${rowIndex}` to the content hash of §4.5.
+ * Legacy Format A keeps its original cleaning and row rules. Newly generated
+ * workbooks may explicitly provide 完整申請人(JSON v1) to preserve full names.
+ * Stable IDs retain the content-hash semantics of §4.5.
  *
  * Everything in this module is synchronous and free of Node built-ins, because
  * it runs in the browser (`components/UploadZone.tsx`) as well as under vitest.
@@ -21,6 +19,7 @@
 
 import * as XLSX from 'xlsx'
 import type { PatentRow } from '@/types/graph'
+import { COMPLETE_APPLICANTS_COLUMN, parseCompleteApplicants } from '@/lib/patent-search/workbook-contract'
 
 // ---------------------------------------------------------------------------
 // FIELD_SYNONYMS — matches PRD F-01 table exactly (format A)
@@ -768,12 +767,14 @@ function parseFormatA(
 
   const headers = Object.keys(rawRows[0])
   const columnMap = buildColumnMap(headers)
+  const completeApplicantsColumn = headers.find(header => header.trim() === COMPLETE_APPLICANTS_COLUMN)
 
   const field_mappings: FieldMapping[] = Object.keys(FIELD_SYNONYMS).map(field => ({
     field,
     matched_column: columnMap.get(field) ?? null,
     required: REQUIRED_FIELDS.has(field),
   }))
+  if (completeApplicantsColumn) field_mappings.push({ field: 'applicants_exact', matched_column: completeApplicantsColumn, required: false })
 
   const missingRequired = field_mappings.filter(fm => fm.required && fm.matched_column === null)
   if (missingRequired.length > 0) {
@@ -807,7 +808,16 @@ function parseFormatA(
     let applicant = ''
     let applicantRaw = ''
     let applicantList: string[] = []
-    if (applicantCol) {
+    if (completeApplicantsColumn) {
+      try {
+        applicantList = parseCompleteApplicants(row[completeApplicantsColumn])
+        applicant = applicantList.join('；')
+        applicantRaw = applicant
+      } catch {
+        errors.push(`第 ${rowIndex + 2} 列的完整申請人欄位格式錯誤，已略過。`)
+        return
+      }
+    } else if (applicantCol) {
       const rawApplicant = cellString(row, applicantCol) ?? ''
       applicantRaw = rawApplicant
       applicantList = rawApplicant

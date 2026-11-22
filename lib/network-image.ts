@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 import type { Network } from "vis-network";
 
 export const IMAGE_EXPORT_SCALE = 4;
@@ -46,7 +47,7 @@ export function captureNetworkImage(network: Network): string | null {
 		source.width = output.width;
 		source.height = output.height;
 		renderer._redraw();
-		ctx.fillStyle = "#ffffff";
+		ctx.fillStyle = graphColors["paper"];
 		ctx.fillRect(0, 0, output.width, output.height);
 		ctx.drawImage(source, 0, 0);
 		const dataUrl = output.toDataURL("image/png");

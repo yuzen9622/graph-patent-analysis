@@ -1,8 +1,13 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Disc, Search, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import presentation from "./sidebar.module.css";
 import { Input } from "@/components/ui/input";
 import type { GraphNode } from "@/types/graph";
 
@@ -22,7 +27,7 @@ export default function SearchBox({
 	onNodeSelect,
 	onEnterSubgraph,
 	onSearchKeyword,
-	placeholder = "搜尋關鍵字、技術概念、機構或專利… (按 Enter 生成主題圖譜)",
+	placeholder = "搜尋概念、機構或專利",
 	className = "",
 }: Props) {
 	const [query, setQuery] = useState("");
@@ -128,10 +133,10 @@ export default function SearchBox({
 
 	return (
 		<div ref={wrapperRef} className={`relative ${className}`}>
-			<div className="relative">
+			<div className={presentation.searchField}>
 				<Search
 					size={14}
-					className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+					className="shrink-0"
 					aria-hidden
 				/>
 				<Input
@@ -144,17 +149,15 @@ export default function SearchBox({
 					onFocus={() => setOpen(true)}
 					onKeyDown={handleKeyDown}
 					placeholder={placeholder}
-					className="pl-8 pr-14 h-9 text-xs bg-muted/60 hover:bg-muted/80 border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-primary shadow-sm"
 					aria-label="搜尋技術關鍵字"
 					autoComplete="off"
 				/>
-				<div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+				<div className="flex shrink-0 items-center">
 					{query ? (
 						<Button
 							variant="ghost"
 							size="icon-xs"
 							onClick={clear}
-							className="size-5 text-muted-foreground hover:text-foreground cursor-pointer rounded p-0"
 							aria-label="清除搜尋"
 						>
 							<X size={12} />
@@ -168,19 +171,10 @@ export default function SearchBox({
 			</div>
 
 			{open && query.trim().length > 0 && (
-				<ul
-					role="listbox"
-					aria-label="關鍵字搜尋結果"
-					className="absolute top-full left-0 right-0 mt-1 z-50 bg-background border border-border rounded-lg shadow-xl max-h-80 overflow-y-auto divide-y divide-border/40 animate-in fade-in zoom-in-95 duration-100"
-				>
+				<Card className="absolute inset-x-0 top-full z-50 mt-1 max-h-80 overflow-y-auto"><CardContent><ul aria-label="關鍵字搜尋結果" className="grid gap-2">
 					{/* 首項：一鍵生成該關鍵字之完整主題圖譜 */}
 					{onSearchKeyword && (
-						<li
-							role="option"
-							aria-selected={false}
-							onClick={() => handleTriggerKeywordSearch(query)}
-							className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary transition-colors font-medium border-b border-border/80"
-						>
+						<li><Button variant="outline" onClick={() => handleTriggerKeywordSearch(query)} className="w-full justify-start">
 							<div className="flex items-center gap-2 min-w-0 flex-1">
 								<Sparkles className="size-4 text-primary shrink-0" />
 								<span className="truncate">
@@ -191,18 +185,18 @@ export default function SearchBox({
 									」主題技術圖譜
 								</span>
 							</div>
-							<span className="text-[0.65rem] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-normal shrink-0 whitespace-nowrap">
+							<Badge variant="secondary">
 								{results.length > 0
 									? `含 ${results.length} 個相符概念`
 									: "搜尋關聯脈絡"}{" "}
 								· 按 Enter
-							</span>
-						</li>
+							</Badge>
+						</Button></li>
 					)}
 
 					{results.length > 0 && (
 						<li
-							className="sticky top-0 bg-background/95 backdrop-blur-sm px-3 py-1 text-[0.65rem] text-muted-foreground flex items-center justify-between border-b border-border z-10"
+							className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground"
 							aria-hidden
 						>
 							<span>相關概念與節點 ({results.length})</span>
@@ -213,18 +207,12 @@ export default function SearchBox({
 					)}
 
 					{results.map((node) => (
-						<li
-							key={node.id}
-							role="option"
-							aria-selected={false}
-							onClick={() => handleSelectNode(node)}
-							className="group flex items-center justify-between gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-muted transition-colors"
-						>
-							<div className="flex items-center gap-2 min-w-0 flex-1">
+						<li key={node.id} className="flex items-center gap-1">
+                            <Button variant="ghost" className="min-w-0 flex-1 justify-start" onClick={() => handleSelectNode(node)}>
 								<span
 									aria-hidden
-									className="size-2.5 rounded-full shrink-0"
-									style={{ background: node.color }}
+									className="size-2.5 rounded-full shrink-0 bg-graph-swatch"
+									style={graphSwatch(node.color)}
 								/>
 								<span className="text-foreground font-medium truncate">
 									{node.label}
@@ -239,17 +227,17 @@ export default function SearchBox({
 										({node.patent_count} 篇)
 									</span>
 								)}
-							</div>
+							</Button>
 
 							<div className="flex items-center gap-1.5 shrink-0">
-								<span className="text-muted-foreground text-[0.65rem] px-1.5 py-0.5 rounded bg-muted/80">
+								<Badge variant="secondary">
 									{TYPE_LABELS[node.type]}
-								</span>
+								</Badge>
 								{onEnterSubgraph && (
 									<Button
 										variant="outline"
 										size="xs"
-										className="h-6 px-1.5 text-[0.7rem] gap-1 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground transition-all shrink-0 cursor-pointer"
+										className="gap-1 shrink-0"
 										title={`以此「${node.label}」為中心，深入局部圖譜`}
 										aria-label={`以此「${node.label}」為中心，深入局部圖譜`}
 										onClick={(e) => {
@@ -273,7 +261,7 @@ export default function SearchBox({
 							」檢索相關專利脈絡。
 						</li>
 					)}
-				</ul>
+				</ul></CardContent></Card>
 			)}
 		</div>
 	);

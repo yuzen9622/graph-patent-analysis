@@ -1,6 +1,16 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+
+import { Badge } from "@/components/ui/badge";
+
+import { Slider } from "@/components/ui/slider";
+
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { Button } from "@/components/ui/button";
+import presentation from "./sidebar.module.css";
 import { cn } from "@/lib/utils";
 import { BANK_OWNERSHIPS, BANK_OWNERSHIP_LABELS, includesAllOwnership, type BankOwnership } from "@/lib/bank-ownership";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -152,14 +162,14 @@ function Section({
 }: SectionProps) {
   return (
     <AccordionItem value={value} className={cn("w-full", className)}>
-      <div className="flex justify-between gap-1 flex-1">
-        <AccordionTrigger className="min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-xs font-semibold tracking-wide hover:no-underline  cursor-pointer">
+      <div className={presentation.sectionHeader}>
+        <AccordionTrigger className="min-w-0 flex-1 items-center gap-2">
           {icon && (
             <span className="text-muted-foreground shrink-0" aria-hidden>
               {icon}
             </span>
           )}
-          <span className="text-xs font-semibold text-foreground tracking-wide flex-1">
+          <span className="text-sm font-semibold text-foreground flex-1">
             {title}
           </span>
           {active && (
@@ -170,14 +180,14 @@ function Section({
             />
           )}
           {count !== undefined && count > 0 && (
-            <span className="rounded-full bg-primary/10 text-primary font-mono text-[0.7rem] leading-none px-1.5 py-1 shrink-0 tabular-nums">
+            <Badge variant="secondary">
               {count}
-            </span>
+            </Badge>
           )}
         </AccordionTrigger>
         {headerAction}
       </div>
-      <AccordionContent className="px-3 pb-3">{children}</AccordionContent>
+      <AccordionContent className={presentation.sectionBody}>{children}</AccordionContent>
     </AccordionItem>
   );
 }
@@ -220,13 +230,13 @@ function Inspector({
 
   return (
     <section
-      className="shrink-0 border-t border-border bg-background"
+      className="shrink-0 bg-popover"
       aria-label="節點與關係詳細資訊"
     >
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger
           aria-label={`${open ? "收合" : "展開"}${title}`}
-          className="group flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          render={<Button variant="ghost" className="group w-full justify-start" />}
         >
           <Network
             size={13}
@@ -247,11 +257,11 @@ function Inspector({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <ScrollArea
-            className="max-h-[40svh] border-t border-border"
+            className="max-h-[40svh]"
             aria-label={`${title}內容`}
           >
             <div className="p-3">
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <Card><CardContent>
                 {selectedEdge ? (
                   <EdgeInfo
                     edge={selectedEdge}
@@ -273,7 +283,7 @@ function Inspector({
                     onExitSubgraph={onExitSubgraph}
                   />
                 ) : null}
-              </div>
+              </CardContent></Card>
             </div>
           </ScrollArea>
         </CollapsibleContent>
@@ -304,15 +314,13 @@ function IpcFilterSection({
         <p className="text-xs text-foreground font-medium mb-2">IPC 層級</p>
         <span className="font-mono text-primary tabular-nums">L{ipcLevel}</span>
       </div>
-      <input
-        type="range"
+      <Slider
         min={1}
         max={5}
-        value={ipcLevel}
-        onChange={(event) =>
-          onIpcLevelChange(Number(event.target.value) as IpcLevel)
+        value={[ipcLevel]}
+        onValueChange={(values) =>
+          onIpcLevelChange((typeof values === "number" ? values : values[0]) as IpcLevel)
         }
-        className="w-full accent-primary"
         aria-label="IPC 層級"
       />
       <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
@@ -343,7 +351,6 @@ function IpcFilterSection({
           variant="outline"
           size="xs"
           onClick={() => onIpcFilterChange([])}
-          className="h-auto rounded px-2 py-1 text-[0.7rem] text-muted-foreground hover:bg-accent"
         >
           全部 IPC
         </Button>
@@ -375,14 +382,12 @@ function MinSupportControl({
         <span className="font-medium">{label}</span>
         <span className="font-mono text-primary tabular-nums">{value}</span>
       </span>
-      <input
-        type="range"
+      <Slider
         min={1}
         max={Math.max(1, max)}
-        value={Math.min(value, Math.max(1, max))}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-primary"
-      />
+        value={[Math.min(value, Math.max(1, max))]}
+        onValueChange={(values) => onChange((typeof values === "number" ? values : values[0]))}
+      aria-label={label} />
     </label>
   );
 }
@@ -509,11 +514,11 @@ export default function Sidebar({
 
   return (
     <aside
-      className="w-[300px] shrink-0 bg-background border-l border-border flex flex-col overflow-hidden"
+      className={cn("w-full min-w-0 lg:w-80 shrink-0 bg-popover flex flex-col overflow-hidden", presentation.sidebar)}
       aria-label="控制側邊欄"
     >
       {/* 常駐搜尋列：捲動時仍可使用 */}
-      <div className="shrink-0 border-b border-border bg-background px-3 py-2.5">
+      <div className={presentation.searchHeader}>
         <SearchBox
           nodes={nodes}
           onNodeFocus={onNodeFocus}
@@ -524,7 +529,7 @@ export default function Sidebar({
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="pt-2 space-y-0.5 pb-4">
+        <div className={presentation.scrollBody}>
           <Accordion multiple defaultValue={["filters", "communities"]}>
             {/* ── 篩選器 ── */}
             <Section
@@ -542,7 +547,7 @@ export default function Sidebar({
                     size="xs"
                     onClick={onResetFilters}
                     title="重設年份、來源檔、IPC、門檻、圖層、社群與引用線等所有篩選"
-                    className="h-auto shrink-0 rounded-md px-1.5 py-1.5 text-[0.7rem] text-primary hover:bg-primary/10 hover:text-primary cursor-pointer"
+                    className="shrink-0"
                   >
                     <RotateCcw size={11} />
                     重設
@@ -550,36 +555,32 @@ export default function Sidebar({
                 ) : undefined
               }
             >
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2" role="group" aria-label="經營類型">
-                  {BANK_OWNERSHIPS.map(kind => (
-                    <label
-                      key={kind}
-                      className={cn(
-                        "flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs transition-colors hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-                        ownership.includes(kind)
-                          ? "border-primary/30 bg-primary/5 text-foreground"
-                          : "border-border text-muted-foreground",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        name="ownership"
-                        value={kind}
-                        checked={ownership.includes(kind)}
-                        onChange={event => onOwnershipChange(
-                          BANK_OWNERSHIPS.filter(value => value === kind ? event.target.checked : ownership.includes(value)),
-                        )}
-                        className="size-3.5 shrink-0 cursor-pointer accent-primary"
-                      />
-                      {BANK_OWNERSHIP_LABELS[kind]}
-                    </label>
-                  ))}
-                </div>
+              <div className={presentation.filters}>
+                <fieldset className={presentation.ownership}>
+                  <legend>經營類型</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {BANK_OWNERSHIPS.map(kind => (
+                      <label
+                        key={kind}
+                        className="flex items-center gap-2"
+                      >
+                        <Checkbox
+                          name="ownership"
+                          value={kind}
+                          checked={ownership.includes(kind)}
+                          onCheckedChange={checked => onOwnershipChange(
+                            BANK_OWNERSHIPS.filter(value => value === kind ? checked : ownership.includes(value)),
+                          )}
+                        />
+                        {BANK_OWNERSHIP_LABELS[kind]}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
                 {mode === "context" ? (
                   <>
                     {sharedConceptCount && (
-                      <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+                      <Card><CardContent>
                         <p className="text-xs text-foreground font-medium mb-1.5">
                           兩檔共享概念
                         </p>
@@ -592,8 +593,8 @@ export default function Sidebar({
                           <dd className="font-mono tabular-nums text-right">
                             {sharedConceptCount.bOnly}
                           </dd>
-                          <dt className="text-red-600 font-medium">共有</dt>
-                          <dd className="font-mono tabular-nums text-right text-red-600">
+                          <dt className="text-graph-diff-shared font-medium">共有</dt>
+                          <dd className="font-mono tabular-nums text-right text-graph-diff-shared">
                             {sharedConceptCount.counts[1]}
                           </dd>
                           <dt className="text-muted-foreground">聯集</dt>
@@ -608,7 +609,7 @@ export default function Sidebar({
                         <p className="text-[0.65rem] text-muted-foreground mt-1.5">
                           隨年份／IPC／最低支持度篩選重算。
                         </p>
-                      </div>
+                      </CardContent></Card>
                     )}
                     <div>
                       <p className="text-xs text-foreground font-medium mb-2">
@@ -667,16 +668,14 @@ export default function Sidebar({
                           {minSupport}
                         </span>
                       </span>
-                      <input
-                        type="range"
+                      <Slider
                         min={1}
                         max={Math.max(1, maxSupport)}
-                        value={Math.min(minSupport, Math.max(1, maxSupport))}
-                        onChange={(event) =>
-                          onMinSupportChange(Number(event.target.value))
+                        value={[Math.min(minSupport, Math.max(1, maxSupport))]}
+                        onValueChange={(values) =>
+                          onMinSupportChange((typeof values === "number" ? values : values[0]))
                         }
-                        className="w-full accent-primary"
-                      />
+                      aria-label="最低共享概念數" />
                     </label>
                     <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
                       邊＝兩家機構共同投入 ≥
@@ -694,8 +693,8 @@ export default function Sidebar({
                           >
                             <span
                               aria-hidden
-                              className="size-2.5 rounded-full shrink-0"
-                              style={{ background: c.color }}
+                              className="size-2.5 rounded-full shrink-0 bg-graph-swatch"
+                              style={graphSwatch(c.color)}
                             />
                             <span className="text-muted-foreground">
                               {c.name}
@@ -729,7 +728,7 @@ export default function Sidebar({
                         分析單位
                       </p>
                       <div
-                        className="inline-flex rounded-md border border-border bg-background p-0.5"
+                        className={presentation.segmented}
                         role="group"
                         aria-label="分析單位"
                       >
@@ -756,11 +755,6 @@ export default function Sidebar({
                                   ? "此分析未含機構資料，無法使用「家（機構）」單位"
                                   : undefined
                               }
-                              className={`h-auto rounded px-2 py-1 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-40 ${
-                                unit === value
-                                  ? ""
-                                  : "text-foreground/60 hover:text-foreground disabled:hover:text-muted-foreground"
-                              }`}
                             >
                               {label}
                             </Button>
@@ -775,7 +769,7 @@ export default function Sidebar({
                               (applicantAvailability === "rebuildable"
                                 ? "（此分析為舊格式，「家」計量由專利—機構結構重建）"
                                 : "")
-                            : "門檻/大小/線寬以「專利篇數」計。"}
+                            : "門檻、節點大小與線寬依專利篇數計算。"}
                       </p>
                     </div>
                     <div>
@@ -783,7 +777,7 @@ export default function Sidebar({
                         概念顏色
                       </p>
                       <div
-                        className="inline-flex rounded-md border border-border bg-background p-0.5"
+                        className={presentation.segmented}
                         role="group"
                         aria-label="概念顏色模式"
                       >
@@ -806,11 +800,6 @@ export default function Sidebar({
                             size="xs"
                             onClick={() => onColorModeChange(value)}
                             aria-pressed={colorMode === value}
-                            className={`h-auto rounded px-2 py-1 text-xs ${
-                              colorMode === value
-                                ? ""
-                                : "text-foreground/60 hover:text-foreground"
-                            }`}
                           >
                             {label}
                           </Button>
@@ -820,7 +809,7 @@ export default function Sidebar({
                         <p className="text-[0.7rem] text-muted-foreground mt-1.5 leading-relaxed">
                           {unit === "applicant"
                             ? "顏色＝「家」單位 Louvain 社群（同一機構跨篇碰過的概念對分）；隨分析單位自動切換，分區獨立於「篇」單位社群。"
-                            : "顏色＝以 support 加權的 Louvain 技術社群（「篇」單位）。"}
+                            : "依專利篇數的共現支持度加權，以 Louvain 演算法劃分技術社群。"}
                         </p>
                       )}
                       {colorMode === "first_year" && (
@@ -848,19 +837,16 @@ export default function Sidebar({
                             ）：該概念的多數專利落在哪個分類。
                           </p>
                           {ipcLegend && ipcLegend.length > 0 && (
-                            <div className="rounded-md border border-border bg-muted/40 p-2 text-xs space-y-1">
+                            <Card><CardContent className="space-y-1">
                               <p className="text-[0.65rem] font-medium text-foreground">
                                 IPC 顏色對照（L{ipcLevel}）：
                               </p>
                               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                                 {ipcLegend.map((item) => (
-                                  <span
-                                    key={item.key}
-                                    className="inline-flex items-center gap-1 rounded bg-background px-1.5 py-0.5 text-[0.65rem] border border-border/60"
-                                  >
+                                  <Badge key={item.key} variant="outline">
                                     <span
-                                      className="size-2 rounded-sm shrink-0"
-                                      style={{ background: item.color }}
+                                      className="size-2 rounded-sm shrink-0 bg-graph-swatch"
+                                      style={graphSwatch(item.color)}
                                     />
                                     <span className="font-mono text-foreground font-medium">
                                       {item.key}
@@ -868,10 +854,10 @@ export default function Sidebar({
                                     <span className="text-muted-foreground font-mono">
                                       ({item.count})
                                     </span>
-                                  </span>
+                                  </Badge>
                                 ))}
                               </div>
-                            </div>
+                            </CardContent></Card>
                           )}
                         </div>
                       )}
@@ -882,7 +868,7 @@ export default function Sidebar({
                       </p>
                       {allSourceFiles.length <= 1 ? (
                         <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
-                          此分析只有一個來源檔；多檔上傳後可用來源檔篩選做「比對」。
+                          上傳多個來源檔後，即可分檔比對。
                         </p>
                       ) : compareMode ? (
                         <div className="space-y-3">
@@ -918,13 +904,11 @@ export default function Sidebar({
                       />
                     )}
                     <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={showCitations}
-                        onChange={(event) =>
-                          onCitationsChange(event.target.checked)
+                        onCheckedChange={(checked) =>
+                          onCitationsChange(checked)
                         }
-                        className="mt-0.5"
                       />
                       <span>
                         顯示引用虛線

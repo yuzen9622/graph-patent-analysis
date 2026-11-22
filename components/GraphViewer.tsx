@@ -1,5 +1,9 @@
 "use client";
 
+import graphColors from "@/lib/graph-colors.generated.json";
+
+import { Card, CardContent } from "@/components/ui/card";
+
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Network } from "vis-network";
 import { captureNetworkImage } from "@/lib/network-image";
@@ -120,10 +124,10 @@ function toVisNode(
 	const isPatent = n.type === "patent";
 
 	// Handle color being a string or an object
-	let bgColor = "#BAB0AC";
-	let borderColor = "#BAB0AC";
-	let highlightBg = "#6B9CC3";
-	let highlightBorder = "#6B9CC3";
+	let bgColor = graphColors["unknown"];
+	let borderColor = graphColors["unknown"];
+	let highlightBg = graphColors["highlight"];
+	let highlightBorder = graphColors["highlight"];
 
 	if (typeof n.color === "string") {
 		bgColor = n.color;
@@ -159,7 +163,7 @@ function toVisNode(
 				: isPatent
 					? 0
 					: 11;
-	const fontColor = nodeFont?.color !== undefined ? nodeFont.color : "#000000";
+	const fontColor = nodeFont?.color !== undefined ? nodeFont.color : graphColors["label"];
 
 	const shape = n.shape ?? (isApplicant ? "star" : "dot");
 
@@ -169,17 +173,16 @@ function toVisNode(
 		title: buildTitle(n, unit, godInfo),
 		shape: shape,
 		size: n.size,
-		borderWidth: godInfo ? 4 : undefined,
 		color: {
 			background: bgColor,
-			border: godInfo ? "#FFD700" : borderColor,
+			border: borderColor,
 			highlight: {
 				background: highlightBg,
-				border: godInfo ? "#FFD700" : highlightBorder,
+				border: highlightBorder,
 			},
 			hover: {
 				background: highlightBg,
-				border: godInfo ? "#FFD700" : highlightBorder,
+				border: highlightBorder,
 			},
 		},
 		font: {
@@ -251,21 +254,21 @@ function toVisEdge(
 		color: e.color
 			? { color: e.color, opacity: e.opacity ?? 1 }
 			: surprising
-				? { color: "#FF6B35", opacity: e.opacity ?? 1 }
+				? { color: graphColors["bridge"], opacity: e.opacity ?? 1 }
 				: isSemantic
-					? { color: "#8B5CF6", opacity: e.opacity ?? 1 }
+					? { color: graphColors["semantic"], opacity: e.opacity ?? 1 }
 					: isInstitution
-						? { color: "#0f766e", opacity: e.opacity ?? 1 }
+						? { color: graphColors["institution-edge"], opacity: e.opacity ?? 1 }
 						: isCooccurrence
-							? { color: "#64748B", opacity: e.opacity ?? 1 }
-							: { color: "#94A3B8", opacity: e.opacity ?? 1 },
+							? { color: graphColors["cooccurrence"], opacity: e.opacity ?? 1 }
+							: { color: graphColors["edge"], opacity: e.opacity ?? 1 },
 		arrows: {
 			to: {
 				enabled: isSemantic || e.temporal_directed || e.kind === "structural",
 				scaleFactor: 0.4,
 			},
 		},
-		font: { size: 9, color: "rgb(115, 115, 115)", strokeWidth: 0 },
+		font: { size: 9, color: graphColors["edge-label"], strokeWidth: 0 },
 		// Semantic relations are an evidence overlay and must not alter layout.
 		physics: !(isSemantic || isInstitution),
 		// smooth is controlled globally via options — not set per-edge
@@ -304,7 +307,7 @@ function toVisCitationEdge(edge: CitationEdge) {
 		dashes: [4, 5] as [number, number],
 		width: 1.5,
 		color: {
-			color: edge.direction_conflict ? "#dc2626" : "#2563eb",
+			color: edge.direction_conflict ? graphColors["citation-conflict"] : graphColors["citation"],
 			opacity: 1,
 		},
 		arrows: { to: { enabled: true, scaleFactor: 0.35 } },
@@ -347,9 +350,8 @@ function fontColorWithOpacity(color: string, opacity: number): string {
 		const alpha = (rgb[4] ? Number(rgb[4]) : 1) * clampedOpacity;
 		return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
 	}
-	// The app's current font colours are hex/RGB. Keep a safe transparent fallback
-	// for any future CSS colour syntax and restore the original at completion.
-	return `rgba(0, 0, 0, ${clampedOpacity})`;
+	// Keep other valid CSS colors intact when their alpha cannot be interpolated.
+	return color;
 }
 
 function edgeColorWithOpacity(
@@ -452,7 +454,7 @@ function renderPublicationFigure(
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return null;
 
-	ctx.fillStyle = "#ffffff";
+	ctx.fillStyle = graphColors["paper"];
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 	const toCanvas = (x: number, y: number) => ({
@@ -491,7 +493,7 @@ function renderPublicationFigure(
 		ctx.globalAlpha = isPrimaryEdge
 			? 1
 			: Math.min(PRINT_DIM_EDGE_OPACITY, existingOpacity);
-		ctx.strokeStyle = edge.kind === "semantic" ? "#8B5CF6" : "#64748B";
+		ctx.strokeStyle = edge.kind === "semantic" ? graphColors["semantic"] : graphColors["cooccurrence"];
 		ctx.lineWidth = Math.max(0.5, baseWidth * PRINT_EDGE_SCALE * scale);
 		ctx.setLineDash(edge.kind === "semantic" ? [6 * scale, 4 * scale] : []);
 		ctx.beginPath();
@@ -512,7 +514,7 @@ function renderPublicationFigure(
 			((n.size ?? 10) / 2) * PRINT_NODE_SCALE * scale,
 		);
 		ctx.beginPath();
-		ctx.fillStyle = typeof n.color === "string" ? n.color : "#BAB0AC";
+		ctx.fillStyle = typeof n.color === "string" ? n.color : graphColors["unknown"];
 		ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
 		ctx.fill();
 	}
@@ -526,7 +528,7 @@ function renderPublicationFigure(
 		ctx.font = `${fontPx}px "Atkinson Hyperlegible", sans-serif`;
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
-		ctx.fillStyle = "#0f172a";
+		ctx.fillStyle = graphColors["print-ink"];
 		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
 		const labelIds =
 			labelMode === "all"
@@ -564,7 +566,7 @@ function renderPublicationFigure(
 		ctx.font = `${CAPTION_FONT_PX}px "Atkinson Hyperlegible", sans-serif`;
 		ctx.textAlign = "left";
 		ctx.textBaseline = "top";
-		ctx.fillStyle = "#0f172a";
+		ctx.fillStyle = graphColors["print-ink"];
 		let y = graphHpx + 12;
 		for (const line of options.caption) {
 			ctx.fillText(line, 16, y);
@@ -590,7 +592,7 @@ function buildOptions(nodeCount: number) {
 			// shadow is very expensive — disable for large graphs
 			shadow: isLarge
 				? false
-				: { enabled: true, size: 5, x: 2, y: 2, color: "rgba(0,0,0,0.6)" },
+				: { enabled: true, size: 5, x: 2, y: 2, color: graphColors["node-shadow"] },
 		},
 		edges: {
 			color: { inherit: "from" as const, opacity: 1 },
@@ -1184,7 +1186,7 @@ export default function GraphViewer({
 
 			// ── Highlight: Neighbourhood Highlight (1st & 2nd degree) ───────────
 			const DIM_EDGE: EdgeColorProp = { inherit: "from", opacity: 0.05 };
-			const DIM_NODE_COLOR = "rgba(200,200,200,0.3)";
+			const DIM_NODE_COLOR = graphColors["dim-node"];
 
 			const applyHighlight = (clickedId: string) => {
 				if (networkRef.current !== network) return;
@@ -1408,7 +1410,6 @@ export default function GraphViewer({
 					title: visual.title,
 					shape: visual.shape,
 					size: visual.size,
-					borderWidth: visual.borderWidth,
 					color: visual.color,
 					font: visual.font,
 				};
@@ -1572,38 +1573,36 @@ export default function GraphViewer({
 	}, [focusNodeId, nodes]);
 
 	return (
-		<div className="relative w-full h-full bg-accent">
+		<div className="relative w-full h-full">
 			{/* Fit-to-view button */}
 			<Button
 				variant="outline"
 				size="sm"
 				onClick={handleFit}
 				title="全部顯示"
-				className="absolute top-3 right-3 z-10 h-auto rounded bg-background/90 py-1.5 text-xs text-muted-foreground hover:border-accent hover:bg-transparent hover:text-foreground cursor-pointer backdrop-blur-sm"
+				className="absolute top-3 right-3 z-10"
 			>
 				全部顯示
 			</Button>
 
 			{layoutStatus === "computing" && (
-				<div
-					role="status"
-					className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground"
-				>
+				<Card
+					role="status" className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10"
+				><CardContent>
 					佈局計算中…
-				</div>
+				</CardContent></Card>
 			)}
 			{layoutStatus === "failed" && (
-				<div
-					role="alert"
-					className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-md border border-border bg-background/90 px-4 py-2 text-xs text-muted-foreground"
-				>
+				<Card
+					role="alert" className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10"
+				><CardContent>
 					背景排版失敗，目前顯示初步位置；重新開啟此視圖會再次計算。
-				</div>
+				</CardContent></Card>
 			)}
 
 			<div
 				ref={containerRef}
-				className="w-full h-full"
+				className="knowledge-graph w-full h-full bg-background"
 				data-layout-status={layoutStatus}
 				data-layout-reason={layoutReason}
 				data-layout-source={layoutSource}

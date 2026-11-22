@@ -1,7 +1,6 @@
 "use client";
 
 import { X, ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import StatCard from "./StatCard";
 import type {
@@ -26,24 +25,6 @@ const CONFIDENCE_LABELS: Record<RelationConfidence, string> = {
 };
 
 /** 證據可信度的語意色（綠＝原文、琥珀＝推論、紅＝不明確）。 */
-function ConfidenceBadge({ confidence }: { confidence: RelationConfidence }) {
-	const styles: Record<RelationConfidence, string> = {
-		EXTRACTED:
-			"border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-		INFERRED:
-			"border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-		AMBIGUOUS:
-			"border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-	};
-	return (
-		<span
-			className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[0.65rem] font-medium leading-none ${styles[confidence]}`}
-		>
-			{CONFIDENCE_LABELS[confidence]}
-		</span>
-	);
-}
-
 export default function EdgeInfo({ edge, nodes, methodology, onClose }: Props) {
 	const kind = edge.kind ?? inferLegacyKind(edge);
 	const source = nodes.find((node) => node.id === edge.from);
@@ -53,18 +34,12 @@ export default function EdgeInfo({ edge, nodes, methodology, onClose }: Props) {
 	return (
 		<div className="relative">
 			<div className="mb-3 flex items-start justify-between gap-2">
-				<Badge
-					className="rounded border-0 px-2 py-0.5 text-[0.7rem] font-bold"
-					style={{ background: kindColor(kind), color: "white" }}
-				>
-					{kindLabel(kind)}
-				</Badge>
+				<p className="text-base font-medium">{kindLabel(kind)}</p>
 				<Button
 					type="button"
 					variant="ghost"
 					size="icon-xs"
 					onClick={onClose}
-					className="-mt-0.5 cursor-pointer rounded text-muted-foreground hover:text-foreground"
 					aria-label="關閉關係資訊"
 				>
 					<X className="size-3.5" />
@@ -226,7 +201,7 @@ function SemanticDetails({
 			{provenance === "partial" && (
 				<p
 					role="status"
-					className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[0.7rem] leading-relaxed text-amber-800 dark:text-amber-200"
+					className="rounded-md border border-warning/30 bg-warning/10 p-2 text-[0.7rem] leading-relaxed text-warning"
 				>
 					舊資料只保存部分 LLM
 					關係來源；此處列出的來源與證據可能不完整，不代表完整支持篇數。
@@ -274,7 +249,7 @@ function EvidenceCard({
 				</p>
 				{evidence.confidence && (
 					<span className="shrink-0">
-						<ConfidenceBadge confidence={evidence.confidence} />
+						{CONFIDENCE_LABELS[evidence.confidence]}
 					</span>
 				)}
 			</div>
@@ -303,7 +278,7 @@ function PatentSources({
 		<div>
 			<dt className="mb-1.5 font-medium text-foreground">
 				來源專利
-				<span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[0.65rem] text-primary tabular-nums">
+				<span className="ml-1.5 tabular-nums">
 					{sourcePatents.length}
 				</span>
 			</dt>
@@ -389,13 +364,4 @@ function kindLabel(
 	if (kind === "semantic") return "LLM 語意關係";
 	if (kind === "institution") return "機構共享概念";
 	return "結構關係";
-}
-
-function kindColor(
-	kind: "structural" | "cooccurrence" | "semantic" | "institution",
-) {
-	if (kind === "cooccurrence") return "#475569";
-	if (kind === "semantic") return "#7c3aed";
-	if (kind === "institution") return "#0f766e";
-	return "#64748b";
 }

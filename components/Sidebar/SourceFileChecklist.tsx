@@ -1,5 +1,8 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { Button } from "@/components/ui/button";
 import { SOURCE_FILE_COLORS } from "@/lib/graph-view";
 
@@ -30,31 +33,22 @@ export default function SourceFileChecklist({
 					return (
 						<label
 							key={file}
-							className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-colors ${
-								active
-									? "border-primary bg-primary/5"
-									: "border-border bg-background"
-							}`}
+							className="flex items-center gap-2"
 						>
-							<input
-								type="checkbox"
+							<Checkbox
 								checked={active}
-								onChange={(event) => {
-									const next = event.target.checked
+								onCheckedChange={(checked) => {
+									const next = checked
 										? [...sourceFiles, file]
 										: sourceFiles.filter((f) => f !== file);
 									onChange(next);
 								}}
-								className="mt-0.5"
 							/>
 							<span className="inline-flex items-center gap-1.5 min-w-0">
 								<span
 									aria-hidden
-									className="size-2.5 shrink-0 rounded-full"
-									style={{
-										background:
-											SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length],
-									}}
+									className="size-2.5 shrink-0 rounded-full bg-graph-swatch"
+									style={graphSwatch(SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length])}
 								/>
 								<span className="truncate">{file}</span>
 							</span>
@@ -69,7 +63,6 @@ export default function SourceFileChecklist({
 					size="xs"
 					onClick={() => onChange([])}
 					aria-pressed={sourceFiles.length === 0}
-					className="h-auto rounded px-2 py-1 text-[0.65rem] text-muted-foreground hover:bg-accent"
 				>
 					全部來源
 				</Button>

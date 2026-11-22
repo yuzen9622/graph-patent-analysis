@@ -1,5 +1,7 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+
 import { useState } from "react";
 import { FileImage, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -110,11 +112,6 @@ export default function PublicationExportPanel({
 								? (disabledReason ?? "等待圖譜佈局完成")
 								: "產生可放入論文的出版圖（PRD-Q8 M1/M2）"
 						}
-						className={`h-auto gap-1.5 rounded-md py-1.5 text-xs disabled:pointer-events-auto ${
-							disabled
-								? "cursor-not-allowed"
-								: "cursor-pointer hover:bg-accent hover:text-accent-foreground"
-						}`}
 						aria-label="出版整體圖選項"
 					/>
 				}
@@ -188,7 +185,7 @@ export default function PublicationExportPanel({
 					</DropdownMenuRadioGroup>
 					<label className="mt-1.5 flex items-center gap-1.5 text-[0.65rem] text-muted-foreground">
 						自訂
-						<input
+						<Input
 							type="number"
 							min={40}
 							max={400}
@@ -198,7 +195,7 @@ export default function PublicationExportPanel({
 								const next = Number(event.target.value);
 								if (Number.isFinite(next) && next > 0) setWidthMm(next);
 							}}
-							className="w-16 rounded border border-border bg-background px-1.5 py-0.5 text-[0.7rem] text-foreground"
+							className="w-16"
 						/>
 						mm
 					</label>
@@ -249,7 +246,6 @@ export default function PublicationExportPanel({
 						<DropdownMenuCheckboxItem
 							checked={acknowledgeRisk}
 							onCheckedChange={(checked) => setAcknowledgeRisk(checked)}
-							className="text-[0.65rem] text-foreground"
 						>
 							我了解部分標籤可能被自動省略，仍要產生
 						</DropdownMenuCheckboxItem>
@@ -272,11 +268,6 @@ export default function PublicationExportPanel({
 						});
 						setOpen(false);
 					}}
-					className={`h-auto w-full gap-1.5 rounded-md py-1.5 text-xs ${
-						!canGenerate
-							? "cursor-not-allowed text-muted-foreground"
-							: "cursor-pointer border-primary"
-					}`}
 				>
 					<Download size={12} />
 					產生並下載

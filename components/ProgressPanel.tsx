@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
 	CheckCircle2,
-	Circle,
 	Loader2,
 	XCircle,
 	AlertCircle,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AnalysisActivity } from "@/components/workspace/AnalysisActivity";
 import { notifyHistoryChanged } from "@/lib/analysis-history";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -45,7 +46,6 @@ interface ProgressPanelProps {
 export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 	const router = useRouter();
 	const esRef = useRef<EventSource | null>(null);
-	const logEndRef = useRef<HTMLDivElement | null>(null);
 	const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const [state, setState] = useState<ProgressState>({
@@ -150,12 +150,6 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 		};
 	}, [jobId, router]);
 
-	// ── Auto-scroll log to bottom ─────────────────────────────────────────────
-
-	useEffect(() => {
-		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [state.batchLog.length]);
-
 	// ── Cancel handler ────────────────────────────────────────────────────────
 
 	async function handleCancel() {
@@ -181,15 +175,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 	// ── Derived values ────────────────────────────────────────────────────────
 
 	const { status, done, total, currentTitles, batchLog, errorMessage } = state;
-	const totalBatches = batchLog.length + (status === "running" ? 1 : 0);
 	const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-	const barColor =
-		status === "cancelled"
-			? "bg-warning"
-			: status === "error"
-				? "bg-error"
-				: "bg-gradient-to-r from-accent to-accent-hover";
 
 	const headingText =
 		status === "running"
@@ -204,7 +190,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 
 	return (
 		<div
-			className="w-full max-w-2xl mx-auto glass rounded-2xl p-6 space-y-5"
+			className="w-full max-w-2xl mx-auto space-y-8"
 			role="region"
 			aria-label="分析進度"
 		>
@@ -212,25 +198,25 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 			<div className="flex items-center gap-2">
 				{status === "running" && (
 					<Loader2
-						className="w-5 h-5 text-accent animate-spin sshrink-0"
+						className="w-5 h-5 text-primary animate-spin shrink-0"
 						aria-hidden="true"
 					/>
 				)}
 				{status === "done" && (
 					<CheckCircle2
-						className="w-5 h-5 text-success sshrink-0"
+						className="w-5 h-5 text-success shrink-0"
 						aria-hidden="true"
 					/>
 				)}
 				{status === "cancelled" && (
 					<XCircle
-						className="w-5 h-5 text-warning sshrink-0"
+						className="w-5 h-5 text-warning shrink-0"
 						aria-hidden="true"
 					/>
 				)}
 				{status === "error" && (
 					<AlertCircle
-						className="w-5 h-5 text-error sshrink-0"
+						className="w-5 h-5 text-error shrink-0"
 						aria-hidden="true"
 					/>
 				)}
@@ -248,22 +234,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 			{/* Progress bar */}
 			{total > 0 && (
 				<div className="space-y-1">
-					<div
-						className="w-full h-2.5 rounded-full bg-black/5 dark:bg-white/8 overflow-hidden"
-						role="progressbar"
-						aria-valuenow={done}
-						aria-valuemin={0}
-						aria-valuemax={total}
-						aria-label={`進度 ${pct}%`}
-					>
-						<div
-							className={cn(
-								"h-full rounded-full transition-[width] duration-400 ease-out",
-								barColor,
-							)}
-							style={{ width: `${pct}%` }}
-						/>
-					</div>
+					<Progress value={done} max={total} aria-label={`進度 ${pct}%`} />
 					<p className="text-sm text-muted-foreground tabular-nums">
 						{done} / {total} &nbsp;·&nbsp; {pct}%
 					</p>
@@ -273,7 +244,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 			{/* Current batch titles */}
 			{currentTitles.length > 0 && status === "running" && (
 				<div className="flex items-start gap-2 text-sm text-muted-foreground">
-					<span className="sshrink-0 mt-0.5 text-accent" aria-hidden="true">
+					<span className="shrink-0 mt-0.5 text-foreground" aria-hidden="true">
 						▶
 					</span>
 					<p>
@@ -284,64 +255,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 				</div>
 			)}
 
-			{/* Scrollable batch log */}
-			{batchLog.length > 0 && (
-				<div
-					className="rounded-xl border border-black/5 dark:border-white/8 bg-black/[0.01] dark:bg-white/[0.03] backdrop-blur-sm max-h-52 overflow-y-auto"
-					aria-label="批次處理紀錄"
-				>
-					{batchLog.map((entry, idx) => (
-						<div
-							key={`${entry.batchIndex}-${idx}`}
-							className="flex items-start gap-2 px-3 py-2 text-sm border-b border-black/5 dark:border-white/[0.06] last:border-b-0"
-						>
-							<CheckCircle2
-								className="w-4 h-4 text-success mt-0.5 sshrink-0"
-								aria-hidden="true"
-							/>
-							<span className="text-muted-foreground sshrink-0 tabular-nums">
-								[batch {entry.batchIndex + 1}/
-								{Math.max(totalBatches, entry.batchIndex + 1)}]
-							</span>
-							<span className="text-foreground truncate">
-								{entry.titles[0]}
-								{entry.titles.length > 1 && (
-									<span className="text-muted-foreground">
-										{" "}
-										等 {entry.titles.length} 篇
-									</span>
-								)}
-							</span>
-						</div>
-					))}
-					{/* Running entry at bottom */}
-					{status === "running" && currentTitles.length > 0 && (
-						<div className="flex items-start gap-2 px-3 py-2 text-sm">
-							<Circle
-								className="w-4 h-4 text-accent mt-0.5 sshrink-0 animate-pulse"
-								aria-hidden="true"
-							/>
-							<span className="text-muted-foreground sshrink-0 tabular-nums">
-								[batch {batchLog.length + 1}/...]
-							</span>
-							<span className="text-foreground truncate">
-								{currentTitles[0]}
-								{currentTitles.length > 1 && (
-									<span className="text-muted-foreground">
-										{" "}
-										等 {currentTitles.length} 篇
-									</span>
-								)}
-							</span>
-							<Loader2
-								className="w-3 h-3 text-accent animate-spin ml-auto sshrink-0 mt-1"
-								aria-hidden="true"
-							/>
-						</div>
-					)}
-					<div ref={logEndRef} />
-				</div>
-			)}
+			<AnalysisActivity status={status} done={done} total={total} batches={batchLog} />
 
 			{/* Cancel button */}
 			{status === "running" && (
@@ -350,11 +264,6 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 						type="button"
 						variant="outline"
 						onClick={handleCancel}
-						className={cn(
-							"h-auto px-4 py-2 rounded-xl text-sm font-medium cursor-pointer",
-							"border-transparent bg-black/5 text-foreground dark:border-transparent dark:bg-white/8",
-							"hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/10",
-						)}
 						aria-label="取消分析"
 					>
 						取消分析

@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 /**
  * N 面板比較（比較工作區）的純邏輯：來源檔範圍正規化、以 id 為準的集合比較、
  * 差異（聯集）檢視組裝與成員可見性。
@@ -34,11 +35,11 @@ export function diffMemberships(panelCount: number): readonly DiffMembership[] {
 
 /** 差異圖配色。2026-08-09 修訂：shared（兩面板都有）由灰改為紅（老師指定）。 */
 export const DIFF_COLORS: Record<DiffMembership, string> = {
-	a: "#2563eb",
-	b: "#059669",
-	unique: "#f59e0b",
-	partial: "#8b5cf6",
-	shared: "#dc2626",
+	a: graphColors["diff-a"],
+	b: graphColors["diff-b"],
+	unique: graphColors["diff-unique"],
+	partial: graphColors["diff-partial"],
+	shared: graphColors["diff-shared"],
 };
 
 /** 冗餘編碼：顏色以外再用形狀區分，色覺障礙者也分得出來。 */

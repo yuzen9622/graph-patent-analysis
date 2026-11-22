@@ -7,6 +7,7 @@ import {
 	TriangleAlert,
 	X,
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -58,7 +59,7 @@ export default function CompareSetupPanel({
 			>
 				<DialogHeader className="flex-row items-start justify-between gap-3">
 					<div>
-						<DialogTitle className="font-serif text-base font-bold text-foreground">
+						<DialogTitle>
 							設定多面板比較
 						</DialogTitle>
 						<p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -73,7 +74,7 @@ export default function CompareSetupPanel({
 								variant="outline"
 								size="icon-lg"
 								aria-label="取消比較設定"
-								className="size-11 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+								className="shrink-0"
 							/>
 						}
 					>
@@ -100,7 +101,7 @@ export default function CompareSetupPanel({
 											: `移除${panelLabel(index, panelCount)}`
 									}
 									aria-label={`移除${panelLabel(index, panelCount)}`}
-									className="shrink-0 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-40"
+									className="shrink-0 disabled:pointer-events-auto"
 								>
 									<X size={14} />
 								</Button>
@@ -124,7 +125,7 @@ export default function CompareSetupPanel({
 							type="button"
 							variant="outline"
 							onClick={onAddPanel}
-							className="h-auto min-h-24 w-full gap-2 rounded-md border-dashed text-sm text-muted-foreground hover:border-primary hover:text-foreground"
+							className="w-full gap-2"
 						>
 							<Plus size={16} />
 							新增面板
@@ -132,30 +133,23 @@ export default function CompareSetupPanel({
 					)}
 				</div>
 
-				<p
-					role={distinct ? "status" : "alert"}
-					className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
-						distinct
-							? "border-border bg-accent/40 text-muted-foreground"
-							: "border-destructive/40 bg-destructive/5 text-destructive"
-					}`}
-				>
+				<Alert role={distinct ? "status" : "alert"} variant={distinct ? "default" : "destructive"}>
 					{!distinct && (
 						<TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />
 					)}
-					<span>
+					<AlertDescription>
 						{distinct
 							? `${panelCount} 個面板的有效範圍互異，可以開始比較。`
 							: "有兩個面板的有效範圍相同（未勾選＝全部來源），沒有東西可比。請讓每個面板的範圍互異。"}
-					</span>
-				</p>
+					</AlertDescription>
+				</Alert>
 
 				<DialogFooter className="flex-row flex-wrap items-center justify-start gap-2">
 					<Button
 						type="button"
 						onClick={onStart}
 						disabled={!distinct}
-						className="h-auto min-h-11 gap-2 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+						className="gap-2"
 					>
 						<GitCompare size={16} />
 						開始比較
@@ -165,7 +159,7 @@ export default function CompareSetupPanel({
 							type="button"
 							variant="outline"
 							onClick={onSwap}
-							className="h-auto min-h-11 gap-2 rounded-md px-4 text-sm hover:bg-accent"
+							className="gap-2"
 						>
 							<ArrowLeftRight size={16} />
 							交換 A/B
@@ -175,7 +169,6 @@ export default function CompareSetupPanel({
 						type="button"
 						variant="outline"
 						onClick={onCancel}
-						className="h-auto min-h-11 rounded-md px-4 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
 					>
 						取消
 					</Button>

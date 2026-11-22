@@ -62,7 +62,7 @@ describe("resource limits (§5.2)", () => {
 			uploadMaxFileBytes: 8 * MB,
 			uploadMaxFiles: 10,
 			uploadMaxTotalBytes: 8 * MB,
-			analyzeMaxPatents: 20000,
+			analyzeMaxPatents: Infinity,
 			analyzeMaxBodyBytes: 8 * MB,
 		});
 	});
@@ -328,9 +328,12 @@ describe("validateAnalyzeBody (§5.2, §5.3)", () => {
 		}
 	});
 
-	it("refuses 21000 patents with 413 instead of truncating (§9-10)", () => {
+	it("accepts all 21000 patents by default and respects explicit administrator overrides", () => {
 		const patents = Array.from({ length: 21000 }, (_, i) => patent(String(i)));
-		const result = validateAnalyzeBody({ provider: "gemini", patents });
+		const body = { provider: "gemini", patents };
+		const unlimited = validateAnalyzeBody(body);
+		expect(unlimited.ok && unlimited.value.sampleSize).toBe(21000);
+		const result = validateAnalyzeBody(body, limits({ analyzeMaxPatents: 20000 }));
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.failure.status).toBe(413);

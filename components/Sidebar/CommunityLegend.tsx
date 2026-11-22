@@ -1,5 +1,8 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+
 import { EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Community } from "@/types/graph";
@@ -27,7 +30,7 @@ export default function CommunityLegend({
 				社群名稱取群內連結度最高的概念作為代表概念，不等同人工分類名稱。
 			</p>
 			{hiddenCount > 0 && (
-				<div className="mb-2 flex items-center justify-between rounded-md border border-border bg-muted/40 px-2 py-1.5">
+				<Card><CardContent className="flex items-center justify-between">
 					<span className="inline-flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
 						<EyeOff size={11} aria-hidden />
 						已隱藏 {hiddenCount} 個社群
@@ -41,11 +44,10 @@ export default function CommunityLegend({
 								.filter((c) => hiddenCommunities.has(c.id))
 								.forEach((c) => onToggle(c.id))
 						}
-						className="h-auto px-0 text-[0.7rem] cursor-pointer"
 					>
 						全部顯示
 					</Button>
-				</div>
+				</CardContent></Card>
 			)}
 			<ul className="space-y-0.5">
 				{communities.map((c) => {
@@ -58,12 +60,12 @@ export default function CommunityLegend({
 								onClick={() => onToggle(c.id)}
 								title={isHidden ? `顯示「${c.name}」` : `隱藏「${c.name}」`}
 								aria-pressed={!isHidden}
-								className="h-auto w-full justify-start gap-2 rounded-md px-1.5 py-1.5 cursor-pointer"
+								className="w-full justify-start gap-2"
 							>
 								<span
 									aria-hidden
-									className="w-3 h-3 rounded-full shrink-0 transition-opacity"
-									style={{ background: c.color, opacity: isHidden ? 0.3 : 1 }}
+									className={`w-3 h-3 rounded-full shrink-0 transition-opacity bg-graph-swatch ${isHidden ? "opacity-30" : ""}`}
+									style={graphSwatch(c.color)}
 								/>
 								<span
 									className={`flex-1 text-xs text-left truncate transition-colors ${

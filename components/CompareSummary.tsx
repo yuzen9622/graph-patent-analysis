@@ -1,5 +1,9 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
+
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from "@/components/ui/table";
+
 import { ArrowLeftRight, Columns2, Diff, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +14,6 @@ import {
 	type CompareViewTab,
 } from "@/lib/compare-export";
 import {
-	DIFF_COLORS,
 	type CompareCount,
 	type CompareMetrics,
 } from "@/lib/graph-compare";
@@ -30,48 +33,45 @@ function MetricRow({ title, count }: { title: string; count: CompareCount }) {
 	const panelCount = count.counts.length;
 	if (panelCount <= 2) {
 		return (
-			<tr>
-				<th
+			<TableRow>
+				<TableHead
 					scope="row"
-					className="py-0.5 pr-3 text-left font-medium text-foreground"
 				>
 					{title}
-				</th>
-				<td className="py-0.5 pr-3 font-mono" style={{ color: DIFF_COLORS.a }}>
+				</TableHead>
+				<TableCell className="text-graph-diff-a">
 					{count.aOnly ?? 0}
-				</td>
-				<td className="py-0.5 pr-3 font-mono" style={{ color: DIFF_COLORS.b }}>
+				</TableCell>
+				<TableCell className="text-graph-diff-b">
 					{count.bOnly ?? 0}
-				</td>
-				<td
-					className="py-0.5 pr-3 font-mono"
-					style={{ color: DIFF_COLORS.shared }}
+				</TableCell>
+				<TableCell
+					className="text-graph-diff-shared"
 				>
 					{count.counts[1] ?? 0}
-				</td>
-				<td className="py-0.5 font-mono text-foreground">
+				</TableCell>
+				<TableCell>
 					{formatJaccard(count.jaccard)}
-				</td>
-			</tr>
+				</TableCell>
+			</TableRow>
 		);
 	}
 	return (
-		<tr>
-			<th
+		<TableRow>
+			<TableHead
 				scope="row"
-				className="py-0.5 pr-3 text-left font-medium text-foreground"
 			>
 				{title}
-			</th>
+			</TableHead>
 			{count.counts.map((value, index) => (
-				<td key={index} className="py-0.5 pr-3 font-mono text-foreground">
+				<TableCell key={index}>
 					{value}
-				</td>
+				</TableCell>
 			))}
-			<td className="py-0.5 font-mono text-foreground">
+			<TableCell>
 				{formatJaccard(count.jaccard)}
-			</td>
-		</tr>
+			</TableCell>
+		</TableRow>
 	);
 }
 
@@ -91,7 +91,7 @@ export default function CompareSummary({
 	return (
 		<section
 			aria-label="比較摘要"
-			className="shrink-0 border-b border-border bg-accent/40 px-4 py-2.5"
+			className="shrink-0 bg-accent/40 px-4 py-2.5"
 		>
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div className="min-w-0 space-y-1">
@@ -104,10 +104,7 @@ export default function CompareSummary({
 								>
 									<span
 										aria-hidden
-										className="size-2.5 shrink-0 rounded-full"
-										style={{
-											background: index === 0 ? DIFF_COLORS.a : DIFF_COLORS.b,
-										}}
+										className={`size-2.5 shrink-0 rounded-full ${index === 0 ? "bg-graph-diff-a" : "bg-graph-diff-b"}`}
 									/>
 									<span className="font-medium text-foreground">
 										{panelLabel(index, panelCount)}
@@ -118,9 +115,8 @@ export default function CompareSummary({
 									</span>
 								</span>
 							) : (
-								<span
+								<Badge variant="secondary"
 									key={index}
-									className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5"
 								>
 									<span className="font-medium text-foreground">
 										{panelLabel(index, panelCount)}
@@ -128,7 +124,7 @@ export default function CompareSummary({
 									<span className="truncate text-muted-foreground">
 										{label}
 									</span>
-								</span>
+								</Badge>
 							),
 						)}
 					</div>
@@ -156,11 +152,6 @@ export default function CompareSummary({
 								size="sm"
 								onClick={() => onTabChange(value)}
 								aria-pressed={tab === value}
-								className={`h-auto gap-1.5 rounded px-2.5 py-1.5 text-xs ${
-									tab === value
-										? ""
-										: "text-muted-foreground hover:text-foreground"
-								}`}
 							>
 								<Icon size={12} />
 								{label}
@@ -172,7 +163,7 @@ export default function CompareSummary({
 						variant="outline"
 						size="sm"
 						onClick={onEditScope}
-						className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent"
+						className="gap-1.5"
 					>
 						<Pencil size={12} />
 						編輯範圍
@@ -183,7 +174,7 @@ export default function CompareSummary({
 							variant="outline"
 							size="sm"
 							onClick={onSwap}
-							className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent"
+							className="gap-1.5"
 						>
 							<ArrowLeftRight size={12} />
 							交換 A/B
@@ -194,7 +185,7 @@ export default function CompareSummary({
 						variant="outline"
 						size="sm"
 						onClick={onExit}
-						className="h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+						className="gap-1.5"
 					>
 						<X size={12} />
 						結束比較
@@ -203,48 +194,47 @@ export default function CompareSummary({
 			</div>
 
 			<div className="mt-2 overflow-x-auto text-[0.65rem]">
-				<table>
-					<caption className="sr-only">
+				<Table>
+					<TableCaption className="sr-only">
 						{twoPanels ? "A/B 差異指標" : "面板比較指標"}
-					</caption>
-					<thead className="text-muted-foreground">
-						<tr>
-							<th scope="col" className="pr-3 text-left font-normal">
+					</TableCaption>
+					<TableHeader>
+						<TableRow>
+							<TableHead scope="col">
 								指標
-							</th>
+							</TableHead>
 							{twoPanels ? (
 								<>
-									<th scope="col" className="pr-3 text-left font-normal">
+									<TableHead scope="col">
 										僅 A
-									</th>
-									<th scope="col" className="pr-3 text-left font-normal">
+									</TableHead>
+									<TableHead scope="col">
 										僅 B
-									</th>
-									<th scope="col" className="pr-3 text-left font-normal">
+									</TableHead>
+									<TableHead scope="col">
 										共有
-									</th>
+									</TableHead>
 								</>
 							) : (
 								metrics.nodes.counts.map((_, index) => (
-									<th
+									<TableHead
 										key={index}
 										scope="col"
-										className="pr-3 text-left font-normal"
 									>
 										僅 {index + 1} 組
-									</th>
+									</TableHead>
 								))
 							)}
-							<th scope="col" className="text-left font-normal">
+							<TableHead scope="col">
 								{twoPanels ? "Jaccard" : "共有比例"}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
 						<MetricRow title="節點" count={metrics.nodes} />
 						<MetricRow title="關係邊" count={metrics.edges} />
-					</tbody>
-				</table>
+					</TableBody>
+				</Table>
 			</div>
 		</section>
 	);

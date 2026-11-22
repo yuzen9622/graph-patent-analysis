@@ -1,12 +1,14 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Layers, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { RAINBOW_COLORS, UNKNOWN_YEAR_COLOR } from "@/lib/concept-time";
+import { RAINBOW_COLORS } from "@/lib/concept-time";
 import {
 	SOURCE_FILE_COLORS,
-	SOURCE_OVERLAP_COLOR,
 	INSTITUTION_TYPE_COLORS,
 	type ColorMode,
 	type InstitutionType,
@@ -32,12 +34,12 @@ interface Props {
 const CONTEXT_LAYERS: Array<{
 	type: NodeType;
 	label: string;
-	color: string;
+	swatch: string;
 	shape: string;
 }> = [
-	{ type: "applicant", label: "申請人層", color: "#4E79A7", shape: "★ 星形" },
-	{ type: "patent", label: "專利層", color: "#F28E2B", shape: "● 圓點" },
-	{ type: "concept", label: "概念層", color: "#59A14F", shape: "● 圓點" },
+	{ type: "applicant", label: "申請人層", swatch: "bg-layer-applicant", shape: "★ 星形" },
+	{ type: "patent", label: "專利層", swatch: "bg-layer-patent", shape: "● 圓點" },
+	{ type: "concept", label: "概念層", swatch: "bg-layer-concept", shape: "● 圓點" },
 ];
 
 const IPC_LEVEL_NAMES: Record<IpcLevel, string> = {
@@ -66,27 +68,20 @@ export default function FloatingLegend({
 
 	// Determine title and content according to view mode & colorMode
 	let title = "圖譜圖例";
-	let badgeText = "";
 
 	if (mode === "context") {
 		title = "專利脈絡圖例";
-		badgeText = "三層節點";
 	} else if (mode === "institution") {
 		title = "機構類型圖例";
-		badgeText = "機構類別";
 	} else if (colorMode === "community" || colorMode === "community_applicants") {
 		title =
 			colorMode === "community_applicants" ? "機構社群圖例" : "技術社群圖例";
-		badgeText = `共 ${communities.length} 個社群`;
 	} else if (colorMode === "first_year") {
 		title = "首次出現年份圖例";
-		badgeText = "時間彩虹漸層";
 	} else if (colorMode === "ipc") {
 		title = `IPC 分類圖例（${IPC_LEVEL_NAMES[ipcLevel] ?? `L${ipcLevel}`}）`;
-		badgeText = `共 ${ipcLegend.length} 個分類`;
 	} else if (colorMode === "source") {
 		title = "來源檔案圖例";
-		badgeText = `共 ${allSourceFiles.length} 檔`;
 	}
 
 	const renderContent = () => {
@@ -105,8 +100,7 @@ export default function FloatingLegend({
 								<div className="flex items-center gap-1.5 min-w-0">
 									<span
 										aria-hidden
-										className="size-2.5 shrink-0 rounded-sm"
-										style={{ background: layer.color }}
+										className={`size-2.5 shrink-0 rounded-sm ${layer.swatch}`}
 									/>
 									<span className="truncate text-foreground font-medium">
 										{layer.label}
@@ -132,8 +126,8 @@ export default function FloatingLegend({
 						<div key={name} className="flex items-center gap-1.5 py-0.5 text-xs">
 							<span
 								aria-hidden
-								className="size-2.5 shrink-0 rounded-full"
-								style={{ background: color }}
+								className="size-2.5 shrink-0 rounded-full bg-graph-swatch"
+								style={graphSwatch(color)}
 							/>
 							<span className="truncate text-foreground">{name}</span>
 						</div>
@@ -155,20 +149,19 @@ export default function FloatingLegend({
 						{communities.map((c) => {
 							const isHidden = hiddenCommunities?.has(c.id);
 							return (
-								<button
+								<Button variant="ghost"
 									key={c.id}
-									type="button"
+                                    aria-pressed={!isHidden}
+                                    type="button"
 									onClick={() => onToggleCommunity?.(c.id)}
-									className={`flex w-full items-center justify-between gap-1.5 rounded px-1 py-0.5 text-left text-xs transition-colors hover:bg-accent cursor-pointer ${
-										isHidden ? "opacity-40" : "opacity-100"
-									}`}
+									className="w-full justify-between"
 									title={isHidden ? `點擊顯示「${c.name}」` : `點擊隱藏「${c.name}」`}
 								>
 									<div className="flex items-center gap-1.5 min-w-0">
 										<span
 											aria-hidden
-											className="size-2.5 shrink-0 rounded-full"
-											style={{ background: c.color }}
+											className="size-2.5 shrink-0 rounded-full bg-graph-swatch"
+											style={graphSwatch(c.color)}
 										/>
 										<span className="truncate text-foreground">{c.name}</span>
 									</div>
@@ -176,7 +169,7 @@ export default function FloatingLegend({
 										{isHidden && <EyeOff size={10} />}
 										<span>{c.node_count ?? 0}</span>
 									</div>
-								</button>
+								</Button>
 							);
 						})}
 					</div>
@@ -201,26 +194,23 @@ export default function FloatingLegend({
 				<div className="space-y-2 text-xs">
 					<div>
 						<div
-							className="h-3 w-full rounded-md shadow-inner"
-							style={{
-								background: `linear-gradient(to right, ${RAINBOW_COLORS.join(", ")})`,
-							}}
+							className="h-3 w-full rounded-md shadow-inner bg-year-scale"
 							title="紅（最早）→ 橙 → 黃 → 綠 → 藍 → 靛 → 紫（最近）"
 						/>
 						<div className="mt-1 flex items-center justify-between text-[0.65rem] font-mono text-muted-foreground">
-							<span className="text-red-500 font-semibold">{minYear} 年</span>
+							<span className="text-graph-year-1 font-semibold">{minYear} 年</span>
 							<span>{midYear} 年</span>
-							<span className="text-purple-500 font-semibold">{maxYear} 年</span>
+							<span className="text-graph-year-7 font-semibold">{maxYear} 年</span>
 						</div>
 					</div>
 
-					<div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-[0.7rem]">
+					<div className="flex items-center justify-between pt-1.5 text-[0.7rem]">
 						<div className="flex items-center gap-1">
 							{RAINBOW_COLORS.map((color, i) => (
 								<span
 									key={color}
-									className="size-2 rounded-full"
-									style={{ background: color }}
+									className="size-2 rounded-full bg-graph-swatch"
+									style={graphSwatch(color)}
 									title={["紅", "橙", "黃", "綠", "藍", "靛", "紫"][i]}
 								/>
 							))}
@@ -229,8 +219,7 @@ export default function FloatingLegend({
 						<div className="flex items-center gap-1.5 text-muted-foreground">
 							<span
 								aria-hidden
-								className="size-2 rounded-full"
-								style={{ background: UNKNOWN_YEAR_COLOR }}
+								className="size-2 rounded-full bg-graph-unknown"
 							/>
 							<span>未知年份</span>
 						</div>
@@ -261,8 +250,8 @@ export default function FloatingLegend({
 								<div className="flex items-center gap-1.5 min-w-0">
 									<span
 										aria-hidden
-										className="size-2.5 shrink-0 rounded-sm"
-										style={{ background: item.color }}
+										className="size-2.5 shrink-0 rounded-sm bg-graph-swatch"
+										style={graphSwatch(item.color)}
 									/>
 									<span className="font-mono font-medium text-foreground truncate">
 										{item.key}
@@ -290,21 +279,18 @@ export default function FloatingLegend({
 								<div className="flex items-center gap-1.5 min-w-0">
 									<span
 										aria-hidden
-										className="size-2.5 shrink-0 rounded-full"
-										style={{
-											background: SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length],
-										}}
+										className="size-2.5 shrink-0 rounded-full bg-graph-swatch"
+										style={graphSwatch(SOURCE_FILE_COLORS[i % SOURCE_FILE_COLORS.length])}
 									/>
 									<span className="truncate text-foreground">{filename}</span>
 								</div>
 							</div>
 						))}
-						<div className="flex items-center justify-between gap-1.5 rounded px-1 py-0.5 text-xs border-t border-border/50 pt-1 mt-1">
+						<div className="flex items-center justify-between gap-1.5 rounded px-1 py-0.5 text-xs pt-1 mt-1">
 							<div className="flex items-center gap-1.5 min-w-0">
 								<span
 									aria-hidden
-									className="size-2.5 shrink-0 rounded-full"
-									style={{ background: SOURCE_OVERLAP_COLOR }}
+									className="size-2.5 shrink-0 rounded-full bg-graph-source-overlap"
 								/>
 								<span className="text-muted-foreground font-medium">
 									跨多檔共有概念
@@ -320,27 +306,20 @@ export default function FloatingLegend({
 	};
 
 	return (
-		<aside
-			aria-label="右下角顏色圖例清單"
-			className="absolute bottom-3 right-3 z-10 w-[min(18.5rem,calc(100%-1.5rem))] rounded-lg border border-border bg-background/92 p-2.5 text-xs shadow-lg backdrop-blur-md transition-all dark:bg-background/95"
-		>
-			<div className="flex items-center justify-between gap-1 pb-1.5 border-b border-border/60">
+		<Card role="complementary"
+			aria-label="右下角顏色圖例清單" className="absolute bottom-3 right-3 z-10 w-[min(18.5rem,calc(100%-1.5rem))]"
+		><CardContent>
+			<div className="flex items-center justify-between gap-1 pb-1.5">
 				<div className="flex items-center gap-1.5 min-w-0">
 					<Layers size={13} className="text-primary shrink-0" aria-hidden />
 					<h3 className="font-semibold text-foreground truncate text-xs">{title}</h3>
 				</div>
 				<div className="flex items-center gap-1 shrink-0">
-					{badgeText && (
-						<span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] text-muted-foreground font-medium">
-							{badgeText}
-						</span>
-					)}
 					<Button
 						type="button"
 						variant="ghost"
 						size="icon-xs"
 						onClick={() => setExpanded(!expanded)}
-						className="size-5 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
 						aria-label={expanded ? "收合圖例" : "展開圖例"}
 					>
 						{expanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
@@ -349,6 +328,6 @@ export default function FloatingLegend({
 			</div>
 
 			{expanded && <div className="pt-2">{renderContent()}</div>}
-		</aside>
+		</CardContent></Card>
 	);
 }

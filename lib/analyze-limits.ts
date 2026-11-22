@@ -65,7 +65,7 @@ export const DEFAULT_LIMITS: Limits = {
 	uploadMaxFileBytes: PROXY_BUDGET_HEADROOM_BYTES,
 	uploadMaxFiles: 10,
 	uploadMaxTotalBytes: PROXY_BUDGET_HEADROOM_BYTES,
-	analyzeMaxPatents: 20000,
+	analyzeMaxPatents: Infinity,
 	analyzeMaxBodyBytes: PROXY_BUDGET_HEADROOM_BYTES,
 };
 

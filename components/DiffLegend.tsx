@@ -1,5 +1,10 @@
 "use client";
 
+import { graphSwatch } from "@/lib/graph-swatch";
+import { Card, CardContent } from "@/components/ui/card";
+
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { compareLegendItems } from "@/lib/compare-export";
 import type { DiffMembership } from "@/lib/graph-compare";
 
@@ -19,10 +24,9 @@ export default function DiffLegend({
 	panelCount,
 }: Props) {
 	return (
-		<aside
-			aria-label="差異圖例與顯示切換"
-			className="absolute bottom-3 left-3 z-10 w-[min(20rem,calc(100%-1.5rem))] rounded-md border border-border bg-background/95 px-3 py-2.5 text-xs backdrop-blur-sm"
-		>
+		<Card role="complementary"
+			aria-label="差異圖例與顯示切換" className="absolute bottom-3 left-3 z-10 w-[min(20rem,calc(100%-1.5rem))]"
+		><CardContent>
 			<p className="mb-1.5 font-medium text-foreground">
 				差異圖例（可切換顯示）
 			</p>
@@ -32,16 +36,14 @@ export default function DiffLegend({
 						key={item.membership}
 						className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-1 hover:bg-accent"
 					>
-						<input
-							type="checkbox"
+						<Checkbox
 							checked={!hidden.has(item.membership)}
-							onChange={() => onToggle(item.membership)}
-							className="size-4"
+							onCheckedChange={() => onToggle(item.membership)}
 						/>
 						<span
 							aria-hidden
-							className="size-3 shrink-0 rounded-sm"
-							style={{ background: item.color }}
+							className="size-3 shrink-0 rounded-sm bg-graph-swatch"
+							style={graphSwatch(item.color)}
 						/>
 						<span className="min-w-0">
 							<span className="text-foreground">{item.label}</span>
@@ -53,6 +55,6 @@ export default function DiffLegend({
 			<p role="status" className="mt-1.5 text-[0.65rem] text-muted-foreground">
 				顯示中的節點：{visibleNodeCount} / {totalNodeCount}
 			</p>
-		</aside>
+		</CardContent></Card>
 	);
 }

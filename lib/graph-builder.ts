@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 // lib/graph-builder.ts
 // Implements F-05: Three-tier graph construction (Applicant → Patent → Concept)
 // PRD v1.1 Section 3.2 F-05
@@ -45,30 +46,30 @@ import type { LouvainOptions } from "@/lib/louvain";
 // PRD v2 / P4 (Q2): 「家」單位社群的色盤與「篇」單位分開，同 community_id
 // 在兩單位下不共享色（色盤 key = unit + id）。
 const APPLICANT_COMMUNITY_COLORS: string[] = [
-  "#7B2CBF",
-  "#FF8C42",
-  "#2EC4B6",
-  "#E63946",
-  "#4361EE",
-  "#F4A261",
-  "#7209B7",
-  "#06D6A0",
-  "#EF476F",
-  "#118AB2",
+  graphColors["applicant-community-1"],
+  graphColors["applicant-community-2"],
+  graphColors["applicant-community-3"],
+  graphColors["applicant-community-4"],
+  graphColors["applicant-community-5"],
+  graphColors["applicant-community-6"],
+  graphColors["applicant-community-7"],
+  graphColors["applicant-community-8"],
+  graphColors["applicant-community-9"],
+  graphColors["applicant-community-10"],
 ];
 
 // Tableau-10 colors as defined in PRD Section 6.2
 const TABLEAU_10: string[] = [
-  "#4E79A7",
-  "#F28E2B",
-  "#E15759",
-  "#76B7B2",
-  "#59A14F",
-  "#EDC948",
-  "#B07AA1",
-  "#FF9DA7",
-  "#9C755F",
-  "#BAB0AC",
+  graphColors["community-1"],
+  graphColors["community-2"],
+  graphColors["community-3"],
+  graphColors["community-4"],
+  graphColors["community-5"],
+  graphColors["community-6"],
+  graphColors["community-7"],
+  graphColors["community-8"],
+  graphColors["community-9"],
+  graphColors["community-10"],
 ];
 
 /**
@@ -169,7 +170,7 @@ export function buildGraph(
     }
     const aggregate = conceptNetwork.concepts.get(label);
     const communityId = communities.get(label) ?? 0;
-    const communityColor = communityColors.get(communityId) ?? "#BAB0AC";
+    const communityColor = communityColors.get(communityId) ?? graphColors["unknown"];
     const node: GraphNode = {
       id: `concept:${label}`,
       type: "concept",

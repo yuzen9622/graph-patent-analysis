@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 /**
  * PRD v2 / P5 — IPC classification analysis (view layer only).
  *
@@ -28,18 +29,18 @@ export const DEFAULT_IPC_LEVEL: IpcLevel = 3
  * 該層級排序後索引 mod 本長度（圖例與節點同規則，跨圖穩定）。
  */
 export const IPC_COLORS = [
-  '#1d4ed8', // blue-700
-  '#0e7490', // cyan-700
-  '#15803d', // green-700
-  '#a16207', // yellow-700
-  '#b45309', // amber-700
-  '#be185d', // pink-700
-  '#7c3aed', // violet-700
-  '#475569', // slate-600
-  '#0f766e', // teal-700
-  '#dc2626', // red-600
-  '#4d7c0f', // lime-700
-  '#9333ea', // purple-600
+  graphColors["ipc-1"], // blue-700
+  graphColors["ipc-2"], // cyan-700
+  graphColors["ipc-3"], // green-700
+  graphColors["ipc-4"], // yellow-700
+  graphColors["ipc-5"], // amber-700
+  graphColors["ipc-6"], // pink-700
+  graphColors["ipc-7"], // violet-700
+  graphColors["ipc-8"], // slate-600
+  graphColors["ipc-9"], // teal-700
+  graphColors["ipc-10"], // red-600
+  graphColors["ipc-11"], // lime-700
+  graphColors["ipc-12"], // purple-600
 ]
 
 /** `^([A-H]\d{2}[A-Z])(\d{0,4})(?:/(\d{1,6}))?$` — normalised key shape. */
@@ -94,7 +95,7 @@ export function ipcSortedKeys(graph: GraphData, level: IpcLevel): string[] {
 /** S5: deterministic palette colour for an IPC key (by sorted rank). */
 export function ipcColorOf(key: string, sortedKeys: string[]): string {
   const index = sortedKeys.indexOf(key)
-  if (index < 0) return '#94a3b8'
+  if (index < 0) return graphColors["unclassified"]
   return IPC_COLORS[index % IPC_COLORS.length]
 }
 
@@ -255,6 +256,6 @@ export function ipcLegendItems(
     }
   }
   return Array.from(countByKey.entries())
-    .map(([key, count]) => ({ key, count, color: colorByKey.get(key) ?? '#94a3b8' }))
+    .map(([key, count]) => ({ key, count, color: colorByKey.get(key) ?? graphColors["unclassified"] }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key, 'zh-Hant'))
 }
