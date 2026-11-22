@@ -1,0 +1,21 @@
+.page {
+  display: grid;
+  align-items: center;
+  min-height: 100svh;
+  padding: 2rem 1rem;
+}
+.content {
+  display: grid;
+  align-items: center;
+  gap: 2rem;
+  width: min(100%, 24rem);
+  margin-inline: auto;
+}
+@media (min-width: 48rem) {
+  .page { padding-inline: 3rem; }
+  .content {
+    width: min(100%, 58rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+    gap: clamp(2rem, 6vw, 6rem);
+  }
+}

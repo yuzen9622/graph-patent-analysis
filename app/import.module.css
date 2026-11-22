@@ -1,0 +1,23 @@
+.page {
+  container-type: inline-size;
+  max-width: 66rem;
+  margin-inline: auto;
+  padding: clamp(1rem, 3vw, 2.5rem);
+}
+
+.grid {
+  display: grid;
+  align-items: start;
+  gap: 1.5rem;
+}
+
+.settings {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@container (min-width: 42rem) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.58fr);
+  }
+}
