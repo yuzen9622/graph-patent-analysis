@@ -60,3 +60,9 @@ backup.sql.gz
 /backups/
 
 .pi/
+
+# Local UI verification, authenticated browser profiles, and worker output
+/.taste-skill/
+/.audit/
+/dist/
+data/research-tmp/
