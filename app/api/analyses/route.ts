@@ -90,6 +90,8 @@ export async function GET() {
 
       return {
         id: row.id,
+        title: row.title,
+        pinned: row.pinned,
         // Legacy single values, kept so older clients keep rendering.
         filename: row.filename ?? files[0]?.filename ?? null,
         source_file_url: files[0]?.url ?? null,

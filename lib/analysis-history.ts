@@ -21,6 +21,8 @@ export interface HistoryFile {
 }
 
 export interface HistoryEntry {
+	title?: string | null;
+	pinned?: boolean;
 	id: string;
 	/** Display label: the filename, or "N 個檔（a.xlsx、b.xlsx）" for a multi-file analysis. */
 	filename: string;
@@ -36,6 +38,8 @@ export interface HistoryEntry {
 export const HISTORY_EVENT = "patent-history-changed";
 
 interface ApiAnalysis {
+	title?: string | null;
+	pinned?: boolean;
 	id: string;
 	filename: string | null;
 	status: "running" | "done" | "cancelled" | "error";
@@ -76,6 +80,8 @@ export function toHistoryEntry(row: ApiAnalysis): HistoryEntry {
 	return {
 		id: row.id,
 		filename: label,
+		title: row.title,
+		pinned: row.pinned,
 		timestamp: row.created_at,
 		status: STATUS_MAP[row.status] ?? "error",
 		patentCount: row.patent_count || undefined,

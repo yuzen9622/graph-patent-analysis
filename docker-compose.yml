@@ -53,6 +53,20 @@ services:
     # ports:
     #   - "3001:3001"
 
+  research-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.research-worker
+    restart: unless-stopped
+    init: true
+    shm_size: 256mb
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-patent}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-patent_graph}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Cloudflare Tunnel — create a tunnel in the Zero Trust dashboard, then map a
   # public hostname to the service http://app:3001 and paste its token below.
   cloudflared:

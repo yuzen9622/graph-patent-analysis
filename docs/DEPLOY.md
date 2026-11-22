@@ -4,6 +4,10 @@ The app builds into a self-contained Next.js **standalone** server and runs as a
 Docker container. LLM API keys are read from the **server environment** — there
 is no bring-your-own-key input in the UI.
 
+Patent retrieval runs in the separate `research-worker` service. See
+[啟動與使用專利研究工作台](patent-research.md) for browser setup, migration requirements,
+retrieval limits, and Excel compatibility.
+
 ## Prerequisites
 
 - Docker + Docker Compose

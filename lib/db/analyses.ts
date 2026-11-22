@@ -1,3 +1,4 @@
+import graphColors from "@/lib/graph-colors.generated.json";
 /**
  * analyses.ts — persist and rebuild GraphData through normalised tables.
  *
@@ -25,6 +26,8 @@ import { query, queryOne, withTransaction } from './client'
 export type AnalysisStatus = 'running' | 'done' | 'cancelled' | 'error'
 
 export interface AnalysisSummary {
+  title: string | null
+  pinned: boolean
   id: string
   owner_id: string | null
   owner_username: string | null
@@ -46,7 +49,7 @@ export interface AnalysisSummary {
   completed_at: Date | null
 }
 
-const SUMMARY_COLUMNS = `a.id, a.owner_id, u.username AS owner_username, a.upload_id, a.filename,
+const SUMMARY_COLUMNS = `a.id, a.owner_id, u.username AS owner_username, a.upload_id, a.filename, a.title, a.pinned,
   a.status, a.error, a.provider, a.model_id, a.prompt_version, a.sample_size,
   a.applicant_count, a.patent_count, a.concept_count, a.community_count,
   a.year_min, a.year_max, a.created_at, a.completed_at`
@@ -101,14 +104,14 @@ export async function listAnalyses(options: {
     return query<AnalysisSummary>(
       `SELECT ${SUMMARY_COLUMNS} FROM analyses a
        LEFT JOIN users u ON u.id = a.owner_id
-       ORDER BY a.created_at DESC LIMIT $1`,
+       ORDER BY a.pinned DESC, a.created_at DESC LIMIT $1`,
       [limit],
     )
   }
   return query<AnalysisSummary>(
     `SELECT ${SUMMARY_COLUMNS} FROM analyses a
      LEFT JOIN users u ON u.id = a.owner_id
-     WHERE a.owner_id = $1 ORDER BY a.created_at DESC LIMIT $2`,
+     WHERE a.owner_id = $1 ORDER BY a.pinned DESC, a.created_at DESC LIMIT $2`,
     [options.ownerId ?? null, limit],
   )
 }
@@ -779,7 +782,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       label: row.name,
       patent_count: row.patent_count,
       applicant_key: row.applicant_key ?? undefined,
-      color: row.color ?? '#94A3B8',
+      color: row.color ?? graphColors.unclassified,
       size: row.size ?? 18,
     })),
     ...patents.map((row): GraphNode => ({
@@ -799,7 +802,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       cited_by_count: row.cited_by_count ?? undefined,
       case_status: row.case_status ?? undefined,
       source_files: row.source_files ?? undefined,
-      color: row.color ?? '#94A3B8',
+      color: row.color ?? graphColors.unclassified,
       size: row.size ?? 18,
     })),
     ...concepts.map((row): GraphNode => ({
@@ -825,7 +828,7 @@ export async function loadGraph(analysisId: string): Promise<GraphData | null> {
       // --- PRD v2 / P4 ---
       applicant_count: row.applicant_count ?? undefined,
       community_id_applicants: applicantCommunitiesByLabel.get(row.label) ?? undefined,
-      color: row.color ?? '#94A3B8',
+      color: row.color ?? graphColors.unclassified,
       size: row.size ?? 10,
     })),
   ]
