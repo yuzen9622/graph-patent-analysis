@@ -8,6 +8,7 @@ import { Trace, TraceLine, TraceTitle, TraceCollapsible, TraceCollapsibleTrigger
 import { isJobActive, retrievalScope, type ResearchJob } from "@/lib/patent-search/contracts";
 import { draftFromPlan, fieldError, planFromDraft, SearchFields } from "./SearchFields";
 import { useResearchController } from "./research-context";
+import { ResearchSteps } from "./ResearchSteps";
 import styles from "./research.module.css";
 
 export const jobStatus = {
@@ -61,7 +62,7 @@ export function ResearchDetails({ job, narrow, open, onOpenChange }: {
       {(error || operationError) && <p role="alert" className={styles.error}>{error || operationError}</p>}
     </section>
     {plan.steps && <section><h3>AI 研究計畫</h3>
-      <ol className="list-decimal space-y-1 pl-5">{plan.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
+      <ResearchSteps steps={plan.steps} />
     </section>}
     <section><div className={styles.sectionTitle}><h3>研究進度</h3></div>
       {job.matchedCount !== null && <dl className={styles.counts}>

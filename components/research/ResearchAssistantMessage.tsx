@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Trace, TraceCollapsible, TraceCollapsibleContent, TraceCollapsibleTrigger, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { useResearchController } from "./research-context";
 import { jobStatus } from "./ResearchDetails";
+import { ResearchSteps } from "./ResearchSteps";
 import styles from "./research.module.css";
 
 export function ResearchAssistantMessage() {
@@ -20,7 +21,7 @@ export function ResearchAssistantMessage() {
     {job ? <Trace>
       {job.plan.steps && <section className="text-sm">
         <h3 className="font-medium">AI 研究計畫</h3>
-        <ol className="list-decimal space-y-1 pl-5">{job.plan.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
+        <ResearchSteps steps={job.plan.steps} />
       </section>}
       <TraceCollapsible>
         <TraceCollapsibleTrigger>
@@ -52,7 +53,7 @@ export function ResearchAssistantMessage() {
     {job?.warnings.length ? <ul className={styles.warnings}>{job.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
     {(message.error || job?.error) && <p className={styles.error} role="alert">{message.error ?? job?.error}</p>}
     {message.phase === "error" && message.retryPrompt && <Button variant="outline" onClick={() => void controller.propose(message.retryPrompt!, message.contextPlan)} disabled={controller.planning || controller.active}><RefreshCw size={15} aria-hidden />重新規劃</Button>}
-    {job?.artifact && <Card><CardContent className={styles.artifact}>
+    {job?.artifact && <Card className="border border-foreground/10 ring-0"><CardContent className={styles.artifact}>
       <FileSpreadsheet size={24} aria-hidden /><div><strong>{job.artifact.filename}</strong><p>{job.artifact.rowCount} 筆專利 · {job.status === "partial" ? "部分結果" : "已驗證 Excel 格式"} · 保留 24 小時</p></div>
       <div className={styles.artifactActions}><Button onClick={() => void controller.downloadArtifact(job)}><Download size={15} aria-hidden />下載 Excel</Button><Button variant="outline" onClick={() => void controller.importArtifact(job)} disabled={controller.importing}>匯入分析</Button></div>
     </CardContent></Card>}
