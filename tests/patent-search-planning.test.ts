@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generateText } from "ai";
-import { patentToolInput } from "@/lib/patent-search/ai-tool";
+import { patentInputForRequest, patentToolInput } from "@/lib/patent-search/ai-tool";
 import { validateSearchPlan } from "@/lib/patent-search/contracts";
 import { POST } from "@/app/api/patent-search/route";
 import { FINTECH_PROMPT } from "@/lib/patent-search/suggestions";
@@ -31,6 +31,21 @@ describe("research planning", () => {
       expect(validateSearchPlan(input.plan).steps).toEqual(steps);
     }
   });
+  it("rejects the recorded applicant placeholder and honors an explicit all-applicant scope", () => {
+    const prompt = "近五年 你幫我想關鍵字 保險與金融 所有申請人";
+    const placeholder = "請提供保險或金融機構名稱（如：富邦人壽、國泰人壽等）";
+    const plan = { steps: ["查詢近五年的專利"], keywords: ["金融", "保險"], match: "any", applicants: [],
+      ipc: [], dateField: "filing", dateFrom: "2021-11-22", dateTo: "2026-11-22", sort: "relevance", limit: null };
+    const input = { title: "保金專利分析", summary: "不限申請人", applicantGroup: "all", intent: "plan", plan };
+    const schema = patentInputForRequest(prompt);
+    expect(schema.safeParse(input).success).toBe(true);
+    expect(schema.safeParse({ ...input, applicantGroup: "domesticBanks" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, plan: { ...plan, applicants: ["國泰人壽"] } }).success).toBe(false);
+    const specified = { ...input, applicantGroup: "specified", plan: { ...plan, applicants: [placeholder] } };
+    expect(schema.safeParse(specified).success).toBe(false);
+    expect(patentInputForRequest("請執行").safeParse(specified).success).toBe(false);
+    expect(patentInputForRequest("只查國泰人壽").safeParse({ ...specified, plan: { ...plan, applicants: ["國泰人壽"] } }).success).toBe(true);
+  });
   it("sends the suggested request to the planner", async () => {
     vi.mocked(generateText).mockResolvedValueOnce(success as never);
     expect(await submit(FINTECH_PROMPT)).toEqual({type:"proposal", job});
@@ -42,6 +57,18 @@ describe("research planning", () => {
     vi.mocked(generateText).mockResolvedValueOnce({...invalid, toolCalls: [], text} as never);
     expect(await submit("研究特定申請人")).toEqual({type:"reply", text});
     expect(generateText).toHaveBeenCalledOnce();
+  });
+  const leakedPlan = JSON.stringify({ applicantGroup: "specified", intent: "plan", plan: { applicants: [""] } });
+  it("requests a real tool call when Gemini writes its arguments in chat", async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({...invalid, toolCalls: [], text: leakedPlan} as never)
+      .mockResolvedValueOnce(success as never);
+    expect(await submit("所有申請人")).toEqual({type: "proposal", job});
+    expect(vi.mocked(generateText).mock.calls[1][0].toolChoice).toEqual({type: "tool", toolName: "searchPatents"});
+  });
+  it("keeps tool arguments out of chat even if the repair returns fenced JSON", async () => {
+    vi.mocked(generateText).mockResolvedValue({...invalid, toolCalls: [], text: "```json\n" + leakedPlan + "\n```"} as never);
+    expect(await submit("所有申請人")).toMatchObject({type: "error"});
+    expect(generateText).toHaveBeenCalledTimes(2);
   });
   it("repairs invalid model arguments before dispatch", async () => {
     vi.mocked(generateText).mockResolvedValueOnce(invalid as never).mockResolvedValueOnce(success as never);

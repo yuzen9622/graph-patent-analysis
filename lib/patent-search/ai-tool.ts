@@ -7,15 +7,30 @@ import { BANK_DIRECTORY, resolveDomesticBanks } from "./domestic-banks";
 export const patentToolInput = proposalSchema.extend({
   plan: searchPlanSchema.extend({ steps: researchStepsSchema.describe("依這次需求自行拆分的具體研究步驟，依執行順序排列。簡單需求可以只有一步。") }),
   title: z.string().trim().min(1).max(60),
-  applicantGroup: z.enum(["specified", "domesticBanks"]).describe("domesticBanks 只能取得全部本國銀行總機構，無法依所有權或業務篩選。指定機構名稱時使用 specified。"),
+  applicantGroup: z.enum(["all", "specified", "domesticBanks"]).describe("不限申請人使用 all 且 applicants=[]。domesticBanks 只能取得全部本國銀行總機構，無法依所有權或業務篩選。指定機構名稱時使用 specified。"),
   intent: z.enum(["retrieve", "plan"]).describe("要求專利資料選 retrieve，只要求建立或討論條件選 plan"),
 });
+
+export function patentInputForRequest(request: string) {
+  const explicitlyAll = /(?:^|[\s，,。；;：:、])(?:所有申請人|全部申請人|不限申請人|申請人不限)(?=$|[\s，,。；;、！？!?])/.test(request);
+  return patentToolInput.superRefine(({ applicantGroup, plan }, ctx) => {
+    if (explicitlyAll && applicantGroup !== "all") {
+      ctx.addIssue({ code: "custom", path: ["applicantGroup"], message: "使用者指定所有申請人，請使用 all。" });
+    }
+    if (applicantGroup === "all" && plan.applicants.length) {
+      ctx.addIssue({ code: "custom", path: ["plan", "applicants"], message: "不限申請人時請填空陣列。" });
+    }
+    if (plan.applicants.some(name => /^(?:請(?:提供|輸入|填寫)|例如[：:]|如[：:])/.test(name))) {
+      ctx.addIssue({ code: "custom", path: ["plan", "applicants"], message: "申請人欄位只能填寫實際名稱。" });
+    }
+  });
+}
 
 export function patentCrawlerTool(owner: string, request: string, signal: AbortSignal, turn?: { chatId: string; id: string }) {
   let called = false;
   return tool({
     description: "依條件向智慧局 TwIP Search 取得專利與研究 Excel。可先查中央銀行本國銀行總機構名錄，再以申請人交集檢索。",
-    inputSchema: patentToolInput,
+    inputSchema: patentInputForRequest(request),
     execute: async (input) => {
       if (called) throw new ResearchError("每次提問只能建立一份研究。", 400);
       called = true;
