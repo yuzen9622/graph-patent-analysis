@@ -227,16 +227,14 @@ export default function GraphLayout({ graph, jobId }: Props) {
   const fullMaxYear = graph.stats.year_range[1];
 
   const handleTogglePlay = useCallback(() => {
-    setIsPlaying((prev) => {
-      if (!prev) {
-        if (yearRange[1] >= fullMaxYear) {
-          setYearRange([fullMinYear, fullMinYear]);
-        }
-        return true;
+    if (!isPlaying) {
+      setCompareViewport(null);
+      if (yearRange[1] >= fullMaxYear) {
+        setYearRange([fullMinYear, fullMinYear]);
       }
-      return false;
-    });
-  }, [yearRange, fullMinYear, fullMaxYear]);
+    }
+    setIsPlaying(!isPlaying);
+  }, [isPlaying, yearRange, fullMinYear, fullMaxYear]);
 
   const handleStepYear = useCallback(
     (direction: -1 | 1) => {
@@ -303,6 +301,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
 
   const debouncedMinSupport = useDebouncedValue(minSupport, 200);
   const debouncedYearRange = useDebouncedValue(yearRange, isPlaying ? 0 : 200);
+  const viewYearRange = isPlaying ? yearRange : debouncedYearRange;
   const [visibleLayers, setVisibleLayers] = useState<Set<NodeType>>(
     new Set<NodeType>(["applicant", "patent", "concept"]),
   );
@@ -354,7 +353,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       mode,
       showSemantic,
       minSupport: debouncedMinSupport,
-      yearRange: debouncedYearRange,
+      yearRange: viewYearRange,
       colorMode,
       edgeWeight,
       unit,
@@ -368,7 +367,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
       mode,
       showSemantic,
       debouncedMinSupport,
-      debouncedYearRange,
+      viewYearRange,
       colorMode,
       edgeWeight,
       unit,
@@ -1381,7 +1380,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
               disabled={!publicationReady || compareUi !== "off"}
               disabledReason={
                 compareUi !== "off"
-                  ? "出版圖是單張圖譜的 PRD 規格，比較工作區不適用；請先結束比較。"
+                  ? "請先結束比較，再匯出單張論文用圖。"
                   : undefined
               }
               onGenerate={handleGeneratePublicationFigure}
@@ -1465,6 +1464,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
                   positionSnapshotKey={layoutSnapshotKeyDiff}
                   onPositionSnapshotProvider={handlePositionSnapshotProvider}
                   onImageCaptureReady={handleDiffImageCaptureReady}
+                  followPlayback={isPlaying}
                   yearRange={yearRange}
                   edgeWeight={edgeWeight}
                   unit={unit}
@@ -1535,7 +1535,8 @@ export default function GraphLayout({ graph, jobId }: Props) {
                       }
                       onImageCaptureReady={handleImageCaptureReady(index)}
                       viewport={compareViewport}
-                      onViewportChange={setCompareViewport}
+                      onViewportChange={isPlaying ? undefined : setCompareViewport}
+                      followPlayback={isPlaying}
                       yearRange={yearRange}
                       edgeWeight={edgeWeight}
                       unit={unit}
@@ -1578,6 +1579,7 @@ export default function GraphLayout({ graph, jobId }: Props) {
                   onPositionSnapshotProvider={handlePositionSnapshotProvider}
                   onCaptureReady={handlePublicationCaptureReady}
                   onImageCaptureReady={handleImageCaptureReady(0)}
+                  followPlayback={isPlaying}
                   yearRange={yearRange}
                   edgeWeight={edgeWeight}
                   unit={unit}

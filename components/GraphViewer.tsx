@@ -100,7 +100,11 @@ type NodeUpdate = {
 };
 type EdgeColorProp = { inherit: "from"; opacity?: number };
 type EdgeUpdate = { id: string; [key: string]: unknown };
-type NodeDataSet = { update: (items: NodeUpdate[]) => void };
+type NodeDataSet = {
+	update: (items: NodeUpdate[]) => void;
+	getIds: (options?: { filter: (node: NodeUpdate) => boolean }) => string[];
+	remove: (ids: string[]) => void;
+};
 type EdgeDataSet = {
 	update: (items: EdgeUpdate[]) => void;
 	getIds: () => string[];
@@ -630,6 +634,7 @@ interface Props {
 	analysis?: GraphAnalysis;
 	onNodeSelect?: (node: GraphNode | null) => void;
 	yearRange?: [number, number];
+	followPlayback?: boolean;
 	edgeWeight?: EdgeWeightMetric;
 	unit?: Unit;
 	visibleLayers?: Set<NodeType>;
@@ -662,6 +667,7 @@ export default function GraphViewer({
 	citationEdges = [],
 	analysis,
 	onNodeSelect,
+	followPlayback = false,
 	yearRange,
 	edgeWeight = "jaccard",
 	unit = "patent",
@@ -681,6 +687,7 @@ export default function GraphViewer({
 }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const networkRef = useRef<Network | null>(null);
+	const pendingPlaybackFitRef = useRef(false);
 	const nodeDataSetRef = useRef<NodeDataSet | null>(null);
 	const edgeDataSetRef = useRef<EdgeDataSet | null>(null);
 	const savedScopeRef = useRef<string | null>(null);
@@ -692,12 +699,18 @@ export default function GraphViewer({
 	// 不能把使用者已隱藏的成員重新顯示。
 	const baseHiddenNodeIdsRef = useRef<ReadonlySet<string>>(new Set());
 	const onViewportChangeRef = useRef(onViewportChange);
+	const geometryKey = useMemo(
+		() => `${buildLayoutInput(nodes, edges, layoutScopeKey).fingerprint}:${fingerprintTopology(nodes, edges)}`,
+		[nodes, edges, layoutScopeKey],
+	);
 	const propsRef = useRef({
+		geometryKey,
 		nodes,
 		edges,
 		citationEdges,
 		analysis,
 		onNodeSelect,
+		followPlayback,
 		yearRange,
 		edgeWeight,
 		unit,
@@ -717,11 +730,13 @@ export default function GraphViewer({
 	});
 	// eslint-disable-next-line react-hooks/refs -- event handlers must always read the latest props.
 	propsRef.current = {
+		geometryKey,
 		nodes,
 		edges,
 		citationEdges,
 		analysis,
 		onNodeSelect,
+		followPlayback,
 		yearRange,
 		edgeWeight,
 		unit,
@@ -739,12 +754,26 @@ export default function GraphViewer({
 		viewport,
 		onViewportChange,
 	};
-	const layoutInput = useMemo(
-		() => buildLayoutInput(nodes, edges, layoutScopeKey),
-		[nodes, edges, layoutScopeKey],
-	);
-	const layoutKey = `${layoutInput.fingerprint}:${fingerprintTopology(nodes, edges)}`;
-	const lastBuiltLayoutKeyRef = useRef<string | null>(null);
+	// A playback frame changes membership in place. Keep its layout on pause,
+	// then resume normal rebuilds when a filter changes the geometry again.
+	const [layout, setLayout] = useState({
+		scope: layoutScopeKey,
+		frame: geometryKey,
+		revision: 0,
+		incremental: false,
+	});
+	if (layout.frame !== geometryKey || layout.scope !== layoutScopeKey) {
+		const reuse = followPlayback && layout.scope === layoutScopeKey;
+		setLayout({
+			scope: layoutScopeKey,
+			frame: geometryKey,
+			revision: reuse ? layout.revision : layout.revision + 1,
+			incremental: reuse,
+		});
+	}
+	const layoutKey = layout.revision;
+	const incrementalFrame = followPlayback || layout.incremental;
+	const lastBuiltLayoutKeyRef = useRef<number | null>(null);
 	const nodePositionsCacheRef = useRef(
 		new Map<string, { x: number; y: number }>(),
 	);
@@ -754,12 +783,12 @@ export default function GraphViewer({
 	const applyHighlightRef = useRef<(nodeId: string) => void>(() => {});
 	const clearHighlightRef = useRef<() => void>(() => {});
 	const [layoutState, setLayoutState] = useState<{
-		key: string;
+		key: number;
 		status: "computing" | "ready" | "failed";
 		revealed: boolean;
 		reason?: CompletedLayout["reason"];
 		source?: LayoutSource;
-	}>({ key: "", status: "computing", revealed: false });
+	}>({ key: layoutKey, status: "computing", revealed: false });
 	if (layoutState.key !== layoutKey) {
 		setLayoutState({ key: layoutKey, status: "computing", revealed: false });
 	}
@@ -852,7 +881,8 @@ export default function GraphViewer({
 						y: positions[i * 2 + 1],
 					});
 			}
-			const buildProps = propsRef.current;
+			const latest = propsRef.current;
+			const buildProps = latest.geometryKey === current.geometryKey ? latest : current;
 			const initPos = new Map(
 				input.nodeIds.map((id, i) => [
 					id,
@@ -915,8 +945,11 @@ export default function GraphViewer({
 				{ nodes: nodeDataSet, edges: edgeDataSet },
 				buildOptions(buildProps.nodes.length),
 			);
+			lastBuiltLayoutKeyRef.current = layoutKey;
 			builtNetwork = network;
 			networkRef.current = network;
+			// The last year can finish laying out after playback has ended.
+			pendingPlaybackFitRef.current = current.followPlayback;
 			setLayoutGeneration((g) => g + 1);
 			const container = containerRef.current;
 			if (
@@ -1003,8 +1036,7 @@ export default function GraphViewer({
 					if (cancelled || networkRef.current !== network) return;
 					const currentProps = propsRef.current;
 					const latest =
-						`${buildLayoutInput(currentProps.nodes, currentProps.edges, layoutScopeKey).fingerprint}:${fingerprintTopology(currentProps.nodes, currentProps.edges)}` ===
-						layoutKey
+						currentProps.geometryKey === buildProps.geometryKey
 							? currentProps
 							: buildProps;
 					const godNodes = new Map(
@@ -1060,7 +1092,7 @@ export default function GraphViewer({
 					typeof window !== "undefined" &&
 					(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
 						false);
-				if (reduceMotion || initial.nodes.length === 0) {
+				if (initial.followPlayback || reduceMotion || initial.nodes.length === 0) {
 					finishReveal();
 					return;
 				}
@@ -1383,71 +1415,68 @@ export default function GraphViewer({
 		// Geometry identity controls rebuilds; appearance and callbacks stay live through propsRef.
 	}, [layoutKey, layoutScopeKey]);
 
-	// ── Apply visual-only changes without rebuilding or moving the graph ──────
+	// Reconcile playback membership and appearance on the existing canvas.
 	useEffect(() => {
 		if (lastBuiltLayoutKeyRef.current === layoutKey) {
 			lastBuiltLayoutKeyRef.current = null;
-			return;
+			if (!incrementalFrame) return;
 		}
 		const nodeDataSet = nodeDataSetRef.current;
 		const edgeDataSet = edgeDataSetRef.current;
 		if (!networkRef.current || !nodeDataSet || !edgeDataSet) return;
 
+		const positions = nodePositionsCacheRef.current;
+		let added = new Set<string>();
+		if (incrementalFrame) {
+			finishRevealRef.current();
+			const installed = new Set(nodeDataSet.getIds());
+			const wantedNodes = new Set(nodes.map(node => node.id));
+			const wantedEdges = new Set([
+				...edges.map(edge => edge.id),
+				...citationEdges.map(edge => `citation:${edge.id}`),
+			]);
+			edgeDataSet.remove(edgeDataSet.getIds().filter(id => !wantedEdges.has(id)));
+			nodeDataSet.remove([...installed].filter(id => !wantedNodes.has(id)));
+			added = new Set([...wantedNodes].filter(id => !installed.has(id)));
+			if ([...added].some(id => !positions.has(id))) {
+				const seeds = seedPositions(nodes, edges);
+				const inherited = inheritPositions([...wantedNodes], edges, positions,
+					(id, axis) => (stableUnit(`${id}:${axis}`) - 0.5) * 60);
+				for (const id of added) {
+					const position = inherited.positions.get(id) ?? seeds.get(id);
+					if (position) positions.set(id, position);
+				}
+			}
+		}
+
 		const godNodeMap = new Map(
 			(analysis?.god_nodes ?? []).map((godNode) => [godNode.id, godNode]),
 		);
-		nodeDataSet.update(
-			nodes.map((node) => {
-				const visual = toVisNode(
-					node,
-					unit,
-					undefined,
-					godNodeMap.get(node.id),
-				);
-				return {
-					id: visual.id,
-					label: visual.label,
-					title: visual.title,
-					shape: visual.shape,
-					size: visual.size,
-					color: visual.color,
-					font: visual.font,
-				};
-			}),
-		);
+		nodeDataSet.update(nodes.map(node => toVisNode(
+			node, unit, added.has(node.id) ? positions.get(node.id) : undefined, godNodeMap.get(node.id),
+		)));
 
 		const surprisingEdgeMap = new Map(
-			(analysis?.surprising_connections ?? []).map((connection) => [
-				connection.edge_id,
-				connection,
-			]),
+			(analysis?.surprising_connections ?? []).map(connection => [connection.edge_id, connection]),
 		);
-		edgeDataSet.update(
-			edges.map((edge) => {
-				const visual: EdgeUpdate = {
-					...toVisEdge(edge, surprisingEdgeMap.get(edge.id), edgeWeight, unit),
-				};
-				delete visual.from;
-				delete visual.to;
-				return visual;
-			}),
-		);
-
+		edgeDataSet.update(edges.map(edge =>
+			toVisEdge(edge, surprisingEdgeMap.get(edge.id), edgeWeight, unit),
+		));
 		const citationVisuals = citationEdges.map(toVisCitationEdge);
-		const currentCitationIds = edgeDataSet
-			.getIds()
-			.filter((id) => id.startsWith("citation:"));
-		const wantedCitationIds = new Set(citationVisuals.map((edge) => edge.id));
-		if (citationVisuals.length > 0) edgeDataSet.update(citationVisuals);
-		const removedCitationIds = currentCitationIds.filter(
-			(id) => !wantedCitationIds.has(id),
-		);
-		if (removedCitationIds.length > 0) edgeDataSet.remove(removedCitationIds);
+		if (!incrementalFrame) {
+			const wanted = new Set(citationVisuals.map(edge => edge.id));
+			edgeDataSet.remove(edgeDataSet.getIds().filter(id => id.startsWith("citation:") && !wanted.has(id)));
+		}
+		if (citationVisuals.length) edgeDataSet.update(citationVisuals);
 
 		if (highlightRef.current.activeId) {
-			applyHighlightRef.current(highlightRef.current.activeId);
+			if (nodes.some(node => node.id === highlightRef.current.activeId)) {
+				applyHighlightRef.current(highlightRef.current.activeId);
+			} else {
+				clearHighlightRef.current();
+			}
 		}
-	}, [nodes, edges, citationEdges, edgeWeight, unit, analysis, layoutKey]);
+	}, [nodes, edges, citationEdges, edgeWeight, unit, analysis, layoutKey, incrementalFrame, layoutGeneration]);
 
 	// A changed export key must receive the existing stable network, not trigger
 	// another layout run.
@@ -1560,9 +1589,28 @@ export default function GraphViewer({
 		layoutGeneration,
 	]);
 
+	// The layout worker may finish after the year changes. Fit the installed
+	// network after its visibility filters have been applied.
+	const playbackYear = followPlayback ? yearRange?.[1] : undefined;
+	useEffect(() => {
+		const network = networkRef.current;
+		if (!network || (playbackYear === undefined && !pendingPlaybackFitRef.current)) return;
+		pendingPlaybackFitRef.current = false;
+		const visibleIds = nodeDataSetRef.current?.getIds({
+			filter: (node) => !node.hidden,
+		});
+		if (!visibleIds?.length) return;
+		network.fit({
+			nodes: visibleIds,
+			animation: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+				? false
+				: { duration: 400, easingFunction: "easeInOutQuad" },
+		});
+	}, [playbackYear, layoutGeneration]);
+
 	// ── Focus a node (from SearchBox) ──
 	useEffect(() => {
-		if (!focusNodeId || !networkRef.current) return;
+		if (!focusNodeId || !networkRef.current || propsRef.current.followPlayback) return;
 		// 比較模式下兩側面板的節點子集不同，聚焦的節點可能不在這一側——沒有就跳過。
 		if (!nodes.some((n) => n.id === focusNodeId)) return;
 		networkRef.current.focus(focusNodeId, {
