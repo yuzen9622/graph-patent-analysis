@@ -1,21 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { patentInputForRequest, patentToolInput } from "@/lib/patent-search/ai-tool";
 import { validateSearchPlan } from "@/lib/patent-search/contracts";
 import { POST } from "@/app/api/patent-search/route";
 import { FINTECH_PROMPT } from "@/lib/patent-search/suggestions";
 
-vi.mock("ai", async original => ({ ...await original<typeof import("ai")>(), generateText: vi.fn() }));
+vi.mock("ai", async original => ({ ...await original<typeof import("ai")>(), streamText: vi.fn() }));
 vi.mock("@/lib/llm/providers", () => ({ getEnvApiKey: () => "fixture", getModel: () => ({}) }));
 vi.mock("@/lib/patent-search/http", async original => ({ ...await original<typeof import("@/lib/patent-search/http")>(), researchUser: async () => ({id: "owner"}) }));
 vi.mock("@/lib/db/patent-search", async original => ({ ...await original<typeof import("@/lib/db/patent-search")>(), reserveResearchProposal: async () => {} }));
 
+function streamed(result: object) {
+  return {
+    ...result,
+    fullStream: (async function* () {
+      if ("text" in result && typeof result.text === "string") {
+        yield { type: "text-delta", text: result.text };
+      }
+    })(),
+  };
+}
+
 const job = { id: "fixture-job" };
 const invalid = { staticToolCalls: [], staticToolResults: [], toolCalls: [{invalid: true, input: {}}], content: [] };
 const success = { staticToolCalls: [{}], staticToolResults: [{output: job}], toolCalls: [{}], content: [] };
-async function submit(prompt: string) {
+async function submitEvents(prompt: string) {
   const response = await POST(new Request("http://localhost/api/patent-search", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({mode: "guided", prompt})}));
-  return (await response.text()).trim().split("\n").map(line => JSON.parse(line)).at(-1);
+  return (await response.text()).trim().split("\n").map(line => JSON.parse(line));
+}
+
+async function submit(prompt: string) {
+  return (await submitEvents(prompt)).at(-1);
 }
 
 describe("research planning", () => {
@@ -47,37 +62,39 @@ describe("research planning", () => {
     expect(patentInputForRequest("只查國泰人壽").safeParse({ ...specified, plan: { ...plan, applicants: ["國泰人壽"] } }).success).toBe(true);
   });
   it("sends the suggested request to the planner", async () => {
-    vi.mocked(generateText).mockResolvedValueOnce(success as never);
+    vi.mocked(streamText).mockReturnValueOnce(streamed(success) as never);
     expect(await submit(FINTECH_PROMPT)).toEqual({type:"proposal", job});
-    expect(generateText).toHaveBeenCalledOnce();
-    expect(JSON.parse(String(vi.mocked(generateText).mock.calls[0][0].prompt)).request).toBe(FINTECH_PROMPT);
+    expect(streamText).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(vi.mocked(streamText).mock.calls[0][0].prompt)).request).toBe(FINTECH_PROMPT);
   });
   it("lets the planner ask for missing information without dispatching a search", async () => {
     const text = "你想查詢哪一家機構的專利？";
-    vi.mocked(generateText).mockResolvedValueOnce({...invalid, toolCalls: [], text} as never);
+    vi.mocked(streamText).mockReturnValueOnce(streamed({...invalid, toolCalls: [], text}) as never);
     expect(await submit("研究特定申請人")).toEqual({type:"reply", text});
-    expect(generateText).toHaveBeenCalledOnce();
+    expect(streamText).toHaveBeenCalledOnce();
   });
   const leakedPlan = JSON.stringify({ applicantGroup: "specified", intent: "plan", plan: { applicants: [""] } });
   it("requests a real tool call when Gemini writes its arguments in chat", async () => {
-    vi.mocked(generateText).mockResolvedValueOnce({...invalid, toolCalls: [], text: leakedPlan} as never)
-      .mockResolvedValueOnce(success as never);
+    vi.mocked(streamText).mockReturnValueOnce(streamed({...invalid, toolCalls: [], text: leakedPlan}) as never)
+      .mockReturnValueOnce(streamed(success) as never);
     expect(await submit("所有申請人")).toEqual({type: "proposal", job});
-    expect(vi.mocked(generateText).mock.calls[1][0].toolChoice).toEqual({type: "tool", toolName: "searchPatents"});
+    expect(vi.mocked(streamText).mock.calls[1][0].toolChoice).toEqual({type: "tool", toolName: "searchPatents"});
   });
   it("keeps tool arguments out of chat even if the repair returns fenced JSON", async () => {
-    vi.mocked(generateText).mockResolvedValue({...invalid, toolCalls: [], text: "```json\n" + leakedPlan + "\n```"} as never);
-    expect(await submit("所有申請人")).toMatchObject({type: "error"});
-    expect(generateText).toHaveBeenCalledTimes(2);
+    vi.mocked(streamText).mockImplementation(() => streamed({...invalid, toolCalls: [], text: "```json\n" + leakedPlan + "\n```"}) as never);
+    const events = await submitEvents("所有申請人");
+    expect(events.at(-1)).toMatchObject({type: "error"});
+    expect(JSON.stringify(events.filter(event => event.type === "text"))).not.toMatch(/applicantGroup|intent|applicants/);
+    expect(streamText).toHaveBeenCalledTimes(2);
   });
   it("repairs invalid model arguments before dispatch", async () => {
-    vi.mocked(generateText).mockResolvedValueOnce(invalid as never).mockResolvedValueOnce(success as never);
+    vi.mocked(streamText).mockReturnValueOnce(streamed(invalid) as never).mockReturnValueOnce(streamed(success) as never);
     expect(await submit("只查支付技術")).toEqual({type:"proposal", job});
-    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(streamText).toHaveBeenCalledTimes(2);
   });
   it("does not replay a dispatched tool when execution fails", async () => {
-    vi.mocked(generateText).mockResolvedValueOnce({...success,staticToolResults:[],content:[{type:"tool-error",error:new Error("fixture")}]} as never);
+    vi.mocked(streamText).mockReturnValueOnce(streamed({...success,staticToolResults:[],content:[{type:"tool-error",error:new Error("fixture")}]}) as never);
     expect(await submit("只查支付技術")).toMatchObject({type:"error"});
-    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(streamText).toHaveBeenCalledTimes(1);
   });
 });

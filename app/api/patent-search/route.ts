@@ -1,4 +1,4 @@
-import { APICallError, generateText, RetryError } from "ai";
+import { APICallError, streamText, RetryError } from "ai";
 import { z } from "zod";
 import { createResearchJob, listResearchJobs, reserveResearchProposal, ResearchError, workerAvailable } from "@/lib/db/patent-search";
 import { finishReply, failTurn, listChats, startTurn } from "@/lib/db/research-chats";
@@ -60,14 +60,48 @@ export async function POST(request: Request) {
         try {
           send({ type: "status", message: "正在整理研究範圍與搜尋條件。" });
           const tools = { searchPatents: patentCrawlerTool(user.id, body.prompt, signal, turn) };
-          const generate = (correction?: string) => generateText({
-            model: getModel("gemini", apiKey),
-            tools,
-            toolChoice: correction ? { type: "tool", toolName: "searchPatents" } : "auto",
-            abortSignal: signal, maxOutputTokens: 4000, maxRetries: 1,
-            system: `你是臺灣專利研究助理。根據使用者目標、先前對話及工具能力自行安排研究。缺少必要資訊時直接用文字提問；一般討論可以直接回答。條件足夠時呼叫 searchPatents，提供可由工具執行的查詢與對應步驟，不要聲稱已取得結果。今天是 ${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" })}。使用繁體中文摘要描述查詢策略，切勿預告結果。本次追問指定的範圍優先於舊條件。domesticBanks 涵蓋所有本國銀行，只有要求整個群組才可使用。名錄未提供所有權或業務分類。若使用者限定其中一類且未提供可確認的機構名稱，先詢問機構名單；若「私銀」等用語有多種解讀，先確認是民營銀行、私人銀行業務或其他對象。不可猜名單、默用部分範例或沿用舊的全體名錄。不限申請人時使用 all 且 applicants=[]，研究步驟不得聲稱有廠商清單。搜尋參數只能透過工具呼叫傳遞。只指定機構與年代時 keywords=[]，不可自行添加金融關鍵字。年份區間用 YYYY-01-01 起算，「現在」用今天。「銀行技術」是主題，只有明確限定申請人為本國銀行時使用 domesticBanks。關鍵字最多 8 組。日期未指定用 null。未指定筆數或要求全部時 limit=null，只有明確指定筆數才填該正整數，sort=relevance。沿用使用者未修改的條件。只要求規劃時 intent=plan，索取資料時 intent=retrieve。依 firstQuestion 命名對話。`,
-            prompt: JSON.stringify({ firstQuestion: chat?.first_prompt ?? body.prompt, conversation: chat?.history, request: body.prompt, previousPlan: contextPlan, correction }),
-          });
+          const generate = async (correction?: string) => {
+            const generation = streamText({
+              model: getModel("gemini", apiKey),
+              tools,
+              toolChoice: correction ? { type: "tool", toolName: "searchPatents" } : "auto",
+              abortSignal: signal, maxOutputTokens: 4000, maxRetries: 1,
+              onError: () => {}, // The catch below reports a sanitized error.
+              system: `你是臺灣專利研究助理。根據使用者目標、先前對話及工具能力自行安排研究。缺少必要資訊時直接用文字提問；一般討論可以直接回答。條件足夠時呼叫 searchPatents，提供可由工具執行的查詢與對應步驟，不要聲稱已取得結果。今天是 ${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" })}。使用繁體中文摘要描述查詢策略，切勿預告結果。本次追問指定的範圍優先於舊條件。domesticBanks 涵蓋所有本國銀行，只有要求整個群組才可使用。名錄未提供所有權或業務分類。若使用者限定其中一類且未提供可確認的機構名稱，先詢問機構名單；若「私銀」等用語有多種解讀，先確認是民營銀行、私人銀行業務或其他對象。不可猜名單、默用部分範例或沿用舊的全體名錄。不限申請人時使用 all 且 applicants=[]，研究步驟不得聲稱有廠商清單。搜尋參數只能透過工具呼叫傳遞。只指定機構與年代時 keywords=[]，不可自行添加金融關鍵字。年份區間用 YYYY-01-01 起算，「現在」用今天。「銀行技術」是主題，只有明確限定申請人為本國銀行時使用 domesticBanks。關鍵字最多 8 組。日期未指定用 null。未指定筆數或要求全部時 limit=null，只有明確指定筆數才填該正整數，sort=relevance。沿用使用者未修改的條件。只要求規劃時 intent=plan，索取資料時 intent=retrieve。依 firstQuestion 命名對話。`,
+              prompt: JSON.stringify({ firstQuestion: chat?.first_prompt ?? body.prompt, conversation: chat?.history, request: body.prompt, previousPlan: contextPlan, correction }),
+            });
+            let text = "";
+            let published = "";
+            let toolStarted = false;
+            let failure: { error: unknown } | undefined;
+            for await (const part of generation.fullStream) {
+              if (part.type === "error") failure = { error: part.error };
+              if (signal.aborted || failure) continue;
+              if (part.type === "tool-input-start" || part.type === "tool-call") {
+                toolStarted = true;
+                send({ type: "text", text: "" });
+              }
+              if (part.type === "text-delta") {
+                text += part.text;
+                // Hold possible JSON until validation so tool arguments never flash in chat.
+                const boundary = text.indexOf("{");
+                const visible = boundary < 0 ? text : text.slice(0, boundary);
+                if (!correction && !toolStarted && visible !== published) {
+                  published = visible;
+                  send({ type: "text", text: visible });
+                }
+              }
+            }
+            signal.throwIfAborted();
+            if (failure) throw failure.error;
+            return {
+              text: await generation.text,
+              toolCalls: await generation.toolCalls,
+              staticToolCalls: await generation.staticToolCalls,
+              staticToolResults: await generation.staticToolResults,
+              content: await generation.content,
+            };
+          };
           let result = await generate();
           const invalidFields = (call: (typeof result.toolCalls)[number] | undefined) => {
             const parsed = patentInputForRequest(body.prompt).safeParse(call?.input);
@@ -76,6 +110,7 @@ export async function POST(request: Request) {
           // Only retry planning if the SDK never dispatched a valid tool call.
           if (!result.staticToolCalls.length && (result.toolCalls.length || !result.text?.trim() || containsPatentToolInput(result.text))) {
             const fields = result.toolCalls.length ? invalidFields(result.toolCalls[0]) : [];
+            send({ type: "text", text: "" });
             result = await generate(`請呼叫 searchPatents 送出搜尋條件。${fields.length ? "請檢查欄位 " + fields.join("、") + "。" : ""}`);
           }
           if (!result.toolCalls.length && result.text?.trim() && !containsPatentToolInput(result.text)) {
@@ -113,7 +148,7 @@ export async function POST(request: Request) {
       },
       cancel() { closed = true; cancellation.abort(); },
     });
-    return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+    return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
     if (turn) await failTurn(turn.chatId, turn.id, error instanceof ResearchError ? error.message : "搜尋規劃失敗。");
     return researchResponseError(error);

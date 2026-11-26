@@ -200,9 +200,10 @@ export function useResearch({ initialJobId, chatId, onSelectChat, onSelectJob, o
         while (true) {
           const { value, done } = await reader.read();
           buffer += decoder.decode(value, { stream: !done });
-          if (buffer.length > 65_536) throw new Error("研究回應超過預期大小。");
           const lines = buffer.split("\n"); buffer = lines.pop() ?? "";
+          if (buffer.length > 65_536) throw new Error("研究回應超過預期大小。");
           for (const line of lines) {
+            if (line.length > 65_536) throw new Error("研究回應超過預期大小。");
             if (!line.trim()) continue;
             cancellation.signal.throwIfAborted();
             const event = proposalEventSchema.parse(JSON.parse(line));

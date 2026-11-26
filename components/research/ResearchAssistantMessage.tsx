@@ -49,7 +49,7 @@ export function ResearchAssistantMessage() {
           </li>)}</ol>
         </TraceCollapsibleContent>
       </TraceCollapsible>}
-    </Trace> : message.phase === "planning" ? <Trace><TraceLine status="running"><TraceIcon><ScanSearch /></TraceIcon><TraceTitle>正在規劃檢索條件</TraceTitle></TraceLine></Trace> : message.phase !== "error" && message.text && <MessagePrimitive.Parts components={{ Text: MarkdownText }} />}
+    </Trace> : message.phase === "planning" && !message.text ? <Trace><TraceLine status="running"><TraceIcon><ScanSearch /></TraceIcon><TraceTitle>正在規劃檢索條件</TraceTitle></TraceLine></Trace> : message.phase !== "error" && message.text && <MessagePrimitive.Parts components={{ Text: MarkdownText }} />}
     {job?.warnings.length ? <ul className={styles.warnings}>{job.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
     {(message.error || job?.error) && <p className={styles.error} role="alert">{message.error ?? job?.error}</p>}
     {message.phase === "error" && message.retryPrompt && <Button variant="outline" onClick={() => void controller.propose(message.retryPrompt!, message.contextPlan)} disabled={controller.planning || controller.active}><RefreshCw size={15} aria-hidden />重新規劃</Button>}
