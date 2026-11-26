@@ -110,29 +110,29 @@ export default function PublicationExportPanel({
 						title={
 							disabled
 								? (disabledReason ?? "等待圖譜佈局完成")
-								: "產生可放入論文的出版圖（PRD-Q8 M1/M2）"
+								: "匯出論文用圖"
 						}
-						aria-label="出版整體圖選項"
+						aria-label="匯出論文用圖"
 					/>
 				}
 			>
 				<FileImage size={12} />
-				出版圖
+				匯出論文用圖
 			</DropdownMenuTrigger>
 
 			<DropdownMenuContent align="end" sideOffset={8} className="w-72 p-3">
 				<p className="text-xs font-semibold text-foreground mb-2">
-					出版圖（PRD-Q8）
+					論文用圖設定
 				</p>
 
 				<DropdownMenuRadioGroup
 					value={figureMode}
 					onValueChange={(value) => setFigureMode(value as "overview" | "subgraph")}
-					aria-label="M1／M2"
+					aria-label="圖的範圍"
 					className="mb-3"
 				>
-					<DropdownMenuRadioItem value="overview">M1 整體圖</DropdownMenuRadioItem>
-					<DropdownMenuRadioItem value="subgraph">M2 局部子圖</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="overview">整體圖</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="subgraph">局部子圖</DropdownMenuRadioItem>
 				</DropdownMenuRadioGroup>
 
 				{isSubgraph && (
@@ -158,7 +158,7 @@ export default function PublicationExportPanel({
 									1 層（僅直接關聯）
 								</DropdownMenuRadioItem>
 								<DropdownMenuRadioItem value="2">
-									2 層（延伸脈絡，建議）
+									2 層（含間接關聯）
 								</DropdownMenuRadioItem>
 							</DropdownMenuRadioGroup>
 						</div>
@@ -175,7 +175,7 @@ export default function PublicationExportPanel({
 					<DropdownMenuRadioGroup
 						value={String(widthMm)}
 						onValueChange={(value) => setWidthMm(Number(value))}
-						aria-label="圖幅快捷值"
+						aria-label="預設圖幅"
 					>
 						{WIDTH_PRESETS.map(([value, label]) => (
 							<DropdownMenuRadioItem key={value} value={String(value)}>
@@ -218,7 +218,7 @@ export default function PublicationExportPanel({
 
 				{isSubgraph ? (
 					<p className="mb-3 text-[0.65rem] leading-relaxed text-muted-foreground">
-						子圖固定顯示完整標籤（規格：局部子圖是唯一允許全標籤的場合）。
+						局部子圖會顯示所有節點的標籤。
 					</p>
 				) : (
 					<div className="mb-3">
@@ -241,7 +241,7 @@ export default function PublicationExportPanel({
 					<div className="mb-2 space-y-1.5">
 						<p className="text-[0.65rem] leading-relaxed text-destructive">
 							{fullLabelBlockedMessage(effectiveNodeCount)}
-							重疊的標籤會被自動省略，不會畫出疊字的圖；下載後會顯示實際放上幾個。
+							匯出時會略過重疊的標籤，下載後可查看實際標示的數量。
 						</p>
 						<DropdownMenuCheckboxItem
 							checked={acknowledgeRisk}

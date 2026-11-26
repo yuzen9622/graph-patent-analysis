@@ -179,9 +179,9 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 
 	const headingText =
 		status === "running"
-			? "正在分析專利..."
+			? "正在分析專利…"
 			: status === "done"
-				? "分析完成，正在載入圖譜..."
+				? "分析完成，正在載入圖譜…"
 				: status === "cancelled"
 					? `分析已中止，完成 ${done}${total > 0 ? ` / ${total}` : ""} 筆，已取得部分圖譜`
 					: `分析錯誤：${errorMessage ?? "未知錯誤"}`;
@@ -248,7 +248,7 @@ export default function ProgressPanel({ jobId }: ProgressPanelProps) {
 						▶
 					</span>
 					<p>
-						<span className="font-medium text-foreground">當前批次：</span>
+						<span className="font-medium text-foreground">目前批次：</span>
 						{currentTitles[0]}
 						{currentTitles.length > 1 && ` 等 ${currentTitles.length} 篇`}
 					</p>

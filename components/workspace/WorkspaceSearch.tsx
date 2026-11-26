@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getHistoryHref } from "@/lib/analysis-history";
 
 type Result = { id: string; kind: "graph" | "chat" | "research"; title: string; date: string; running: boolean };
-const groups = ["知識圖譜", "研究歷史"] as const;
+const groups = ["知識圖譜", "研究紀錄"] as const;
 const groupOf = (result: Result) => result.kind === "graph" ? groups[0] : groups[1];
 const keyOf = (result: Result) => result.kind + result.id;
 
@@ -54,12 +54,12 @@ export function WorkspaceSearch({ onClose, onOpenChat, onOpenJob }: {
 
   return <Dialog open={isOpen} onOpenChange={setIsOpen} onOpenChangeComplete={open => { if (!open) onClose(); }}>
     <DialogContent initialFocus={input} showCloseButton={false} className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[40rem]">
-      <DialogTitle className="sr-only">搜尋知識圖譜與 研究歷史</DialogTitle>
+      <DialogTitle className="sr-only">搜尋圖譜與研究紀錄</DialogTitle>
       <div className="flex items-center gap-3 px-5 py-4">
         <Search size={18} className="shrink-0 text-muted-foreground" aria-hidden />
-        <input ref={input} className="min-w-0 flex-1 bg-transparent text-base outline-none" role="combobox" aria-label="搜尋知識圖譜與 研究歷史"
+        <input ref={input} className="min-w-0 flex-1 bg-transparent text-base outline-none" role="combobox" aria-label="搜尋圖譜與研究紀錄"
           aria-expanded aria-controls="workspace-results" aria-activedescendant={active && keyOf(active)}
-          placeholder="搜尋知識圖譜與 研究歷史" value={query} onChange={event => { setQuery(event.target.value); setSelected(""); }}
+          placeholder="搜尋圖譜與研究紀錄" value={query} onChange={event => { setQuery(event.target.value); setSelected(""); }}
           onKeyDown={event => {
             if (!active || event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key === "Enter") { event.preventDefault(); open(active); }

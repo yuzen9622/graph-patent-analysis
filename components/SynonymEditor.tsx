@@ -104,7 +104,7 @@ export default function SynonymEditor() {
     const row = rows.find((r) => r.key === key);
     if (!row) return;
     if (!row.canonical.trim()) {
-      setError("canonical（代表標籤）不能為空");
+      setError("請輸入代表標籤");
       return;
     }
     try {
@@ -202,7 +202,7 @@ export default function SynonymEditor() {
           <Card key={row.key}><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`canonical-${row.key}`}>代表標籤 (canonical)</Label>
+                <Label htmlFor={`canonical-${row.key}`}>代表標籤</Label>
                 <Input
                   id={`canonical-${row.key}`}
                   value={row.canonical}

@@ -53,13 +53,13 @@ export default function LoginPage() {
         <div className={styles.content}>
           <header className="grid gap-4">
             <p>專利研究室</p>
-            <h1 id="login-title" className="text-3xl font-semibold">從資料出發。<br />看見技術之間的關係。</h1>
-            <p className="hidden text-muted-foreground md:block">檢索專利、整理來源、探索知識圖譜。<br />讓每一次研究，都有脈絡可循。</p>
+            <h1 id="login-title" className="text-3xl font-semibold">臺灣專利檢索與分析</h1>
+            <p className="hidden text-muted-foreground md:block">查詢專利或匯入 Excel，查看申請人、專利與技術概念之間的關係。</p>
           </header>
           <Card>
             <CardHeader>
               <CardDescription>王老師專利知識圖譜分析平台</CardDescription>
-              <CardTitle><h2>登入，接續研究。</h2></CardTitle>
+              <CardTitle><h2>登入研究平台</h2></CardTitle>
             </CardHeader>
             <CardContent>
               <form
@@ -115,7 +115,7 @@ export default function LoginPage() {
               </form>
 
             </CardContent>
-            <CardFooter><CardDescription>本平台為研究用途，帳號由系統管理者建立。若需要帳號或忘記密碼，請聯絡管理者。</CardDescription></CardFooter>
+            <CardFooter><CardDescription>本平台供研究使用。如需帳號或忘記密碼，請聯絡管理員。</CardDescription></CardFooter>
           </Card>
         </div>
       </section>

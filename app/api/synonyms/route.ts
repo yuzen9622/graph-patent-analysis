@@ -68,11 +68,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const canonical = typeof body.canonical === 'string' ? body.canonical.trim() : ''
   const aliases = Array.isArray(body.aliases) ? body.aliases.filter((a) => typeof a === 'string') : []
   if (!canonical) {
-    return NextResponse.json({ error: 'canonical 不能為空' }, { status: 400 })
+    return NextResponse.json({ error: '請輸入代表標籤' }, { status: 400 })
   }
   if (aliases.some((a) => a.trim() === canonical)) {
     return NextResponse.json(
-      { error: 'aliases 不得與 canonical 相同' },
+      { error: '同義詞不能與代表標籤相同' },
       { status: 400 },
     )
   }
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (err) {
     if (isUniqueViolation(err)) {
       return NextResponse.json(
-        { error: '已有相同 canonical 的同義詞群組' },
+        { error: '其他同義詞群組已使用這個代表標籤' },
         { status: 409 },
       )
     }

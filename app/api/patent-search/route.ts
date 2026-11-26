@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const chat = body.chatId ? await startTurn(user.id, body.chatId, turnId, body.prompt, contextPlan) : null;
     if (body.chatId) turn = { chatId: body.chatId, id: turnId };
     const apiKey = getEnvApiKey("gemini");
-    if (!apiKey) throw new ResearchError("尚未設定搜尋規劃模型；你仍可使用結構化條件建立研究。", 503);
+    if (!apiKey) throw new ResearchError("尚未設定 AI 檢索模型。請選「手動設定條件」。", 503);
     const cancellation = new AbortController();
     const signal = AbortSignal.any([request.signal, cancellation.signal, AbortSignal.timeout(90_000)]);
     let closed = false;
@@ -135,11 +135,11 @@ export async function POST(request: Request) {
           console.error("[patent-search] planning failed", { type: error instanceof Error ? error.name : "unknown", status: APICallError.isInstance(error) ? error.statusCode : undefined });
           const message = error instanceof z.ZodError ? error.issues[0]?.message ?? "請檢查搜尋條件。"
             : error instanceof ResearchError ? error.message
-            : APICallError.isInstance(error) && error.statusCode === 429 ? "Gemini 使用額度或頻率已達上限。請稍後重試，或使用結構化條件。"
+            : APICallError.isInstance(error) && error.statusCode === 429 ? "Gemini 使用額度或頻率已達上限。請稍後重試，或選「手動設定條件」。"
             : APICallError.isInstance(error) && [401, 403].includes(error.statusCode ?? 0) ? "Gemini 未授權這次請求，請管理者檢查模型金鑰與權限。"
             : signal.aborted ? "搜尋規劃已中斷或逾時，請重新規劃。"
             : APICallError.isInstance(error) ? `Gemini 服務暫時無法完成請求（HTTP ${error.statusCode ?? "未知"}）。請稍後重試。`
-            : "無法完成 AI 搜尋規劃。請稍後重試，或直接填寫結構化條件。";
+            : "無法完成 AI 搜尋規劃。請稍後重試，或選「手動設定條件」。";
           if (turn) await failTurn(turn.chatId, turn.id, message);
           if (!closed) send({ type: "error", message });
         } finally {

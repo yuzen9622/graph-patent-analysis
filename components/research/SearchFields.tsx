@@ -30,7 +30,7 @@ export function SearchFields({ draft, onChange, disabled = false }: { draft: Sea
   const set = (key: keyof SearchDraft, value: string) => onChange({ ...draft, [key]: value });
   return (
     <div className={styles.fields}>
-      <div className={styles.wideField}><Label htmlFor={`${id}-keywords`}>主題關鍵字（選填，以逗號分隔）</Label><Input id={`${id}-keywords`} value={draft.keywords} onChange={(event) => set("keywords", event.target.value)} disabled={disabled} placeholder="金融、支付" /></div>
+      <div className={styles.wideField}><Label htmlFor={`${id}-keywords`}>主題關鍵字（選填，以頓號或逗號分隔）</Label><Input id={`${id}-keywords`} value={draft.keywords} onChange={(event) => set("keywords", event.target.value)} disabled={disabled} placeholder="金融、支付" /></div>
       <div><Label htmlFor={`${id}-match`}>關鍵字關係</Label><Select value={draft.match} onValueChange={(value) => { if (value) onChange({ ...draft, match: value === "all" ? "all" : "any" }); }} disabled={disabled}><SelectTrigger id={`${id}-match`} className="w-full"><SelectValue>{draft.match === "all" ? "全部符合（AND）" : "任一符合（OR）"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">全部符合（AND）</SelectItem><SelectItem value="any">任一符合（OR）</SelectItem></SelectContent></Select></div>
       <div><Label htmlFor={`${id}-limit`}>取得筆數（選填）</Label><Input id={`${id}-limit`} type="number" min={1} placeholder="全部" value={draft.limit} onChange={(event) => set("limit", event.target.value)} disabled={disabled} /></div>
       <div className={styles.wideField}><Label htmlFor={`${id}-applicants`}>申請人（選填，每行一個）</Label><Textarea id={`${id}-applicants`} rows={2} value={draft.applicants} onChange={(event) => set("applicants", event.target.value)} disabled={disabled} placeholder="留空則不限申請人" /></div>
@@ -47,10 +47,10 @@ export function fieldError(error: unknown) {
   if (error instanceof ZodError) {
     const issue = error.issues[0];
     if (issue?.code === "custom") return issue.message;
-    if (issue?.path[0] === "limit") return "取得筆數請輸入 正整數，或留空取得全部。";
+    if (issue?.path[0] === "limit") return "請輸入大於 0 的整數，或留空取得全部結果。";
     if (issue?.path[0] === "keywords") return "最多可填 8 組主題關鍵字，每組最多 100 字。";
-    return "搜尋條件格式不正確，請檢查日期、IPC 或申請人欄位。";
+    return "檢索條件格式不正確，請檢查日期、IPC 或申請人欄位。";
   }
-  return error instanceof Error ? error.message : "無法處理搜尋條件。";
+  return error instanceof Error ? error.message : "無法處理檢索條件。";
 }
 

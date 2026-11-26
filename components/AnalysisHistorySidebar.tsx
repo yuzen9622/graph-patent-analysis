@@ -42,7 +42,7 @@ export default function AnalysisHistorySidebar({ onChanged, collapsed, onToggle,
   }, [hasRunning]);
 
   return (
-    <aside className={`${styles.history} ${collapsed ? styles.collapsed : ""}`} aria-label="分析歷史側欄">
+    <aside className={`${styles.history} ${collapsed ? styles.collapsed : ""}`} aria-label="分析紀錄側欄">
       <div className={styles.header}>
         {!collapsed && <span><History size={14} aria-hidden />近期分析{entries.length > 0 && <small>{entries.length}</small>}</span>}
         {onToggle && <Button variant="ghost" size="icon" onClick={onToggle} aria-label={collapsed ? "展開歷史側欄" : "收起歷史側欄"} className="shrink-0">
@@ -50,8 +50,8 @@ export default function AnalysisHistorySidebar({ onChanged, collapsed, onToggle,
         </Button>}
       </div>
       <motion.div layoutScroll className={styles.list} aria-busy={loading}>
-        {loading ? <div className={styles.empty}><Loader2 size={18} className="animate-spin" aria-hidden /><span className={collapsed ? "sr-only" : ""}>載入分析記錄…</span></div>
-        : entries.length === 0 ? <div className={styles.empty}><Clock size={20} aria-hidden /><p className={collapsed ? "sr-only" : ""}>還沒有分析記錄<span>完成第一份分析後，<br />隨時回來接續研究。</span></p></div>
+        {loading ? <div className={styles.empty}><Loader2 size={18} className="animate-spin" aria-hidden /><span className={collapsed ? "sr-only" : ""}>載入分析紀錄…</span></div>
+        : entries.length === 0 ? <div className={styles.empty}><Clock size={20} aria-hidden /><p className={collapsed ? "sr-only" : ""}>還沒有分析紀錄<span>匯入 Excel 並開始分析後，可在這裡查看進度。</span></p></div>
         : <ul>{entries.map((entry) => <li key={entry.id} className={styles.row} data-sidebar-row={"graph" + entry.id}>
           <SidebarHighlight row={"graph" + entry.id} />
           <HistoryMenu kind="graph" id={entry.id} title={entry.title ?? entry.filename.replace(/\.xlsx$/i, "")} pinned={entry.pinned} onChanged={onChanged} showRowActions={!collapsed}>
@@ -59,7 +59,7 @@ export default function AnalysisHistorySidebar({ onChanged, collapsed, onToggle,
             <span className={styles.status}>
               {collapsed && entry.pinned ? <Pin size={14} aria-label="已釘選" /> : entry.status === "completed" ? <CheckCircle2 size={15} aria-label="已完成" /> : entry.status === "analyzing" ? <Loader2 size={15} className="animate-spin" aria-label="分析中" /> : entry.status === "error" ? <AlertCircle size={15} aria-label="分析失敗" /> : <FileSpreadsheet size={15} aria-hidden />}
             </span>
-            {!collapsed && <span className={styles.entry}><strong>{entry.title ?? entry.filename.replace(/\.xlsx$/i, "")}</strong><small>{entry.patentCount !== undefined ? `${entry.patentCount.toLocaleString("zh-TW")} 筆專利` : "分析記錄"}<time dateTime={entry.timestamp}>{formatDate(entry.timestamp)}</time></small></span>}
+            {!collapsed && <span className={styles.entry}><strong>{entry.title ?? entry.filename.replace(/\.xlsx$/i, "")}</strong><small>{entry.patentCount !== undefined ? `${entry.patentCount.toLocaleString("zh-TW")} 筆專利` : "分析紀錄"}<time dateTime={entry.timestamp}>{formatDate(entry.timestamp)}</time></small></span>}
           </Link>
           </HistoryMenu>
         </li>)}</ul>}

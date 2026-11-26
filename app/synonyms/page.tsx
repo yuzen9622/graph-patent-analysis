@@ -18,7 +18,7 @@ export default async function SynonymsPage() {
 					<div className="flex items-start gap-3">
 
 						<div>
-							<h1 className="text-2xl font-semibold">同義詞治理</h1>
+							<h1 className="text-2xl font-semibold">同義詞管理</h1>
 							<p className="mt-1 text-sm text-muted-foreground">
 								把同一技術概念的不同寫法合併成一個節點（如「AI」與「人工智能」歸為「人工智慧」）。
 							</p>

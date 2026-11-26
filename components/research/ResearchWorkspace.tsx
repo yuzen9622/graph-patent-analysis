@@ -21,16 +21,16 @@ import { FINTECH_PROMPT } from "@/lib/patent-search/suggestions";
 
 const SUGGESTIONS = [
   { title: "金融科技", icons: [Landmark, CreditCard, ChartNoAxesColumnIncreasing], detail: "近五年的支付、保險與銀行專利", prompt: FINTECH_PROMPT },
-  { title: "研究特定申請人", icons: [Building2, Files, Network], detail: "以機構為起點，整理技術布局", prompt: "我想研究特定申請人的臺灣專利，請協助我設定申請人與日期範圍。" },
-  { title: "從技術問題出發", icons: [Fingerprint, ScanSearch, Files], detail: "將研究方向轉為可確認的條件", prompt: "我想找與金融詐欺偵測有關的臺灣專利，請協助建立搜尋條件。" },
+  { title: "依申請人查專利", icons: [Building2, Files, Network], detail: "依申請人名稱與日期範圍檢索", prompt: "我想研究特定申請人的臺灣專利，請協助我設定申請人與日期範圍。" },
+  { title: "金融詐欺偵測", icons: [Fingerprint, ScanSearch, Files], detail: "查詢與詐欺偵測相關的臺灣專利", prompt: "我想找與金融詐欺偵測有關的臺灣專利，請協助建立檢索條件。" },
 ];
 
 function ResearchWelcome() {
   const controller = useResearchController();
   const user = useWorkspaceUser();
   return <header className={styles.welcome}>
-    <p>{user ? `你好，${user.display_name || user.username}` : "專利研究助理"}</p>
-    <h1>{controller.restoring ? "正在載入研究…" : "今天想研究什麼專利？"}</h1>
+    <p>{user ? user.display_name || user.username : "專利研究助理"}</p>
+    <h1>{controller.restoring ? "正在載入研究…" : "臺灣專利檢索"}</h1>
   </header>;
 }
 
@@ -38,7 +38,7 @@ function ResearchSuggestions() {
   const aui = useAui();
   const heading = useId();
   return <section aria-labelledby={heading} className={styles.recommendations}>
-    <h2 id={heading} className="text-sm text-muted-foreground">研究建議</h2>
+    <h2 id={heading} className="text-sm text-muted-foreground">檢索範例</h2>
     <div className={styles.suggestions}>
       {SUGGESTIONS.map(({ title, detail, prompt, icons: [Start, Middle, End] }) => (
         <Card key={title} size="sm" className="relative">
@@ -87,7 +87,7 @@ export default function ResearchWorkspace({ onImport, controller }: {
     if (narrow) setSheetOpen(true);
   }
   const busy = controller.planning || controller.active || controller.importing || controller.restoring || Boolean(controller.pendingAction);
-  const availability = controller.serviceError ?? (controller.service ? !controller.service.workerAvailable ? "資料擷取服務尚未啟動。可先規劃條件，或匯入既有 Excel。" : !controller.service.modelAvailable ? "AI 規劃模型尚未設定；可直接使用結構化條件搜尋。" : null : "正在檢查研究服務…");
+  const availability = controller.serviceError ?? (controller.service ? !controller.service.workerAvailable ? "資料擷取服務尚未啟動。可先規劃條件，或匯入既有 Excel。" : !controller.service.modelAvailable ? "尚未設定 AI 檢索模型。請選「手動設定條件」。" : null : "正在檢查研究服務…");
 
   return (
     <ResearchContext.Provider value={{ ...controller, inspectJob }}>
@@ -102,7 +102,7 @@ export default function ResearchWorkspace({ onImport, controller }: {
           <div className={styles.bottom}>
             <div className={styles.toolStrip}>
               <span className="text-xs text-muted-foreground">專利檢索 · TwIP Search</span>
-              <Button size="sm" variant="ghost" onClick={() => { setStructuredOpen(true); setError(null); }} disabled={busy}><SlidersHorizontal />結構化條件</Button>
+              <Button size="sm" variant="ghost" onClick={() => { setStructuredOpen(true); setError(null); }} disabled={busy}><SlidersHorizontal />手動設定條件</Button>
             </div>
             {!controller.messages.length && !controller.restoring && <ResearchSuggestions />}
             <div className={styles.details}>
@@ -115,15 +115,15 @@ export default function ResearchWorkspace({ onImport, controller }: {
               </section>}
               {!!controller.messages.length && availability && <div className={styles.availability}><Search size={15} aria-hidden /><p>{availability}</p><Button variant="ghost" size="icon-sm" onClick={() => void controller.refreshService()} aria-label="重新檢查研究服務"><RefreshCw /></Button></div>}
               {controller.connectionError && <p className={styles.error} role="alert">{controller.connectionError}</p>}
-              <p className={styles.privacy}>研究需求與上一份搜尋條件會傳送至 Google Gemini。Excel 附件僅用於匯入分析，不會傳給搜尋規劃模型。</p>
+              <p className={styles.privacy}>研究需求與上一次的檢索條件會傳送至 Google Gemini。Excel 附件僅用於匯入分析，不會傳給搜尋規劃模型。</p>
 
             </div>
           </div>
         </AssistantRuntimeProvider>
         <Dialog open={structuredOpen} onOpenChange={setStructuredOpen}>
           <DialogContent className={styles.formDialog}>
-            <DialogTitle>用條件建立專利研究</DialogTitle>
-            <DialogDescription>直接填寫範圍，不必呼叫 AI。建立後仍需確認，才會向 TwIP Search 取得資料。</DialogDescription>
+            <DialogTitle>專利檢索條件</DialogTitle>
+            <DialogDescription>填好後可先核對條件，確認後才會向 TwIP Search 查詢。</DialogDescription>
             <form onSubmit={async (event) => {
               event.preventDefault();
               try { setError(null); await controller.structured(planFromDraft(draft)); setStructuredOpen(false); }
@@ -131,7 +131,7 @@ export default function ResearchWorkspace({ onImport, controller }: {
             }}>
               <SearchFields draft={draft} onChange={setDraft} disabled={busy} />
               {error && <p className={styles.error} role="alert">{error}</p>}
-              <DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={() => setStructuredOpen(false)}>返回研究</Button><Button type="submit" disabled={busy || !controller.service}>{controller.pendingAction === "structured" ? "建立中…" : "建立搜尋條件"}</Button></DialogFooter>
+              <DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={() => setStructuredOpen(false)}>返回研究</Button><Button type="submit" disabled={busy || !controller.service}>{controller.pendingAction === "structured" ? "建立中…" : "建立檢索條件"}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>

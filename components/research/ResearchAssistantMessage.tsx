@@ -20,7 +20,7 @@ export function ResearchAssistantMessage() {
   return <MessagePrimitive.Root className={styles.answer}>
     {job ? <Trace>
       {job.plan.steps && <section className="text-sm">
-        <h3 className="font-medium">AI 研究計畫</h3>
+        <h3 className="font-medium">檢索步驟</h3>
         <ResearchSteps steps={job.plan.steps} />
       </section>}
       <TraceCollapsible>

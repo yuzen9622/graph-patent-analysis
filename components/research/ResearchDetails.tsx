@@ -61,7 +61,7 @@ export function ResearchDetails({ job, narrow, open, onOpenChange }: {
       </div>}
       {(error || operationError) && <p role="alert" className={styles.error}>{error || operationError}</p>}
     </section>
-    {plan.steps && <section><h3>AI 研究計畫</h3>
+    {plan.steps && <section><h3>檢索步驟</h3>
       <ResearchSteps steps={plan.steps} />
     </section>}
     <section><div className={styles.sectionTitle}><h3>研究進度</h3></div>

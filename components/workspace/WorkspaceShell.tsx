@@ -73,8 +73,8 @@ export function WorkspaceShell({ onHistoryChanged, activeTab, tabBar, onEntries,
       ...jobs.map(job => ({ ...job, kind: "research" as const, label: job.title ?? (job.keywords.join("、") || job.summary), date: job.created_at })),
     ].sort((a, b) => Number(b.pinned) - Number(a.pinned) || Date.parse(b.date) - Date.parse(a.date));
     if (!entries.length) return null;
-    return <motion.nav layoutScroll aria-label="研究歷史" className={styles.researchHistory}>
-      <p className="px-2 text-xs text-muted-foreground">研究歷史</p>
+    return <motion.nav layoutScroll aria-label="研究紀錄" className={styles.researchHistory}>
+      <p className="px-2 text-xs text-muted-foreground">研究紀錄</p>
       {entries.map(({ kind, id, label, pinned }) => {
         const selected = id === (kind === "chat" ? chatId : selectedJob);
         return <HistoryMenu key={kind + id} kind={kind} id={id} title={label} pinned={pinned} onChanged={onHistoryChanged}>

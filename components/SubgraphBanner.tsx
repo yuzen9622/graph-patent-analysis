@@ -63,7 +63,7 @@ export default function SubgraphBanner({
       <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[0.7rem] text-muted-foreground mr-0.5 font-medium">
-            探索範圍:
+            探索範圍
           </span>
           {isKeyword ? (
             <ButtonGroup>
@@ -79,17 +79,17 @@ export default function SubgraphBanner({
                 variant={state.hops === 1 ? "default" : "outline"}
                 size="xs"
                 onClick={() => onKeywordHopsChange(1)}
-                title="包含所有相符概念，以及直接共現的周邊相關技術（推薦）"
+                title="顯示相符概念，以及與其直接共現的概念"
               >
-                直接相關 (推薦)
+                延伸 1 層
               </Button>
               <Button
                 variant={state.hops === 2 ? "default" : "outline"}
                 size="xs"
                 onClick={() => onKeywordHopsChange(2)}
-                title="向外探索 2 層相關技術脈絡"
+                title="從相符概念向外顯示 2 層節點"
               >
-                廣泛探索
+                延伸 2 層
               </Button>
             </ButtonGroup>
           ) : (
@@ -98,7 +98,7 @@ export default function SubgraphBanner({
                 variant={state.hops === 1 ? "default" : "outline"}
                 size="xs"
                 onClick={() => onNodeHopsChange(1)}
-                title="只顯示與此概念直接相連的核心技術"
+                title="只顯示與此概念直接相連的節點"
               >
                 直接相關
               </Button>
@@ -106,17 +106,17 @@ export default function SubgraphBanner({
                 variant={state.hops === 2 ? "default" : "outline"}
                 size="xs"
                 onClick={() => onNodeHopsChange(2)}
-                title="包含直接技術再向外延伸的應用脈絡（推薦）"
+                title="從此概念向外顯示 2 層節點"
               >
-                延伸技術 (推薦)
+                延伸 2 層
               </Button>
               <Button
                 variant={state.hops === 3 ? "default" : "outline"}
                 size="xs"
                 onClick={() => onNodeHopsChange(3)}
-                title="向外探索 3 層，發掘跨領域潛在技術關聯"
+                title="從此概念向外顯示 3 層節點"
               >
-                廣泛探索
+                延伸 3 層
               </Button>
             </ButtonGroup>
           )}

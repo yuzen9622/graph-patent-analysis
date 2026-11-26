@@ -140,7 +140,7 @@ export default function CompareSetupPanel({
 					<AlertDescription>
 						{distinct
 							? `${panelCount} 個面板的有效範圍互異，可以開始比較。`
-							: "有兩個面板的有效範圍相同（未勾選＝全部來源），沒有東西可比。請讓每個面板的範圍互異。"}
+							: "兩個面板的來源相同。請調整其中一個面板的來源檔案。未勾選時會使用全部來源。"}
 					</AlertDescription>
 				</Alert>
 
