@@ -10,6 +10,9 @@
 }
 .shell[data-collapsed="true"] { --rail-space: 0rem; }
 .rail { width: var(--rail-width); height: 100%; display: flex; flex-direction: column; @apply bg-sidebar; }
+.rail [data-sidebar-row] { position: relative; isolation: isolate; }
+.rail [data-sidebar-row][data-slot="button"] { background: transparent; translate: none; }
+.hoverSurface { position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; background: var(--sidebar-accent); }
 .desktopRail { grid-area: 2 / 1; overflow: hidden; }
 .desktopRail .rail { transition: transform var(--shell-motion); }
 .shell[data-collapsed="true"] .desktopRail .rail { transform: translateX(-100%); }

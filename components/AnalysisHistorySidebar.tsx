@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { History, PanelLeftClose, PanelLeftOpen, Clock, CheckCircle2, Loader2, AlertCircle, Pin, FileSpreadsheet } from "lucide-react";
+import { SidebarHighlight } from "./workspace/SidebarHighlight";
 import { HistoryMenu, type HistoryChanged } from "./workspace/HistoryMenu";
 import { Button } from "@/components/ui/button";
 import { fetchHistory, HISTORY_EVENT, getHistoryHref, type HistoryEntry } from "@/lib/analysis-history";
@@ -47,10 +49,11 @@ export default function AnalysisHistorySidebar({ onChanged, collapsed, onToggle,
           {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </Button>}
       </div>
-      <div className={styles.list} aria-busy={loading}>
+      <motion.div layoutScroll className={styles.list} aria-busy={loading}>
         {loading ? <div className={styles.empty}><Loader2 size={18} className="animate-spin" aria-hidden /><span className={collapsed ? "sr-only" : ""}>載入分析記錄…</span></div>
         : entries.length === 0 ? <div className={styles.empty}><Clock size={20} aria-hidden /><p className={collapsed ? "sr-only" : ""}>還沒有分析記錄<span>完成第一份分析後，<br />隨時回來接續研究。</span></p></div>
-        : <ul>{entries.map((entry) => <li key={entry.id} className={styles.row}>
+        : <ul>{entries.map((entry) => <li key={entry.id} className={styles.row} data-sidebar-row={"graph" + entry.id}>
+          <SidebarHighlight row={"graph" + entry.id} />
           <HistoryMenu kind="graph" id={entry.id} title={entry.title ?? entry.filename.replace(/\.xlsx$/i, "")} pinned={entry.pinned} onChanged={onChanged} showRowActions={!collapsed}>
           <Link href={getHistoryHref(entry)} className={styles.link} title={collapsed ? entry.title ?? entry.filename : undefined} aria-label={collapsed ? entry.title ?? entry.filename : undefined}>
             <span className={styles.status}>
@@ -60,7 +63,7 @@ export default function AnalysisHistorySidebar({ onChanged, collapsed, onToggle,
           </Link>
           </HistoryMenu>
         </li>)}</ul>}
-      </div>
+      </motion.div>
     </aside>
   );
 }

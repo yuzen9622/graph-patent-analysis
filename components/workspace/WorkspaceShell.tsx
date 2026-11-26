@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { SidebarHighlight, SidebarRail } from "./SidebarHighlight";
 import { WorkspaceSearch } from "./WorkspaceSearch";
 import Link from "next/link";
 import { ArrowUpRight, BookOpen, FileSpreadsheet, Menu, Pin, Search, SquarePen, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { MotionConfig } from "motion/react";
+import { motion, MotionConfig } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import AnalysisHistorySidebar from "@/components/AnalysisHistorySidebar";
@@ -40,6 +41,7 @@ export function WorkspaceShell({ onHistoryChanged, activeTab, tabBar, onEntries,
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const title = chatTitle;
+  const importSelected = activeTab === "chat" && section === "import";
 
   function navigate(next: WorkspaceSection) {
     onSectionChange(next);
@@ -49,17 +51,17 @@ export function WorkspaceShell({ onHistoryChanged, activeTab, tabBar, onEntries,
   function navigation() {
     return (
       <nav className={styles.navigation} aria-label="工作台導覽">
-        <Button variant="ghost" size="default" className="justify-start" aria-label="新對話" title="新對話" onClick={() => { onNewChat(); setMenuOpen(false); }}>
-          <SquarePen aria-hidden />新對話
+        <Button data-sidebar-row="new" variant="ghost" size="default" className="justify-start" aria-label="新對話" title="新對話" onClick={() => { onNewChat(); setMenuOpen(false); }}>
+          <SidebarHighlight row="new" /><SquarePen aria-hidden />新對話
         </Button>
-        <Button type="button" size="default" className="justify-start" variant="ghost" onClick={() => { setMenuOpen(false); setSearchOpen(true); }} aria-haspopup="dialog" aria-label="搜尋">
-          <Search size={18} aria-hidden />搜尋
+        <Button data-sidebar-row="search" type="button" size="default" className="justify-start" variant="ghost" onClick={() => { setMenuOpen(false); setSearchOpen(true); }} aria-haspopup="dialog" aria-label="搜尋">
+          <SidebarHighlight row="search" /><Search size={18} aria-hidden />搜尋
         </Button>
-        <Button type="button" size="default" className="justify-start" variant={activeTab === "chat" && section === "import" ? "secondary" : "ghost"} onClick={() => navigate("import")} aria-current={activeTab === "chat" && section === "import" ? "page" : undefined} aria-label="匯入 Excel">
-          <FileSpreadsheet size={18} aria-hidden />匯入 Excel
+        <Button data-sidebar-row={importSelected ? undefined : "import"} type="button" size="default" className="justify-start" variant={importSelected ? "secondary" : "ghost"} onClick={() => navigate("import")} aria-current={importSelected ? "page" : undefined} aria-label="匯入 Excel">
+          {!importSelected && <SidebarHighlight row="import" />}<FileSpreadsheet size={18} aria-hidden />匯入 Excel
         </Button>
-        <Button nativeButton={false} render={<Link href="/synonyms" />} size="default" variant="ghost" className="justify-start" aria-label="同義詞管理">
-          <BookOpen size={18} aria-hidden />同義詞管理
+        <Button data-sidebar-row="synonyms" nativeButton={false} render={<Link href="/synonyms" />} size="default" variant="ghost" className="justify-start" aria-label="同義詞管理">
+          <SidebarHighlight row="synonyms" /><BookOpen size={18} aria-hidden />同義詞管理
         </Button>
       </nav>
     );
@@ -71,16 +73,19 @@ export function WorkspaceShell({ onHistoryChanged, activeTab, tabBar, onEntries,
       ...jobs.map(job => ({ ...job, kind: "research" as const, label: job.title ?? (job.keywords.join("、") || job.summary), date: job.created_at })),
     ].sort((a, b) => Number(b.pinned) - Number(a.pinned) || Date.parse(b.date) - Date.parse(a.date));
     if (!entries.length) return null;
-    return <nav aria-label="研究歷史" className={styles.researchHistory}>
+    return <motion.nav layoutScroll aria-label="研究歷史" className={styles.researchHistory}>
       <p className="px-2 text-xs text-muted-foreground">研究歷史</p>
-      {entries.map(({ kind, id, label, pinned }) => <HistoryMenu key={kind + id} kind={kind} id={id} title={label} pinned={pinned} onChanged={onHistoryChanged}>
-        <Button variant={id === (kind === "chat" ? chatId : selectedJob) ? "secondary" : "ghost"}
+      {entries.map(({ kind, id, label, pinned }) => {
+        const selected = id === (kind === "chat" ? chatId : selectedJob);
+        return <HistoryMenu key={kind + id} kind={kind} id={id} title={label} pinned={pinned} onChanged={onHistoryChanged}>
+        <Button data-sidebar-row={selected ? undefined : kind + id} variant={selected ? "secondary" : "ghost"}
           size="default" className="min-w-0 justify-start"
           title={label} aria-label={label} onClick={() => { (kind === "chat" ? onOpenChat : onOpenJob)(id); setMenuOpen(false); }}>
-          {pinned ? <Pin aria-label="已釘選" /> : <MessageSquare aria-hidden />}<span className="truncate">{label}</span>
+          {!selected && <SidebarHighlight row={kind + id} />}{pinned ? <Pin aria-label="已釘選" /> : <MessageSquare aria-hidden />}<span className="truncate">{label}</span>
         </Button>
-      </HistoryMenu>)}
-    </nav>;
+      </HistoryMenu>;
+      })}
+    </motion.nav>;
   }
 
   function footer() {
@@ -109,25 +114,25 @@ export function WorkspaceShell({ onHistoryChanged, activeTab, tabBar, onEntries,
           {tabBar}
         </header>
         <div id="workspace-sidebar" className={styles.desktopRail} inert={collapsed}>
-          <div className={styles.rail}>
+          <SidebarRail>
             {navigation()}
             {researchHistory()}
             <div className={styles.history}><AnalysisHistorySidebar onChanged={onHistoryChanged} onEntries={onEntries} collapsed={false} /></div>
             {footer()}
-          </div>
+          </SidebarRail>
         </div>
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <SheetContent side="left" className={styles.drawer}>
             <SheetTitle className="sr-only">工作台導覽</SheetTitle>
             <SheetDescription className="sr-only">開啟專利研究、匯入資料或過往分析。</SheetDescription>
-            <div className={styles.rail}>
+            <SidebarRail>
               {navigation()}
               {researchHistory()}
               <div className={styles.history} onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
                 <AnalysisHistorySidebar onChanged={onHistoryChanged} onEntries={onEntries} collapsed={false} />
               </div>
               {footer()}
-            </div>
+            </SidebarRail>
           </SheetContent>
         </Sheet>
         {searchOpen && <WorkspaceSearch onClose={() => setSearchOpen(false)} onOpenChat={onOpenChat} onOpenJob={onOpenJob} />}
